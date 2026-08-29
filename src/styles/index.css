@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { @apply border-ink-100; }
+  html { scroll-behavior: smooth; }
+  body { -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+  :focus-visible {
+    outline: 2px solid #2563EB;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+@layer utilities {
+  .orb-gradient {
+    background: conic-gradient(from 180deg at 50% 50%, #2563EB, #38BDF8, #7C3AED, #2563EB);
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 99px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

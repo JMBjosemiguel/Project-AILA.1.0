@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: aila-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci && npm run validate:deployment
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_CONNECTION_LIMIT
+        value: 5
+      - key: DB_SSL
+        value: true
+      - key: DB_SSL_CA
+        sync: false
+      - key: DB_SSL_REJECT_UNAUTHORIZED
+        value: true
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: BCRYPT_SALT_ROUNDS
+        value: 10
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_TIMEOUT_MS
+        value: 30000
+      - key: STORAGE_DRIVER
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false

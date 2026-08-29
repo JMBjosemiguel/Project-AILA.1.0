@@ -1,4 +1,10 @@
-USE aila_db;
+-- AILA production baseline data (portable / managed-host safe).
+-- Reference/lookup rows the application requires, plus curated public prompt chips.
+-- Contains NO user accounts and NO passwords.
+--
+-- No USE statement: select the target database on the connection before running
+-- this file (mysql -D <DB_NAME> ...  or pick the database in the Aiven console).
+-- Run this AFTER production_schema.sql, on the same database.
 
 SET NAMES utf8mb4;
 

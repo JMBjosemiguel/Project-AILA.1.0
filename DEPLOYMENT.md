@@ -48,13 +48,20 @@ Never commit real values for `GEMINI_API_KEY`, `JWT_SECRET`, database passwords,
 
 ## 4. Database Import and Migration
 
-Do not run `database/schema.sql` against a production database that already has data. It drops and recreates tables.
+Do not run `database/schema.sql` against a managed/cloud database. It contains
+`CREATE DATABASE aila_db` + `USE aila_db` + a `DROP TABLE` reset block, so on Aiven it
+either creates a stray `aila_db` schema or fails. Use `database/production_schema.sql`
+instead — same tables, no database/USE/DROP statements.
 
-For a fresh cloud database:
+For a fresh cloud database (full runbook in `database/AIVEN_MIGRATION.md`):
 
-1. Import `database/schema.sql`.
-2. Import `database/production_baseline.sql`.
-3. Do not import `database/seed.sql` in production unless you first remove demo accounts and sample data.
+1. In the Aiven console, note the pre-created database name (for AILA it is `project-aila`).
+2. Connect with that database selected and import `database/production_schema.sql`.
+3. Import `database/production_baseline.sql` into the same database.
+4. Create one admin account deliberately (private bcrypt hash — see the runbook). Do not
+   commit the password or hash.
+5. Never import `database/seed.sql` in production. `indexes.sql` / `constraints.sql` are
+   not needed after `production_schema.sql`.
 
 For migrating existing local data:
 
@@ -125,14 +132,14 @@ PORT=5000
 APP_URL=https://your-cloudflare-pages-site.pages.dev
 CORS_ORIGINS=https://your-cloudflare-pages-site.pages.dev
 
-DB_HOST=your-aiven-host
-DB_PORT=3306
+DB_HOST=your-aiven-host                # e.g. project-aila-xxx.a.aivencloud.com
+DB_PORT=your-aiven-port                # Aiven assigns a custom port, NOT 3306
 DB_USER=avnadmin
 DB_PASSWORD=your-aiven-password
-DB_NAME=aila_db
+DB_NAME=project-aila                   # exact database name from the Aiven console
 DB_CONNECTION_LIMIT=5
-DB_SSL=true
-DB_SSL_CA=your-aiven-ca-certificate
+DB_SSL=true                            # Aiven requires TLS
+DB_SSL_CA=your-aiven-ca-certificate    # paste ca.pem contents; use \n for newlines
 DB_SSL_REJECT_UNAUTHORIZED=true
 
 JWT_SECRET=long-random-secret

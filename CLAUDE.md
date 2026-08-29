@@ -102,10 +102,10 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 
 ## Database
 
-SQL package lives in `database/`. Import order (phpMyAdmin SQL tab or the `mysql` CLI):
+SQL package lives in `database/`. **Local** import order (phpMyAdmin SQL tab or the `mysql` CLI):
 
-1. `schema.sql`  — creates `aila_db` + all 43 tables. **Destructive: drops existing tables first.**
-2. `seed.sql`    — dev data + the login accounts below. (Production uses `production_baseline.sql` instead.)
+1. `schema.sql`  — creates `aila_db` + all 43 tables. **Destructive: drops existing tables first.** Local only (hardcodes `aila_db`).
+2. `seed.sql`    — dev data + the login accounts below. Local only.
 3. `indexes.sql` — idempotent; adds recommended indexes if missing.
 4. `constraints.sql` — idempotent; adds foreign keys if missing.
 
@@ -115,6 +115,11 @@ for f in schema seed indexes constraints; do
   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root < "database/$f.sql"
 done
 ```
+
+**Production / managed host (Aiven):** use `production_schema.sql` then
+`production_baseline.sql` (portable — no `CREATE DATABASE` / `USE` / `DROP`; select the
+DB on the connection). Full steps in `database/AIVEN_MIGRATION.md`. Never run `schema.sql`
+or `seed.sql` against a cloud DB.
 
 `database/database_documentation.md` documents every table; `database/migration_notes.md`
 covers validation and phpMyAdmin steps.

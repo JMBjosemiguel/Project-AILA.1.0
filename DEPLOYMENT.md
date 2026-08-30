@@ -235,5 +235,13 @@ Run these checks before sharing the public URL:
 - `JWT_SECRET is required`: set backend secret in Render.
 - Database connection failure: verify Aiven host, port, password, database name, and SSL values.
 - Upload works but download fails: verify `STORAGE_DRIVER=r2` and R2 credentials.
+- Resource upload fails ("Resource storage could not complete the request." /
+  "...rejected the request"): check the Render logs for a
+  `[ResourceStorage] r2 PUT failed: status=... code=...` line. `SignatureDoesNotMatch`
+  or `InvalidAccessKeyId` → wrong `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (or an
+  `R2_ENDPOINT` / `R2_ACCOUNT_ID` that doesn't match the token's account);
+  `AccessDenied` → the R2 API token lacks write permission or is scoped to the
+  wrong bucket; `NoSuchBucket` → wrong `R2_BUCKET`. `R2_ENDPOINT` (if set) must be a
+  bare `https://<account-id>.r2.cloudflarestorage.com` origin — no path or bucket.
 - Refresh returns 404 on frontend routes: verify `_redirects` exists in Cloudflare Pages build output.
 - Gemini returns 503/429: verify API key, quota, model, and billing/free-tier limits.

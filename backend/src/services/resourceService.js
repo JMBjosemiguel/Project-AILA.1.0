@@ -246,7 +246,13 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
       subjectId: subjectId || null,
     });
   } catch (error) {
-    await deleteStoredFile(storedFile.filePath);
+    // Roll back the stored object, but never let a cleanup failure hide the
+    // real error (e.g. report a DB problem as a storage problem).
+    try {
+      await deleteStoredFile(storedFile.filePath);
+    } catch (cleanupError) {
+      console.error(`[ResourceStorage] cleanup after failed upload also failed: ${cleanupError.message}`);
+    }
     throw error;
   }
 

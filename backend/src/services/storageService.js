@@ -116,18 +116,45 @@ function signR2Request({ method, key, body = Buffer.alloc(0), headers = {} }) {
   };
 }
 
+function parseR2Error(xml) {
+  const text = String(xml || '');
+  return {
+    code: (text.match(/<Code>([^<]+)<\/Code>/) || [])[1] || null,
+    message: (text.match(/<Message>([^<]+)<\/Message>/) || [])[1] || null,
+  };
+}
+
 async function r2Request(method, key, { body, headers = {} } = {}) {
   const bodyBuffer = body ? Buffer.from(body) : Buffer.alloc(0);
   const signed = signR2Request({ method, key, body: bodyBuffer, headers });
-  const response = await fetch(signed.url, {
-    method,
-    headers: signed.headers,
-    ...(bodyBuffer.length ? { body: bodyBuffer } : {}),
-  });
+
+  let response;
+  try {
+    response = await fetch(signed.url, {
+      method,
+      headers: signed.headers,
+      ...(bodyBuffer.length ? { body: bodyBuffer } : {}),
+    });
+  } catch (networkError) {
+    console.error(`[ResourceStorage] r2 ${method} network error: ${networkError.message} (key=${key})`);
+    throw new ApiError(502, 'Resource storage is unreachable right now. Please try again.');
+  }
 
   if (!response.ok) {
+    const { code, message } = parseR2Error(await response.text().catch(() => ''));
+    // Secret-free diagnostics: the generic user-facing message alone is not
+    // enough to tell a signing/permission/bucket problem apart in the logs.
+    console.error(
+      `[ResourceStorage] r2 ${method} failed: status=${response.status} code=${code || 'unknown'} ` +
+      `message=${JSON.stringify((message || '').slice(0, 200))} bucket=${process.env.R2_BUCKET || '(unset)'} ` +
+      `endpointExplicit=${Boolean(process.env.R2_ENDPOINT)} key=${key}`
+    );
+
     if (response.status === 404) {
       throw new ApiError(404, 'This file is not available in storage.');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new ApiError(502, 'Resource storage rejected the request. Please try again, or contact support if it keeps happening.');
     }
     throw new ApiError(502, 'Resource storage could not complete the request.');
   }

@@ -53,6 +53,19 @@ if (process.env.STORAGE_DRIVER === 'r2') {
   for (const key of REQUIRED_R2) {
     if (isMissing(key)) fail(`${key} is required when STORAGE_DRIVER=r2.`);
   }
+  // R2_ENDPOINT is optional (it can be derived from R2_ACCOUNT_ID), but when
+  // set it must be a bare https origin — a path, bucket, query or wrong scheme
+  // breaks SigV4 host matching and every upload then fails with a 403.
+  if (!isMissing('R2_ENDPOINT')) {
+    try {
+      const url = new URL(process.env.R2_ENDPOINT);
+      if (url.protocol !== 'https:' || url.search || url.pathname.replace(/\/+$/, '') !== '') {
+        fail('R2_ENDPOINT must be a bare https:// origin (no path, bucket, or query string).');
+      }
+    } catch {
+      fail('R2_ENDPOINT must be a valid https:// URL.');
+    }
+  }
 } else if (process.env.STORAGE_DRIVER !== 'local') {
   fail('STORAGE_DRIVER must be either local or r2.');
 }

@@ -38,10 +38,25 @@ function fileFilter(req, file, cb) {
   cb(null, true);
 }
 
-const uploadResourceFile = multer({
+const runUpload = multer({
   storage: isR2Enabled() ? multer.memoryStorage() : storage,
   fileFilter,
   limits: { fileSize: MAX_FILE_SIZE },
 }).single('file');
+
+// Translate multer's own errors (e.g. file-too-large) into friendly 400s so the
+// student sees a useful message instead of a generic 500.
+function uploadResourceFile(req, res, next) {
+  runUpload(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(new ApiError(400, `That file is too large. The maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`));
+      }
+      return next(new ApiError(400, 'That file could not be uploaded. Please try a different file.'));
+    }
+    return next(err); // ApiError from fileFilter, or anything unexpected
+  });
+}
 
 module.exports = { uploadResourceFile, resourceTypeForMimetype, UPLOADS_DIR };

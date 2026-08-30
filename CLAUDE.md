@@ -101,8 +101,8 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 | `JWT_EXPIRES_IN` | `1d` | Token lifetime. |
 | `BCRYPT_SALT_ROUNDS` | `10` | Password hashing cost. |
 | `GEMINI_API_KEY` | **`REPLACE_ME`** | Google Gemini key — **required for all AI features** (chat, course/quiz/study-tool generation). AI endpoints return 503 until set; the rest of the app runs fine without it. |
-| `GEMINI_MODEL` | `gemini-flash-latest` | Model id. |
-| `GEMINI_TIMEOUT_MS` | `30000` | Per-request timeout. |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Model id. Use a **pinned** version, not a `-latest` alias — the shared aliases get capacity-throttled (503). |
+| `GEMINI_TIMEOUT_MS` | `30000` | Per-request budget (one transient-5xx retry fits inside it). |
 | `STORAGE_DRIVER` | `local` | `local` = files in `backend/uploads/`; `r2` = Cloudflare R2 (needs the `R2_*` vars). |
 | `R2_*` | *(blank)* | Only read when `STORAGE_DRIVER=r2`. |
 

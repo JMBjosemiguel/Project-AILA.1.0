@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
@@ -22,9 +22,12 @@ export default function QuizRunner({ request, onClose }) {
   const [quiz, setQuiz] = useState(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const submittingRef = useRef(false);
   const toast = useToast();
 
   const handleGenerate = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setStep('loading');
     setError('');
     try {
@@ -42,6 +45,8 @@ export default function QuizRunner({ request, onClose }) {
       setError(err.message || 'Could not generate a quiz right now.');
       setStep('setup');
       toast.error(err.message || 'Could not generate a quiz right now.');
+    } finally {
+      submittingRef.current = false;
     }
   };
 

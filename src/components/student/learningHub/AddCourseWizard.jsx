@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
@@ -13,14 +13,17 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
   const [goal, setGoal] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const submittingRef = useRef(false);
   const toast = useToast();
 
   const handleGenerate = async () => {
+    if (submittingRef.current) return;
     if (!courseName.trim() || !goal.trim()) {
       setError('Please fill in the course name and your learning goal.');
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
     setError('');
     try {
@@ -31,6 +34,7 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
       setError(err.message || 'Could not generate that course right now.');
       toast.error(err.message || 'Could not generate that course right now.');
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

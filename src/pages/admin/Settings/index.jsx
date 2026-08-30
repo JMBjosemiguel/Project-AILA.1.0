@@ -52,6 +52,7 @@ export default function AdminSettingsPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [archived, setArchived] = useState('all');
   const [page, setPage] = useState(1);
@@ -61,8 +62,10 @@ export default function AdminSettingsPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAnnouncements({ search, archived, sort: 'newest', page, pageSize: 10 })
       .then((result) => { setAnnouncements(result.announcements ?? []); setPagination(result.pagination); })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -235,6 +238,8 @@ export default function AdminSettingsPage() {
         columns={columns}
         rows={announcements}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: Megaphone, title: 'No announcements sent yet', message: 'Announcements you send to students will appear here.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

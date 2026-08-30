@@ -51,6 +51,7 @@ export default function AdminChatSessionsPage() {
     setLoadingUsers(true);
     listChatSessionUsers({ search: userSearch, page: usersPage, pageSize: 10 })
       .then((result) => { setUsers(result.users ?? []); setUsersPagination(result.pagination); })
+      .catch((error) => toast.error(error.message || 'Could not load chat sessions.'))
       .finally(() => setLoadingUsers(false));
   };
 
@@ -61,6 +62,7 @@ export default function AdminChatSessionsPage() {
     setLoadingConversations(true);
     listChatSessionsForUser(user.id, { filter: filterValue, page: 1, pageSize: 50 })
       .then((result) => setConversations(result.conversations ?? []))
+      .catch((error) => toast.error(error.message || 'Could not load those conversations.'))
       .finally(() => setLoadingConversations(false));
   };
 

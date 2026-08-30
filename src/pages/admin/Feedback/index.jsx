@@ -47,6 +47,7 @@ export default function AdminFeedbackPage() {
   const [feedback, setFeedback] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -60,14 +61,16 @@ export default function AdminFeedbackPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAdminFeedback({ search, status, rating, archived, sort, page, pageSize: 10 })
       .then((result) => { setFeedback(result.feedback ?? []); setPagination(result.pagination); })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
   useEffect(load, [search, status, rating, archived, sort, page]);
   useEffect(() => { setPage(1); }, [search, status, rating, archived, sort]);
-  useEffect(() => { getAdminFeedbackAnalytics().then(setAnalytics); }, []);
+  useEffect(() => { getAdminFeedbackAnalytics().then(setAnalytics).catch(() => setAnalytics(null)); }, []);
 
   const handleArchiveToggle = async (item) => {
     try {
@@ -207,6 +210,8 @@ export default function AdminFeedbackPage() {
         columns={columns}
         rows={feedback}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: MessageSquare, title: 'No feedback has been submitted yet', message: 'Ratings and comments from students will appear here.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

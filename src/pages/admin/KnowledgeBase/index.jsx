@@ -27,6 +27,7 @@ export default function AdminKnowledgeBasePage() {
   const [courses, setCourses] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [archived, setArchived] = useState('all');
   const [sort, setSort] = useState('newest');
@@ -37,8 +38,10 @@ export default function AdminKnowledgeBasePage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAdminCourses({ search, archived, sort, page, pageSize: 10 })
       .then((result) => { setCourses(result.courses ?? []); setPagination(result.pagination); })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -128,6 +131,8 @@ export default function AdminKnowledgeBasePage() {
         columns={columns}
         rows={courses}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: BookOpen, title: 'No courses found', message: 'Try a different search or filter.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

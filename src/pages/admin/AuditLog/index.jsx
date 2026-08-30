@@ -16,6 +16,7 @@ export default function AdminAuditLogPage() {
   const [actions, setActions] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('all');
   const [from, setFrom] = useState('');
@@ -26,8 +27,10 @@ export default function AdminAuditLogPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAuditLog({ search, action, from, to, page, pageSize: 15 })
       .then((result) => { setEntries(result.entries ?? []); setActions(result.actions ?? []); setPagination(result.pagination); })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -78,6 +81,8 @@ export default function AdminAuditLogPage() {
         columns={columns}
         rows={entries}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: ScrollText, title: 'No admin activity yet', message: 'Actions taken by administrators will be recorded here.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

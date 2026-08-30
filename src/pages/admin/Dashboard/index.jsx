@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Send, Users, BookOpen, FolderOpen, MessageSquare, GraduationCap,
-  ClipboardCheck, Star, Activity, UserPlus, Sparkles, Upload, Trash2,
+  ClipboardCheck, Star, Activity, UserPlus, Sparkles, Upload, Trash2, AlertTriangle,
 } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
@@ -38,16 +38,22 @@ function ActivityRow({ icon: Icon, color, text, time }) {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const toast = useToast();
 
-  useEffect(() => {
+  const loadStats = () => {
+    setLoading(true);
+    setError(null);
     getAdminDashboard()
       .then(setStats)
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(loadStats, []);
 
   const handleSend = async () => {
     if (!title.trim() || !body.trim()) return;
@@ -87,6 +93,16 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+      {error && !loading && (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">Couldn&apos;t load the dashboard</p>
+            <p className="text-xs text-rose-600 mt-0.5">{error.message || 'Please try again in a moment.'}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadStats}>Retry</Button>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {loading ? (
           Array.from({ length: 8 }).map((_, index) => <SkeletonStat key={index} />)

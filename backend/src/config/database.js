@@ -35,8 +35,14 @@ const pool = mysql.createPool({
   ssl: buildSslConfig(),
 });
 
+// Use the text protocol (pool.query) rather than server-side prepared statements
+// (pool.execute). Parameters are still bound via `?` and escaped by mysql2, so
+// this stays injection-safe, but `LIMIT ?` / `OFFSET ?` work on strict MySQL 8
+// (Aiven): execute() sends every JS number as a DOUBLE, which MySQL rejects for
+// LIMIT/OFFSET ("Incorrect arguments to mysqld_stmt_execute"). MariaDB accepts it,
+// which is why this only surfaced in production.
 async function query(sql, params = []) {
-  const [rows] = await pool.execute(sql, params);
+  const [rows] = await pool.query(sql, params);
   return rows;
 }
 
@@ -67,7 +73,7 @@ async function testConnection() {
 
 async function execute(connection, sql, params = []) {
   if (connection) {
-    const [result] = await connection.execute(sql, params);
+    const [result] = await connection.query(sql, params);
     return result;
   }
 

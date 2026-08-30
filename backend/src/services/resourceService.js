@@ -7,6 +7,7 @@ const { notifyUser } = require('../utils/notify');
 const { callGemini, getResponseText } = require('./geminiClient');
 const { extractPdfText, truncateForAi } = require('../utils/pdfText');
 const { extractOfficeText } = require('../utils/officeText');
+const { assertFetchableExternalUrl } = require('../utils/safeUrl');
 const { deleteStoredFile, getStoredFile, storeResourceFile } = require('./storageService');
 
 const ANALYSIS_SCHEMA = {
@@ -120,7 +121,12 @@ function stripHtml(html) {
 }
 
 async function fetchLinkText(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  await assertFetchableExternalUrl(url);
+  // Don't auto-follow redirects: a public URL could otherwise bounce the request
+  // to an internal address. If the link redirects we just skip text extraction —
+  // the link resource itself is still saved.
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: 'manual' });
+  if (response.status >= 300 && response.status < 400) return '';
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('text/html') && !contentType.includes('text/plain')) return '';
   const html = await response.text();

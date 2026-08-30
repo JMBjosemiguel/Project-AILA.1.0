@@ -34,6 +34,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('all');
   const [status, setStatus] = useState('all');
@@ -45,11 +46,13 @@ export default function AdminUsersPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAdminUsers({ search, role, status, sort, page, pageSize: 10 })
       .then((result) => {
         setUsers(result.users ?? []);
         setPagination(result.pagination);
       })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -158,6 +161,8 @@ export default function AdminUsersPage() {
         columns={columns}
         rows={users}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: UsersIcon, title: 'No students found', message: 'Try a different search or filter.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

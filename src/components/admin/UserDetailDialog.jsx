@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Flame, Loader2, MessageSquare, X } from 'lucide-react';
+import { AlertTriangle, Flame, Loader2, MessageSquare, X } from 'lucide-react';
 import { getAdminUserDetail } from '../../services/api/adminService';
-import { SkeletonList } from '../common/Skeleton';
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
@@ -23,12 +22,15 @@ function Stat({ label, value }) {
 export default function UserDetailDialog({ userId, onClose }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
     getAdminUserDetail(userId)
       .then((result) => { if (active) setDetail(result); })
+      .catch((err) => { if (active) setError(err); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [userId]);
@@ -39,7 +41,7 @@ export default function UserDetailDialog({ userId, onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="user-detail-title" className="text-[0.95rem] font-semibold text-ink-800">
-              {loading ? 'Loading student...' : `${detail?.first_name} ${detail?.last_name}`}
+              {loading ? 'Loading student...' : detail ? `${detail.first_name} ${detail.last_name}` : 'Student profile'}
             </h3>
             <p className="text-xs text-ink-400 mt-0.5">{detail?.email}</p>
           </div>
@@ -52,6 +54,12 @@ export default function UserDetailDialog({ userId, onClose }) {
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
               <Loader2 size={16} className="animate-spin" /> Loading student profile...
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center gap-2 text-sm text-ink-500 py-10 text-center">
+              <AlertTriangle size={20} className="text-rose-400" />
+              <p className="font-semibold text-ink-700">Couldn&apos;t load this profile</p>
+              <p className="text-xs text-ink-400">{error.message || 'Please close this dialog and try again.'}</p>
             </div>
           ) : detail ? (
             <div className="flex flex-col gap-5">
@@ -103,9 +111,7 @@ export default function UserDetailDialog({ userId, onClose }) {
                 ) : <p className="text-sm text-ink-400">No conversations yet.</p>}
               </div>
             </div>
-          ) : (
-            <SkeletonList count={4} />
-          )}
+          ) : null}
         </div>
       </div>
     </div>,

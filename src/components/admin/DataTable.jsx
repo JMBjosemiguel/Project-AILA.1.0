@@ -1,14 +1,29 @@
+import { AlertTriangle } from 'lucide-react';
 import Card from '../common/Card';
 import { SkeletonList } from '../common/Skeleton';
 import EmptyState from '../common/EmptyState';
+import Button from '../common/Button';
 
-export default function DataTable({ columns, rows, rowKey = 'id', loading, emptyState, onRowClick, footer }) {
+export default function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetry, emptyState, onRowClick, footer }) {
   if (loading) {
     return (
       <Card padded={false} className="overflow-hidden">
         <div className="p-4">
           <SkeletonList count={5} />
         </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <EmptyState
+          icon={AlertTriangle}
+          title="Couldn't load this list"
+          message={error.message || 'Something went wrong while loading. Please try again.'}
+          action={onRetry ? <Button size="sm" variant="outline" onClick={onRetry}>Retry</Button> : null}
+        />
       </Card>
     );
   }

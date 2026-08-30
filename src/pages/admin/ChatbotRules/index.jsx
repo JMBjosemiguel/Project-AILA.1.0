@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Award, BookOpen, FolderOpen, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, FolderOpen, TrendingDown, TrendingUp } from 'lucide-react';
+import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonList } from '../../../components/common/Skeleton';
@@ -28,15 +29,38 @@ function ListCard({ title, subtitle, icon: Icon, items, empty, renderItem }) {
 export default function AdminChatbotRulesPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    getAdminAnalytics().then(setData).finally(() => setLoading(false));
-  }, []);
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    getAdminAnalytics()
+      .then(setData)
+      .catch((err) => setError(err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
 
   if (loading) {
     return (
       <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
         <SkeletonList count={6} />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+        <Card>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Couldn't load analytics"
+            message={error?.message || 'Something went wrong while loading analytics. Please try again.'}
+            action={<Button size="sm" variant="outline" onClick={load}>Retry</Button>}
+          />
+        </Card>
       </div>
     );
   }

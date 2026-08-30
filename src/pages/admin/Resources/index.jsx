@@ -40,6 +40,7 @@ export default function AdminResourcesPage() {
   const [resources, setResources] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [archived, setArchived] = useState('all');
@@ -52,12 +53,14 @@ export default function AdminResourcesPage() {
 
   const load = () => {
     setLoading(true);
+    setError(null);
     listAdminResources({ search, type, archived, sort, page, pageSize: 10 })
       .then((result) => {
         setResources((result.resources ?? []).map(parseResource));
         setPagination(result.pagination);
         setSelected([]);
       })
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -201,6 +204,8 @@ export default function AdminResourcesPage() {
         columns={columns}
         rows={resources}
         loading={loading}
+        error={error}
+        onRetry={load}
         emptyState={{ icon: FolderOpen, title: 'No resources found', message: 'Try a different search or filter.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />

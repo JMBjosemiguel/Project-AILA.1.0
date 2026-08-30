@@ -56,8 +56,14 @@ cd backend
 npm install
 npm run dev        # nodemon; npm start = plain node
 ```
-`node --check src/server.js` is the smoke test (`npm test`). The server exits on startup
-if it cannot reach the DB.
+Tests use the built-in `node:test` runner (no extra deps):
+- `npm test` — unit tests (`backend/test/unit/`), run anywhere.
+- `npm run test:integration` — API + isolation tests (`backend/test/integration/`).
+  Needs `npm run dev` running and the local DB; self-skips if the backend is
+  unreachable and cleans up its own `qa.itest.*` fixtures.
+- `npm run test:smoke` — `node --check src/server.js`.
+
+The server exits on startup if it cannot reach the DB.
 
 **Frontend** (`http://localhost:5173`):
 ```bash

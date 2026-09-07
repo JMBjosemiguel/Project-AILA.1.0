@@ -10,7 +10,20 @@ vi.mock('../../../../services/api/quizService', () => ({ deleteQuizAttempt: vi.f
 vi.mock('../../../../components/common/ConfirmDialog', () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
 vi.mock('../../../../components/common/Toast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
+const setResumeQuiz = vi.fn();
+vi.mock('../../../../utils/quizResumeTarget', () => ({ setResumeQuiz: (id) => setResumeQuiz(id) }));
+
 import DashboardPage from '../index.jsx';
+
+const baseData = {
+  profile: { first_name: 'Sam', xp_points: 40, level: 1 },
+  stats: [{ label: 'Study Streak', value: '3d' }],
+  courses: [], activities: [], deadlines: [],
+  streak: { current_streak: 3, longest_streak: 5 },
+  recentConversations: [], recentQuizzes: [], recentlyOpenedResources: [],
+  weeklyActivity: [], activeQuizAttempts: [], continueLearning: null,
+  recommendation: { type: 'on_track', title: "You're on track", message: 'keep going', lessonId: null },
+};
 
 describe('DashboardPage — reliability', () => {
   it('shows an error state with a retry action when the summary fails to load', async () => {
@@ -30,23 +43,42 @@ describe('DashboardPage — reliability', () => {
   it('renders the dashboard normally when data loads', () => {
     state.error = null;
     state.loading = false;
-    state.data = {
-      profile: { first_name: 'Sam', xp_points: 40, level: 1 },
-      stats: [{ label: 'Study Streak', value: '3d' }],
-      courses: [],
-      activities: [],
-      deadlines: [],
-      streak: { current_streak: 3, longest_streak: 5 },
-      recentConversations: [],
-      recentQuizzes: [],
-      recentlyOpenedResources: [],
-      weeklyActivity: [],
-      continueLearning: null,
-      recommendation: { type: 'on_track', title: "You're on track", message: 'keep going', lessonId: null },
-    };
+    state.data = { ...baseData };
 
     render(<DashboardPage onNavigate={vi.fn()} />);
     expect(screen.queryByText(/Couldn.t load your dashboard/i)).not.toBeInTheDocument();
     expect(screen.getByText("You're on track")).toBeInTheDocument();
+  });
+
+  it('hides the Resume Test widget when there is no unfinished attempt', () => {
+    state.error = null;
+    state.loading = false;
+    state.data = { ...baseData, activeQuizAttempts: [] };
+
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    expect(screen.queryByText(/Resume a test/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the Resume Test widget for an active attempt and routes to it on click', async () => {
+    const user = userEvent.setup();
+    setResumeQuiz.mockClear();
+    const onNavigate = vi.fn();
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      activeQuizAttempts: [
+        { attemptId: 9, quizId: 42, topic: 'Photosynthesis', total: 6, answered: 3, progressPercent: 50 },
+      ],
+    };
+
+    render(<DashboardPage onNavigate={onNavigate} />);
+    expect(screen.getByText(/Resume a test/i)).toBeInTheDocument();
+    expect(screen.getByText('Photosynthesis')).toBeInTheDocument();
+    expect(screen.getByText('3/6 answered')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Resume/i }));
+    expect(setResumeQuiz).toHaveBeenCalledWith(42);
+    expect(onNavigate).toHaveBeenCalledWith('hub');
   });
 });

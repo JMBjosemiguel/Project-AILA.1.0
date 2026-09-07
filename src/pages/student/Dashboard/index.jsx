@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
+import ResumeTestCard from '../../../components/student/dashboard/ResumeTestCard';
 import ActivityCard from '../../../components/student/dashboard/ActivityCard';
 import CourseProgressCard from '../../../components/student/dashboard/CourseProgressCard';
 import DeadlinesCard from '../../../components/student/dashboard/DeadlinesCard';
@@ -17,6 +18,7 @@ import { useToast } from '../../../components/common/Toast';
 import { useDashboardData } from '../../../hooks/useDashboardData';
 import { deleteQuizAttempt } from '../../../services/api/quizService';
 import { setResumeLesson } from '../../../utils/learningHubTarget';
+import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
 
 export default function DashboardPage({ onNavigate }) {
@@ -47,6 +49,11 @@ export default function DashboardPage({ onNavigate }) {
   const handleContinueLearning = () => {
     if (!continueLearning) return;
     setResumeLesson(continueLearning.lessonId);
+    onNavigate('hub');
+  };
+
+  const handleResumeTest = (attempt) => {
+    setResumeQuiz(attempt.quizId);
     onNavigate('hub');
   };
 
@@ -87,6 +94,8 @@ export default function DashboardPage({ onNavigate }) {
           onAskAila={handleAskAilaAboutRecommendation}
         />
       )}
+
+      {!loading && <ResumeTestCard attempts={data?.activeQuizAttempts ?? []} onResume={handleResumeTest} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {loading ? (

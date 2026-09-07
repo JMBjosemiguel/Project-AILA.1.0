@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, BookOpenCheck, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
 import ActivityCard from '../../../components/student/dashboard/ActivityCard';
@@ -21,7 +21,7 @@ import { setPrefillPrompt } from '../../../utils/aiPrefill';
 
 export default function DashboardPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data, loading } = useDashboardData(refreshVersion);
+  const { data, loading, error } = useDashboardData(refreshVersion);
   const stats = data?.stats ?? [];
   const continueLearning = data?.continueLearning;
   const recommendation = data?.recommendation;
@@ -60,6 +60,21 @@ export default function DashboardPage({ onNavigate }) {
     setPrefillPrompt(recommendation?.title ? `Can you help me with "${recommendation.title.replace(/^Review |^Continue /, '')}"?` : 'What should I study next?');
     onNavigate('assistant');
   };
+
+  if (!loading && error) {
+    return (
+      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+        <Card>
+          <EmptyState
+            icon={AlertTriangle}
+            title="Couldn't load your dashboard"
+            message={error.message || 'Something went wrong loading your dashboard. Please try again.'}
+            action={<Button size="sm" variant="outline" onClick={() => setRefreshVersion((version) => version + 1)}>Retry</Button>}
+          />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">

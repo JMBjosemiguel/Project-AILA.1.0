@@ -21,6 +21,7 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
   const [completing, setCompleting] = useState(false);
   const [objectives, setObjectives] = useState(null);
   const [objectivesLoading, setObjectivesLoading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const toast = useToast();
 
   useEffect(() => {
@@ -35,7 +36,9 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
       .finally(() => { if (active) setLoading(false); });
 
     return () => { active = false; };
-  }, [lessonId]);
+  }, [lessonId, reloadKey]);
+
+  const contentUnavailable = detail && !loading && !detail.lesson.content;
 
   const handleComplete = async () => {
     setCompleting(true);
@@ -106,7 +109,14 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
             </div>
           )}
 
-          <MarkdownRenderer text={detail.lesson.content} />
+          {contentUnavailable ? (
+            <div className="flex flex-col items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <span>AILA couldn&apos;t write this lesson just now. Your progress is safe — try again in a moment.</span>
+              <Button size="sm" variant="outline" onClick={() => setReloadKey((key) => key + 1)}>Retry</Button>
+            </div>
+          ) : (
+            <MarkdownRenderer text={detail.lesson.content} />
+          )}
 
           <div>
             <button

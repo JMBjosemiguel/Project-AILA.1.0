@@ -146,7 +146,19 @@ const LESSON_CONTENT_PROMPT_SECTIONS = [
   'Review Questions (3-5 questions, no answers needed — these are for self-study)',
 ];
 
-async function generateLessonContent(lesson) {
+// Per-lesson in-process guard: concurrent opens of the same not-yet-generated
+// lesson (double click, two tabs) share one Gemini call instead of racing.
+// Process-local — on a multi-instance deployment two instances could still each
+// generate once, but the conditional UPDATE below keeps the first result and
+// nothing partial is ever stored.
+const lessonGenerationInFlight = new Map();
+
+async function runLessonGeneration(lesson) {
+  const existing = await query('SELECT content FROM lessons WHERE id = ? LIMIT 1', [lesson.id]);
+  if (existing[0]?.content) {
+    return existing[0].content;
+  }
+
   const prompt = [
     `Write a complete lesson titled "${lesson.title}" for the topic "${lesson.topic_title}" in the module "${lesson.module_title}" of the course "${lesson.subject_name}".`,
     lesson.goal ? `The student's overall goal for this course is: "${lesson.goal}".` : '',
@@ -165,11 +177,28 @@ async function generateLessonContent(lesson) {
     },
   });
 
-  const content = getResponseText(payload);
+  const content = getResponseText(payload); // throws on an empty response — nothing partial is stored
 
-  await query('UPDATE lessons SET content = ? WHERE id = ?', [content, lesson.id]);
+  // Only fill if still empty, so a racing generation's result is never clobbered.
+  await query('UPDATE lessons SET content = ? WHERE id = ? AND content IS NULL', [content, lesson.id]);
 
-  return content;
+  const stored = await query('SELECT content FROM lessons WHERE id = ? LIMIT 1', [lesson.id]);
+  return stored[0]?.content || content;
+}
+
+async function generateLessonContent(lesson) {
+  const key = String(lesson.id);
+  if (lessonGenerationInFlight.has(key)) {
+    return lessonGenerationInFlight.get(key);
+  }
+
+  const task = runLessonGeneration(lesson);
+  lessonGenerationInFlight.set(key, task);
+  try {
+    return await task;
+  } finally {
+    lessonGenerationInFlight.delete(key);
+  }
 }
 
 module.exports = {

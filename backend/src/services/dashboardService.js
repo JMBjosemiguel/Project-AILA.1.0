@@ -24,18 +24,25 @@ async function getStreak(userId) {
   return rows[0] || { current_streak: 0, longest_streak: 0 };
 }
 
+// The "this week's activity" chart is captioned as completed lessons / quizzes /
+// tasks, so it must count only those — not `resource_viewed` (logged on every
+// open/download) or `xp_earned` (a duplicate signal fired alongside the above).
+const LEARNING_ACTIVITY_TYPES = ['lesson_completed', 'quiz_completed', 'task_completed'];
+
 async function getWeeklyActivity(userId) {
   const rows = await query(
     `
       SELECT DATE(created_at) AS date, COUNT(*) AS count
       FROM dashboard_activity_log
-      WHERE user_id = ? AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+      WHERE user_id = ?
+        AND activity_type IN (?, ?, ?)
+        AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `,
-    [userId]
+    [userId, ...LEARNING_ACTIVITY_TYPES]
   );
-  return rows.map((row) => ({ day: weekdayLabel(row.date), count: row.count }));
+  return rows.map((row) => ({ day: weekdayLabel(row.date), count: Number(row.count) }));
 }
 
 function findLessonForTopic(subjects, topicId) {

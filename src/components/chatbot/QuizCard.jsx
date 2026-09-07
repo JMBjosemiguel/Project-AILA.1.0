@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CheckCircle2, ClipboardList, Loader2, XCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, CheckCircle2, ClipboardList, Cloud, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 
@@ -11,6 +11,18 @@ const TYPE_LABELS = {
 
 function normalize(value) {
   return (value ?? '').toString().trim().toLowerCase();
+}
+
+// Server-saved answers arrive as [{ questionId, selectedAnswer }]; QuizCard keys
+// its local answer state by item index, so map one onto the other up front.
+function seedAnswers(items, initialAnswers) {
+  const byId = new Map((initialAnswers ?? []).map((row) => [row.questionId, row.selectedAnswer]));
+  const seeded = {};
+  items.forEach((item, index) => {
+    const value = byId.get(item.id);
+    if (value != null && value !== '') seeded[index] = value;
+  });
+  return seeded;
 }
 
 // A graded quiz always resolves to one review row per item, no matter whether
@@ -40,12 +52,35 @@ function reviewFromInlineKey(items, answers) {
   }));
 }
 
-export default function QuizCard({ quiz, onSubmit }) {
+const SAVE_LABEL = {
+  saving: 'Saving…',
+  saved: 'Saved',
+  error: "Couldn't save",
+};
+
+export default function QuizCard({
+  quiz,
+  onSubmit,
+  initialAnswers,
+  initialIndex = 0,
+  onAnswerChange,
+  saveState = 'idle',
+  onRetrySave,
+}) {
   const items = quiz?.items ?? [];
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState(() => seedAnswers(items, initialAnswers));
   const [review, setReview] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const submitted = review !== null;
+  const itemRefs = useRef([]);
+
+  // On resume, scroll the student back to roughly where they left off.
+  useEffect(() => {
+    if (initialIndex > 0 && itemRefs.current[initialIndex]) {
+      itemRefs.current[initialIndex].scrollIntoView({ block: 'center' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const score = submitted ? review.filter((row) => row.isCorrect).length : 0;
 
@@ -60,6 +95,7 @@ export default function QuizCard({ quiz, onSubmit }) {
   const setAnswer = (index, value) => {
     if (submitted || submitting) return;
     setAnswers((current) => ({ ...current, [index]: value }));
+    onAnswerChange?.({ questionId: items[index]?.id, selectedAnswer: value, index });
   };
 
   const handleSubmit = async () => {
@@ -84,6 +120,8 @@ export default function QuizCard({ quiz, onSubmit }) {
     setReview(reviewFromInlineKey(items, answers));
   };
 
+  const showSaveStatus = !submitted && typeof onAnswerChange === 'function' && saveState !== 'idle';
+
   return (
     <Card className="max-w-xl">
       <CardHeader
@@ -98,13 +136,35 @@ export default function QuizCard({ quiz, onSubmit }) {
         </div>
       )}
 
+      {showSaveStatus && (
+        <div className="mb-3 flex items-center gap-1.5 text-xs text-ink-400" aria-live="polite">
+          {saveState === 'saving' && <Cloud size={12} className="animate-pulse" />}
+          {saveState === 'saved' && <Check size={12} className="text-emerald-500" />}
+          {saveState === 'error' && <XCircle size={12} className="text-rose-500" />}
+          <span className={saveState === 'error' ? 'text-rose-600' : ''}>{SAVE_LABEL[saveState]}</span>
+          {saveState === 'error' && onRetrySave && (
+            <button
+              type="button"
+              onClick={onRetrySave}
+              className="ml-1 inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+            >
+              <RotateCcw size={11} /> Retry
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         {items.map((item, index) => {
           const graded = submitted ? review[index] : null;
           const isCorrect = Boolean(graded?.isCorrect);
 
           return (
-            <div key={index} className="border border-ink-100 rounded-xl p-3.5">
+            <div
+              key={index}
+              ref={(node) => { itemRefs.current[index] = node; }}
+              className="border border-ink-100 rounded-xl p-3.5"
+            >
               <p className="text-sm font-medium text-ink-800 mb-2.5">
                 {index + 1}. {item.question}
               </p>

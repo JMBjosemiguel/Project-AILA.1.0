@@ -28,8 +28,11 @@ export const API_ENDPOINTS = {
     generate: '/quizzes/generate',
     quiz: (id) => `/quizzes/${id}`,
     attempts: (id) => `/quizzes/${id}/attempts`,
+    startAttempt: (id) => `/quizzes/${id}/attempts/start`,
     history: '/quizzes/history',
     attempt: (id) => `/quizzes/attempts/${id}`,
+    attemptAnswers: (id) => `/quizzes/attempts/${id}/answers`,
+    submitAttempt: (id) => `/quizzes/attempts/${id}/submit`,
   },
   chatbot: {
     conversations: '/chat/conversations',

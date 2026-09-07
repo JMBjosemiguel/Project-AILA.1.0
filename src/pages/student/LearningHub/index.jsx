@@ -13,6 +13,7 @@ import { useLearningHubData } from '../../../hooks/useLearningHubData';
 import { deleteCourse } from '../../../services/api/learningService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
 import { consumeResumeLesson } from '../../../utils/learningHubTarget';
+import { consumeResumeQuiz } from '../../../utils/quizResumeTarget';
 
 export default function LearningHubPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -20,6 +21,7 @@ export default function LearningHubPage({ onNavigate }) {
   const [search, setSearch] = useState('');
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [quizRequest, setQuizRequest] = useState(null);
+  const [resumeQuizId, setResumeQuizId] = useState(null);
   const [addingCourse, setAddingCourse] = useState(false);
   const subjects = data?.subjects ?? [];
   const confirm = useConfirm();
@@ -28,6 +30,8 @@ export default function LearningHubPage({ onNavigate }) {
   useEffect(() => {
     const resumeId = consumeResumeLesson();
     if (resumeId) setSelectedLessonId(resumeId);
+    const resumeQuiz = consumeResumeQuiz();
+    if (resumeQuiz) setResumeQuizId(resumeQuiz);
   }, []);
 
   const filtered = useMemo(() => (
@@ -98,6 +102,16 @@ export default function LearningHubPage({ onNavigate }) {
       )}
 
       {quizRequest && <QuizRunner request={quizRequest} onClose={() => setQuizRequest(null)} />}
+
+      {resumeQuizId && (
+        <QuizRunner
+          resumeQuizId={resumeQuizId}
+          onClose={() => {
+            setResumeQuizId(null);
+            setRefreshVersion((version) => version + 1);
+          }}
+        />
+      )}
 
       {addingCourse && (
         <AddCourseWizard

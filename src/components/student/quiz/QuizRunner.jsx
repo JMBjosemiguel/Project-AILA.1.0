@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, X } from 'lucide-react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
 import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
-import { generateQuiz, submitQuizAttempt } from '../../../services/api/quizService';
+import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt } from '../../../services/api/quizService';
 
 const QUIZ_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -14,16 +14,82 @@ const QUIZ_TYPES = [
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
-export default function QuizRunner({ request, onClose }) {
+export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
   const [quizType, setQuizType] = useState('multiple_choice');
   const [difficulty, setDifficulty] = useState('medium');
   const [itemCount, setItemCount] = useState(5);
-  const [step, setStep] = useState('setup');
-  const [quiz, setQuiz] = useState(null);
+  const [step, setStep] = useState(resumeQuizId ? 'starting' : 'setup');
+  const [quiz, setQuiz] = useState(null);            // { topic, quizType, difficulty, items }
+  const [attempt, setAttempt] = useState(null);      // { id, currentIndex }
+  const [initialAnswers, setInitialAnswers] = useState([]);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [saveState, setSaveState] = useState('idle');
   const submittingRef = useRef(false);
   const toast = useToast();
+
+  // --- answer autosave: a serialized "latest write per question" queue --------
+  const attemptIdRef = useRef(null);
+  const quizIdRef = useRef(resumeQuizId);   // which quiz beginAttempt should (re)open
+  const pendingRef = useRef(new Map());   // questionId -> { selectedAnswer, index }
+  const chainRef = useRef(Promise.resolve());
+
+  const drain = useCallback(async () => {
+    while (pendingRef.current.size && attemptIdRef.current) {
+      const [questionId, payload] = pendingRef.current.entries().next().value;
+      pendingRef.current.delete(questionId);
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await saveAttemptAnswer(attemptIdRef.current, {
+          questionId,
+          selectedAnswer: payload.selectedAnswer,
+          currentIndex: payload.index,
+        });
+      } catch {
+        pendingRef.current.set(questionId, payload); // keep it for a retry
+        setSaveState('error');
+        return;
+      }
+    }
+    setSaveState(pendingRef.current.size ? 'error' : 'saved');
+  }, []);
+
+  const queueSave = useCallback(({ questionId, selectedAnswer, index }) => {
+    if (questionId == null) return;
+    pendingRef.current.set(questionId, { selectedAnswer, index });
+    setSaveState('saving');
+    chainRef.current = chainRef.current.then(drain, drain);
+  }, [drain]);
+
+  const flushSaves = useCallback(async () => {
+    if (pendingRef.current.size) setSaveState('saving');
+    chainRef.current = chainRef.current.then(drain, drain);
+    await chainRef.current;
+  }, [drain]);
+
+  const beginAttempt = useCallback(async (quizId) => {
+    quizIdRef.current = quizId;
+    setStep('starting');
+    setError('');
+    try {
+      const data = await startQuizAttempt(quizId);
+      attemptIdRef.current = data.attempt.id;
+      setAttempt(data.attempt);
+      setInitialAnswers(data.answers || []);
+      setQuiz({ ...data.quiz, items: data.items });
+      setSaveState('idle');
+      setStep('ready');
+    } catch (err) {
+      setError(err.message || 'Could not open this quiz. Please try again.');
+      setStep('error');
+    }
+  }, []);
+
+  // Resume path: jump straight to the unfinished attempt.
+  useEffect(() => {
+    if (resumeQuizId) beginAttempt(resumeQuizId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeQuizId]);
 
   const handleGenerate = async () => {
     if (submittingRef.current) return;
@@ -39,8 +105,7 @@ export default function QuizRunner({ request, onClose }) {
         sourceType: request.sourceType,
         sourceId: request.sourceId,
       });
-      setQuiz(generated);
-      setStep('ready');
+      await beginAttempt(generated.id);
     } catch (err) {
       setError(err.message || 'Could not generate a quiz right now.');
       setStep('setup');
@@ -50,28 +115,33 @@ export default function QuizRunner({ request, onClose }) {
     }
   };
 
-  const handleSubmit = async (answers) => {
+  const handleSubmit = async () => {
+    await flushSaves();
+    if (pendingRef.current.size) {
+      toast.error("Some answers didn't save. Check your connection and try again.");
+      throw new Error('unsaved answers');
+    }
     try {
-      const attemptResult = await submitQuizAttempt(quiz.id, answers);
-      setResult(attemptResult);
-      toast.success('Quiz finished — saved to your history.');
-      return attemptResult; // QuizCard uses this to render the graded review
+      const review = await submitAttempt(attemptIdRef.current);
+      setResult(review);
+      toast.success('Quiz submitted — saved to your history.');
+      return review; // QuizCard renders the graded review from this
     } catch (err) {
-      setError(err.message || 'Could not save your quiz attempt.');
-      toast.error(err.message || 'Could not save your quiz attempt.');
+      toast.error(err.message || 'Could not submit your quiz.');
       throw err;
     }
   };
+
+  const headerTitle = step === 'ready' && quiz ? `Quiz: ${quiz.topic}` : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
+  const resumedCount = step === 'ready' && !result ? initialAnswers.filter((a) => a.selectedAnswer).length : 0;
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="quiz-runner-title">
       <div className="w-full max-w-xl max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
-            <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800">
-              {step === 'ready' && quiz ? `Quiz: ${quiz.topic}` : 'Generate a quiz'}
-            </h3>
-            <p className="text-xs text-ink-400 mt-0.5">Topic: {request.topic}</p>
+            <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800">{headerTitle}</h3>
+            <p className="text-xs text-ink-400 mt-0.5">Topic: {quiz?.topic || request?.topic || '—'}</p>
           </div>
           <button
             onClick={onClose}
@@ -143,15 +213,37 @@ export default function QuizRunner({ request, onClose }) {
             </>
           )}
 
-          {step === 'loading' && (
+          {(step === 'loading' || step === 'starting') && (
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
-              <Loader2 size={16} className="animate-spin" /> AILA is generating your quiz...
+              <Loader2 size={16} className="animate-spin" />
+              {step === 'loading' ? 'AILA is generating your quiz...' : 'Opening your quiz...'}
+            </div>
+          )}
+
+          {step === 'error' && (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <AlertTriangle size={22} className="text-amber-500" />
+              <p className="text-sm text-ink-600">{error || 'Something went wrong.'}</p>
+              {quizIdRef.current && (
+                <Button size="sm" variant="outline" onClick={() => beginAttempt(quizIdRef.current)}>Try again</Button>
+              )}
             </div>
           )}
 
           {step === 'ready' && quiz && (
             <div>
-              <QuizCard quiz={quiz} onSubmit={handleSubmit} />
+              {resumedCount > 0 && (
+                <p className="text-xs text-ink-400 mb-3">Resumed — {resumedCount} saved answer{resumedCount === 1 ? '' : 's'} restored.</p>
+              )}
+              <QuizCard
+                quiz={quiz}
+                onSubmit={handleSubmit}
+                initialAnswers={initialAnswers}
+                initialIndex={attempt?.currentIndex ?? 0}
+                onAnswerChange={queueSave}
+                saveState={saveState}
+                onRetrySave={flushSaves}
+              />
               {result && (
                 <p className="text-center text-xs text-ink-400 mt-2">
                   Saved to your quiz history{result.xpAwarded > 0 ? ` · +${result.xpAwarded} XP` : ''}

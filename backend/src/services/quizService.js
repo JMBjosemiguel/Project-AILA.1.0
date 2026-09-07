@@ -3,9 +3,11 @@ const { callGemini, getResponseText } = require('./geminiClient');
 const { transaction } = require('../config/database');
 const quizModel = require('../models/quizModel');
 const resourceModel = require('../models/resourceModel');
-const { awardXp, logActivity } = require('../utils/gamification');
+const { awardXpOnce, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 const { truncateForAi } = require('../utils/pdfText');
+
+const QUIZ_XP_MAX = 20;
 
 const QUIZ_TYPE_LABELS = {
   multiple_choice: 'multiple choice',
@@ -139,7 +141,12 @@ function normalizeAnswer(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
-function formatQuizForClient(quiz) {
+/**
+ * TAKE payload — everything the client needs to answer the quiz and NOTHING
+ * that reveals the answer key. No correct_answer / correctAnswer / explanation
+ * / is_correct.
+ */
+function formatQuizForTake(quiz) {
   return {
     id: quiz.id,
     topic: quiz.topic,
@@ -149,9 +156,38 @@ function formatQuizForClient(quiz) {
       id: question.id,
       question: question.question,
       options: question.options,
-      correctAnswer: question.correct_answer,
-      explanation: question.explanation,
+      orderIndex: question.order_index,
     })),
+  };
+}
+
+/**
+ * REVIEW payload — only returned AFTER a server-side submission. Carries the
+ * grade, the student's answers, the correct answers and the explanations.
+ */
+function formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpAwarded }) {
+  const byId = new Map(quiz.questions.map((question) => [question.id, question]));
+
+  return {
+    attemptId,
+    quizId: quiz.id,
+    topic: quiz.topic,
+    quizType: quiz.quiz_type,
+    score,
+    total,
+    xpAwarded: xpAwarded || 0,
+    items: gradedAnswers.map((answer) => {
+      const question = byId.get(answer.questionId) || {};
+      return {
+        id: answer.questionId,
+        question: question.question,
+        options: question.options ?? null,
+        yourAnswer: answer.selectedAnswer,
+        correctAnswer: question.correct_answer,
+        explanation: question.explanation ?? null,
+        isCorrect: answer.isCorrect,
+      };
+    }),
   };
 }
 
@@ -185,7 +221,7 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
     body: `AILA generated a ${generated.items.length}-item quiz on "${quiz.topic}".`,
   });
 
-  return formatQuizForClient(quiz);
+  return formatQuizForTake(quiz);
 }
 
 async function getQuizForUser(userId, quizId) {
@@ -193,7 +229,7 @@ async function getQuizForUser(userId, quizId) {
   if (!quiz) {
     throw new ApiError(404, 'Quiz not found.');
   }
-  return formatQuizForClient(quiz);
+  return formatQuizForTake(quiz);
 }
 
 async function submitAttempt(userId, quizId, answers) {
@@ -202,8 +238,10 @@ async function submitAttempt(userId, quizId, answers) {
     throw new ApiError(404, 'Quiz not found.');
   }
 
-  const answerMap = new Map(answers.map((answer) => [Number(answer.questionId), answer.selectedAnswer]));
+  const answerMap = new Map((answers || []).map((answer) => [Number(answer.questionId), answer.selectedAnswer]));
 
+  // Grading is server-authoritative: only the DB `correct_answer` is trusted;
+  // any client-supplied correctAnswer / isCorrect / score is ignored.
   const gradedAnswers = quiz.questions.map((question) => {
     const selectedAnswer = answerMap.get(question.id) ?? '';
     const isCorrect = normalizeAnswer(selectedAnswer) === normalizeAnswer(question.correct_answer);
@@ -212,16 +250,20 @@ async function submitAttempt(userId, quizId, answers) {
 
   const score = gradedAnswers.filter((answer) => answer.isCorrect).length;
   const total = quiz.questions.length;
+  const points = total > 0 ? Math.round((score / total) * QUIZ_XP_MAX) : 0;
 
-  const attemptId = await transaction(async (connection) => {
+  const { attemptId, xpAwarded } = await transaction(async (connection) => {
     const newAttemptId = await quizModel.createAttempt({ quizId: quiz.id, userId, score, total }, connection);
     await quizModel.createAttemptAnswers(newAttemptId, gradedAnswers, connection);
     await logActivity(userId, 'quiz_completed', quiz.id, `Scored ${score}/${total} on "${quiz.topic}" quiz`, connection);
 
-    const xpEarned = Math.round((score / total) * 20);
-    if (xpEarned > 0) {
-      await awardXp(userId, xpEarned, `Scored ${score}/${total} on "${quiz.topic}" quiz`, connection);
-    }
+    // First legitimate completion of THIS quiz earns XP; retakes earn nothing.
+    const xp = await awardXpOnce(userId, {
+      eventKey: `quiz_completed:${quiz.id}`,
+      points,
+      reason: `Completed the "${quiz.topic}" quiz`,
+    }, connection);
+
     await notifyUser(userId, {
       type: 'system',
       title: 'Quiz scored',
@@ -229,15 +271,10 @@ async function submitAttempt(userId, quizId, answers) {
       connection,
     });
 
-    return newAttemptId;
+    return { attemptId: newAttemptId, xpAwarded: xp.awarded };
   });
 
-  return {
-    attemptId,
-    score,
-    total,
-    results: gradedAnswers,
-  };
+  return formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpAwarded });
 }
 
 async function listQuizHistory(userId) {
@@ -249,7 +286,24 @@ async function getAttemptReview(userId, attemptId) {
   if (!attempt) {
     throw new ApiError(404, 'Quiz attempt not found.');
   }
-  return attempt;
+
+  return {
+    attemptId: attempt.id,
+    quizId: attempt.quiz_id,
+    topic: attempt.topic,
+    quizType: attempt.quiz_type,
+    score: attempt.score,
+    total: attempt.total,
+    completedAt: attempt.completed_at,
+    items: attempt.answers.map((answer) => ({
+      id: answer.question_id,
+      question: answer.question,
+      yourAnswer: answer.selected_answer,
+      correctAnswer: answer.correct_answer,
+      explanation: answer.explanation ?? null,
+      isCorrect: Boolean(answer.is_correct),
+    })),
+  };
 }
 
 async function deleteAttempt(userId, attemptId) {
@@ -268,4 +322,6 @@ module.exports = {
   listQuizHistory,
   getAttemptReview,
   deleteAttempt,
+  formatQuizForTake,
+  formatAttemptReview,
 };

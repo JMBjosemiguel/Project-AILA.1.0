@@ -4,60 +4,82 @@ const { notifyUser } = require('./notify');
 const XP_PER_LEVEL = 100;
 
 function levelForXp(xp) {
-  return Math.floor(xp / XP_PER_LEVEL) + 1;
+  return Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1;
 }
 
 function toDateStr(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-async function awardXp(userId, amount, reason, connection = null) {
-  const exec = connection
+function runner(connection) {
+  return connection
     ? (sql, params) => connection.execute(sql, params).then(([result]) => result)
     : (sql, params) => query(sql, params);
+}
 
-  const selectSql = 'SELECT xp_points FROM user_profiles WHERE user_id = ? LIMIT 1';
-  const rows = connection
-    ? (await connection.execute(selectSql, [userId]))[0]
-    : await query(selectSql, [userId]);
+/**
+ * Award XP exactly once per (user, eventKey).
+ *
+ * The unique constraint on xp_events(user_id, event_key) is the idempotency
+ * guard: a duplicate award — a quiz retake, a double-submitted request, a
+ * concurrent race — inserts 0 rows and re-awards nothing. user_profiles.xp_points
+ * / level are recomputed from SUM(xp_events) so the cached balance can never
+ * drift from the ledger.
+ */
+async function awardXpOnce(userId, { eventKey, points, reason }, connection = null) {
+  const amount = Math.round(Number(points) || 0);
+  if (!eventKey || amount <= 0) {
+    return { awarded: 0, duplicate: false };
+  }
 
-  const currentXp = rows[0]?.xp_points ?? 0;
-  const previousLevel = levelForXp(currentXp);
-  const nextXp = currentXp + amount;
-  const nextLevel = levelForXp(nextXp);
+  const run = runner(connection);
 
-  await exec('UPDATE user_profiles SET xp_points = ?, level = ? WHERE user_id = ?', [nextXp, nextLevel, userId]);
-  await exec(
+  const claim = await run(
+    'INSERT IGNORE INTO xp_events (user_id, event_key, points, reason) VALUES (?, ?, ?, ?)',
+    [userId, eventKey, amount, reason || null]
+  );
+  if (!claim.affectedRows) {
+    return { awarded: 0, duplicate: true };
+  }
+
+  const totalRows = await run(
+    'SELECT COALESCE(SUM(points), 0) AS total FROM xp_events WHERE user_id = ?',
+    [userId]
+  );
+  const total = Number(totalRows[0]?.total ?? 0);
+  const previousLevel = levelForXp(total - amount);
+  const level = levelForXp(total);
+
+  await run('UPDATE user_profiles SET xp_points = ?, level = ? WHERE user_id = ?', [total, level, userId]);
+  await run(
     'INSERT INTO dashboard_activity_log (user_id, activity_type, reference_id, description) VALUES (?, ?, ?, ?)',
-    [userId, 'xp_earned', amount, `+${amount} XP - ${reason}`]
+    [userId, 'xp_earned', amount, `+${amount} XP - ${reason || 'Learning activity'}`]
   );
 
-  if (nextLevel > previousLevel) {
+  if (level > previousLevel) {
     await notifyUser(userId, {
       type: 'system',
       title: 'Level up!',
-      body: `You reached Level ${nextLevel}. Keep up the momentum.`,
+      body: `You reached Level ${level}. Keep up the momentum.`,
       connection,
     });
   }
 
-  return { xp: nextXp, level: nextLevel };
+  return { awarded: amount, duplicate: false, total, level };
 }
 
 async function touchStreak(userId, connection = null) {
-  const exec = connection
-    ? (sql, params) => connection.execute(sql, params).then(([result]) => result)
-    : (sql, params) => query(sql, params);
+  const run = runner(connection);
 
-  const selectSql = 'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1';
-  const rows = connection
-    ? (await connection.execute(selectSql, [userId]))[0]
-    : await query(selectSql, [userId]);
+  const rows = await run(
+    'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
+    [userId]
+  );
 
   const todayStr = toDateStr(new Date());
 
   if (!rows.length) {
-    await exec(
+    await run(
       'INSERT INTO learning_streaks (user_id, current_streak, longest_streak, last_active_date) VALUES (?, 1, 1, ?)',
       [userId, todayStr]
     );
@@ -76,7 +98,7 @@ async function touchStreak(userId, connection = null) {
   const nextStreak = lastActiveStr === yesterdayStr ? currentStreak + 1 : 1;
   const nextLongest = Math.max(longestStreak, nextStreak);
 
-  await exec(
+  await run(
     'UPDATE learning_streaks SET current_streak = ?, longest_streak = ?, last_active_date = ? WHERE user_id = ?',
     [nextStreak, nextLongest, todayStr, userId]
   );
@@ -95,7 +117,7 @@ async function logActivity(userId, activityType, referenceId, description, conne
 
 module.exports = {
   levelForXp,
-  awardXp,
+  awardXpOnce,
   touchStreak,
   logActivity,
 };

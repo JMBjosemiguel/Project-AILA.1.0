@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle2, ClipboardList, Loader2, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 
@@ -13,34 +13,75 @@ function normalize(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+// A graded quiz always resolves to one review row per item, no matter whether
+// it was graded by the server (persisted quiz) or self-checked from an inline
+// answer key (chatbot practice quiz).
+function reviewFromServerResult(items, answers, result) {
+  const graded = Array.isArray(result?.items) ? result.items : [];
+  const byId = new Map(graded.map((row) => [row.id, row]));
+
+  return items.map((item, index) => {
+    const row = byId.get(item.id) || graded[index] || {};
+    return {
+      correctAnswer: row.correctAnswer ?? '',
+      explanation: row.explanation ?? '',
+      isCorrect: typeof row.isCorrect === 'boolean'
+        ? row.isCorrect
+        : normalize(answers[index]) === normalize(row.correctAnswer),
+    };
+  });
+}
+
+function reviewFromInlineKey(items, answers) {
+  return items.map((item, index) => ({
+    correctAnswer: item.correctAnswer ?? '',
+    explanation: item.explanation ?? '',
+    isCorrect: normalize(answers[index]) === normalize(item.correctAnswer),
+  }));
+}
+
 export default function QuizCard({ quiz, onSubmit }) {
   const items = quiz?.items ?? [];
   const [answers, setAnswers] = useState({});
-  const [submitted, setSubmitted] = useState(false);
+  const [review, setReview] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitted = review !== null;
 
-  const score = useMemo(() => {
-    if (!submitted) return 0;
-    return items.reduce((total, item, index) => (
-      normalize(answers[index]) === normalize(item.correctAnswer) ? total + 1 : total
-    ), 0);
-  }, [submitted, answers, items]);
-
-  const handleSubmit = () => {
-    setSubmitted(true);
-    onSubmit?.(items.map((item, index) => ({ questionId: item.id, selectedAnswer: answers[index] ?? '' })));
-  };
+  const score = submitted ? review.filter((row) => row.isCorrect).length : 0;
 
   if (!items.length) {
     return (
       <Card className="max-w-xl">
-        <p className="text-sm text-ink-400">AILA couldn't build that quiz. Try asking again.</p>
+        <p className="text-sm text-ink-400">AILA couldn&apos;t build that quiz. Try asking again.</p>
       </Card>
     );
   }
 
   const setAnswer = (index, value) => {
-    if (submitted) return;
+    if (submitted || submitting) return;
     setAnswers((current) => ({ ...current, [index]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (submitting || submitted) return;
+
+    if (onSubmit) {
+      const payload = items.map((item, index) => ({
+        questionId: item.id,
+        selectedAnswer: answers[index] ?? '',
+      }));
+      setSubmitting(true);
+      try {
+        const result = await onSubmit(payload);
+        setReview(reviewFromServerResult(items, answers, result));
+      } catch {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // No server round-trip — informal practice quiz self-checked on the client.
+    setReview(reviewFromInlineKey(items, answers));
   };
 
   return (
@@ -59,7 +100,8 @@ export default function QuizCard({ quiz, onSubmit }) {
 
       <div className="flex flex-col gap-4">
         {items.map((item, index) => {
-          const isCorrect = submitted && normalize(answers[index]) === normalize(item.correctAnswer);
+          const graded = submitted ? review[index] : null;
+          const isCorrect = Boolean(graded?.isCorrect);
 
           return (
             <div key={index} className="border border-ink-100 rounded-xl p-3.5">
@@ -71,7 +113,7 @@ export default function QuizCard({ quiz, onSubmit }) {
                 <div className="flex flex-col gap-1.5">
                   {item.options.map((option) => {
                     const selected = answers[index] === option;
-                    const showCorrect = submitted && normalize(option) === normalize(item.correctAnswer);
+                    const showCorrect = submitted && normalize(option) === normalize(graded?.correctAnswer);
                     const showWrong = submitted && selected && !showCorrect;
 
                     return (
@@ -79,7 +121,7 @@ export default function QuizCard({ quiz, onSubmit }) {
                         key={option}
                         type="button"
                         onClick={() => setAnswer(index, option)}
-                        disabled={submitted}
+                        disabled={submitted || submitting}
                         className={[
                           'text-left text-sm px-3 py-2 rounded-lg border transition-colors',
                           showCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : '',
@@ -99,7 +141,7 @@ export default function QuizCard({ quiz, onSubmit }) {
                   type="text"
                   value={answers[index] ?? ''}
                   onChange={(event) => setAnswer(index, event.target.value)}
-                  disabled={submitted}
+                  disabled={submitted || submitting}
                   placeholder="Type your answer"
                   className={[
                     'w-full text-sm px-3 py-2 rounded-lg border outline-none',
@@ -120,8 +162,10 @@ export default function QuizCard({ quiz, onSubmit }) {
                     <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
                   )}
                   <span className="text-ink-500">
-                    {!isCorrect && <span className="font-medium text-ink-700">Correct answer: {item.correctAnswer}. </span>}
-                    {item.explanation}
+                    {!isCorrect && graded?.correctAnswer && (
+                      <span className="font-medium text-ink-700">Correct answer: {graded.correctAnswer}. </span>
+                    )}
+                    {graded?.explanation}
                   </span>
                 </div>
               )}
@@ -131,8 +175,8 @@ export default function QuizCard({ quiz, onSubmit }) {
       </div>
 
       {!submitted && (
-        <Button className="mt-4" full onClick={handleSubmit}>
-          Check Answers
+        <Button className="mt-4" full onClick={handleSubmit} disabled={submitting}>
+          {submitting ? <><Loader2 size={14} className="animate-spin" /> Checking...</> : 'Check Answers'}
         </Button>
       )}
     </Card>

@@ -43,6 +43,7 @@ DROP TABLE IF EXISTS chatbot_responses;
 DROP TABLE IF EXISTS chatbot_keywords;
 DROP TABLE IF EXISTS chatbot_intents;
 DROP TABLE IF EXISTS conversation_categories;
+DROP TABLE IF EXISTS xp_events;
 DROP TABLE IF EXISTS dashboard_activity_log;
 DROP TABLE IF EXISTS learning_streaks;
 DROP TABLE IF EXISTS user_sessions;
@@ -98,6 +99,20 @@ CREATE TABLE user_profiles (
   CONSTRAINT uq_user_profiles_user_id UNIQUE (user_id),
   CONSTRAINT chk_user_profiles_year_level CHECK (year_level IS NULL OR year_level BETWEEN 1 AND 6),
   CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE xp_events (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  event_key VARCHAR(120) NOT NULL,
+  points INT NOT NULL,
+  reason VARCHAR(200) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT uq_xp_events_user_event UNIQUE (user_id, event_key),
+  KEY idx_xp_events_user_created (user_id, created_at),
+  CONSTRAINT fk_xp_events_user FOREIGN KEY (user_id) REFERENCES users(id)
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

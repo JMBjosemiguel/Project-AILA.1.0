@@ -2,7 +2,7 @@ const ApiError = require('../utils/ApiError');
 const { transaction } = require('../config/database');
 const learningModel = require('../models/learningModel');
 const courseGenerationService = require('./courseGenerationService');
-const { awardXp, touchStreak, logActivity } = require('../utils/gamification');
+const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 
 const LESSON_COMPLETE_XP = 10;
@@ -23,16 +23,23 @@ async function getLesson(userId, lessonId) {
   }
 
   if (!detail.lesson.content) {
-    const content = await courseGenerationService.generateLessonContent({
-      id: detail.lesson.id,
-      title: detail.lesson.title,
-      difficulty: detail.lesson.difficulty,
-      topic_title: detail.topic.title,
-      module_title: detail.module.title,
-      subject_name: detail.subject.name,
-      goal: detail.subject.goal,
-    });
-    detail.lesson.content = content;
+    try {
+      detail.lesson.content = await courseGenerationService.generateLessonContent({
+        id: detail.lesson.id,
+        title: detail.lesson.title,
+        difficulty: detail.lesson.difficulty,
+        topic_title: detail.topic.title,
+        module_title: detail.module.title,
+        subject_name: detail.subject.name,
+        goal: detail.subject.goal,
+      });
+    } catch {
+      // AI is unavailable right now — return the lesson shell so the page can
+      // render a retry instead of failing the whole request. Nothing partial
+      // was stored, so a later open will try again.
+      detail.lesson.content = null;
+      detail.lesson.contentError = true;
+    }
   }
 
   return detail;
@@ -52,7 +59,11 @@ async function completeLesson(userId, lessonId) {
   return transaction(async (connection) => {
     await learningModel.markLessonComplete(userId, lesson.id, connection);
     const topicProgress = await learningModel.recomputeTopicProgress(userId, lesson.topic_id, connection);
-    await awardXp(userId, LESSON_COMPLETE_XP, `Completed lesson "${lesson.title}"`, connection);
+    await awardXpOnce(userId, {
+      eventKey: `lesson_completed:${lesson.id}`,
+      points: LESSON_COMPLETE_XP,
+      reason: `Completed lesson "${lesson.title}"`,
+    }, connection);
     await touchStreak(userId, connection);
     await logActivity(userId, 'lesson_completed', lesson.id, `Completed lesson "${lesson.title}"`, connection);
     await notifyUser(userId, {

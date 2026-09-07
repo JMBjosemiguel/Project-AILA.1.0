@@ -55,9 +55,11 @@ export default function QuizRunner({ request, onClose }) {
       const attemptResult = await submitQuizAttempt(quiz.id, answers);
       setResult(attemptResult);
       toast.success('Quiz finished — saved to your history.');
+      return attemptResult; // QuizCard uses this to render the graded review
     } catch (err) {
       setError(err.message || 'Could not save your quiz attempt.');
       toast.error(err.message || 'Could not save your quiz attempt.');
+      throw err;
     }
   };
 
@@ -152,7 +154,7 @@ export default function QuizRunner({ request, onClose }) {
               <QuizCard quiz={quiz} onSubmit={handleSubmit} />
               {result && (
                 <p className="text-center text-xs text-ink-400 mt-2">
-                  Saved to your quiz history · +{Math.round((result.score / result.total) * 20)} XP
+                  Saved to your quiz history{result.xpAwarded > 0 ? ` · +${result.xpAwarded} XP` : ''}
                 </p>
               )}
             </div>

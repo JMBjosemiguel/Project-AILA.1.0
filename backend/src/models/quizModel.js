@@ -53,27 +53,123 @@ async function getQuizWithQuestions(quizId, userId) {
   };
 }
 
-async function createAttempt({ quizId, userId, score, total }, connection = null) {
+// --- Resumable attempt lifecycle -------------------------------------------
+
+// The single active (in-progress) attempt for a (user, quiz), if one exists.
+// UNIQUE(user_id, quiz_id, active_slot) guarantees there is at most one.
+async function findActiveAttempt(userId, quizId, connection = null) {
+  const rows = await execute(
+    connection,
+    `SELECT id, quiz_id, user_id, status, current_index, score, total, started_at
+       FROM quiz_attempts
+      WHERE user_id = ? AND quiz_id = ? AND status = 'in_progress' AND active_slot = 1
+      LIMIT 1`,
+    [userId, quizId]
+  );
+  return rows[0] || null;
+}
+
+async function createInProgressAttempt({ quizId, userId, total }, connection = null) {
   const result = await execute(
     connection,
-    'INSERT INTO quiz_attempts (quiz_id, user_id, score, total, completed_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-    [quizId, userId, score, total]
+    `INSERT INTO quiz_attempts (quiz_id, user_id, score, total, status, current_index, active_slot, started_at, updated_at)
+     VALUES (?, ?, 0, ?, 'in_progress', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [quizId, userId, total]
   );
   return result.insertId;
 }
 
-async function createAttemptAnswers(attemptId, answers, connection = null) {
-  if (!answers.length) return;
-
-  const placeholders = answers.map(() => '(?, ?, ?, ?)').join(', ');
-  const params = answers.flatMap((answer) => [attemptId, answer.questionId, answer.selectedAnswer, answer.isCorrect ? 1 : 0]);
-
-  await execute(
+async function getAttemptById(attemptId, userId, connection = null) {
+  const rows = await execute(
     connection,
-    `INSERT INTO quiz_attempt_answers (attempt_id, question_id, selected_answer, is_correct) VALUES ${placeholders}`,
-    params
+    `SELECT qa.id, qa.quiz_id, qa.user_id, qa.status, qa.current_index, qa.score, qa.total,
+            qa.started_at, qa.completed_at, qa.updated_at,
+            q.topic, q.quiz_type, q.difficulty
+       FROM quiz_attempts qa
+       INNER JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.id = ? AND qa.user_id = ?
+      LIMIT 1`,
+    [attemptId, userId]
+  );
+  return rows[0] || null;
+}
+
+// Row-locking read used inside the submit transaction to serialize concurrent
+// submissions of the same attempt.
+async function lockAttemptStatus(attemptId, connection) {
+  const rows = await execute(
+    connection,
+    'SELECT status FROM quiz_attempts WHERE id = ? FOR UPDATE',
+    [attemptId]
+  );
+  return rows[0]?.status ?? null;
+}
+
+async function getSavedAnswers(attemptId, connection = null) {
+  return execute(
+    connection,
+    'SELECT question_id, selected_answer, is_correct, answered_at FROM quiz_attempt_answers WHERE attempt_id = ?',
+    [attemptId]
   );
 }
+
+// Idempotent save — changing an answer before submission overwrites the row and
+// resets grading (is_correct -> NULL).
+async function upsertAttemptAnswer(attemptId, questionId, selectedAnswer, connection = null) {
+  await execute(
+    connection,
+    `INSERT INTO quiz_attempt_answers (attempt_id, question_id, selected_answer, is_correct, answered_at)
+     VALUES (?, ?, ?, NULL, CURRENT_TIMESTAMP)
+     ON DUPLICATE KEY UPDATE selected_answer = VALUES(selected_answer), is_correct = NULL, answered_at = CURRENT_TIMESTAMP`,
+    [attemptId, questionId, selectedAnswer]
+  );
+}
+
+async function updateAttemptProgress(attemptId, currentIndex, connection = null) {
+  await execute(
+    connection,
+    'UPDATE quiz_attempts SET current_index = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [currentIndex, attemptId]
+  );
+}
+
+async function gradeAttemptAnswer(attemptId, questionId, isCorrect, connection = null) {
+  await execute(
+    connection,
+    'UPDATE quiz_attempt_answers SET is_correct = ? WHERE attempt_id = ? AND question_id = ?',
+    [isCorrect ? 1 : 0, attemptId, questionId]
+  );
+}
+
+// Finalize only if still in progress — the WHERE guard plus the FOR UPDATE lock
+// makes a double submit impossible. Returns the driver result (affectedRows).
+async function finalizeAttempt({ attemptId, score, total, currentIndex }, connection = null) {
+  return execute(
+    connection,
+    `UPDATE quiz_attempts
+        SET status = 'submitted', active_slot = NULL, score = ?, total = ?, current_index = ?,
+            completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'in_progress'`,
+    [score, total, currentIndex, attemptId]
+  );
+}
+
+async function listActiveAttemptsForUser(userId, limit = 10) {
+  return query(
+    `SELECT qa.id AS attempt_id, qa.quiz_id, qa.current_index, qa.total, qa.started_at, qa.updated_at,
+            q.topic, q.quiz_type, q.difficulty, q.item_count,
+            (SELECT COUNT(*) FROM quiz_attempt_answers x
+              WHERE x.attempt_id = qa.id AND x.selected_answer IS NOT NULL AND x.selected_answer <> '') AS answered
+       FROM quiz_attempts qa
+       INNER JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.user_id = ? AND qa.status = 'in_progress'
+      ORDER BY COALESCE(qa.updated_at, qa.started_at) DESC
+      LIMIT ?`,
+    [userId, Number(limit)]
+  );
+}
+
+// --- History / analytics (submitted attempts only) ------------------------
 
 async function listAttemptsForUser(userId, limit = 10) {
   return query(
@@ -81,7 +177,7 @@ async function listAttemptsForUser(userId, limit = 10) {
       SELECT qa.id, qa.quiz_id, qa.score, qa.total, qa.completed_at, q.topic, q.quiz_type, q.difficulty
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
-      WHERE qa.user_id = ?
+      WHERE qa.user_id = ? AND qa.status = 'submitted'
       ORDER BY qa.completed_at DESC
       LIMIT ?
     `,
@@ -89,40 +185,12 @@ async function listAttemptsForUser(userId, limit = 10) {
   );
 }
 
-async function getAttemptDetail(attemptId, userId) {
-  const attemptRows = await query(
-    `
-      SELECT qa.id, qa.quiz_id, qa.score, qa.total, qa.completed_at, q.topic, q.quiz_type
-      FROM quiz_attempts qa
-      INNER JOIN quizzes q ON q.id = qa.quiz_id
-      WHERE qa.id = ? AND qa.user_id = ?
-      LIMIT 1
-    `,
-    [attemptId, userId]
-  );
-  const attempt = attemptRows[0];
-  if (!attempt) return null;
-
-  const answers = await query(
-    `
-      SELECT qaa.question_id, qaa.selected_answer, qaa.is_correct, qq.question, qq.correct_answer, qq.explanation, qq.order_index
-      FROM quiz_attempt_answers qaa
-      INNER JOIN quiz_questions qq ON qq.id = qaa.question_id
-      WHERE qaa.attempt_id = ?
-      ORDER BY qq.order_index ASC
-    `,
-    [attemptId]
-  );
-
-  return { ...attempt, answers };
-}
-
 async function getQuizAverageScore(userId) {
   const rows = await query(
     `
       SELECT ROUND(AVG(score / total) * 100, 0) AS avg_percent, COUNT(*) AS attempt_count
       FROM quiz_attempts
-      WHERE user_id = ? AND total > 0
+      WHERE user_id = ? AND status = 'submitted' AND total > 0
     `,
     [userId]
   );
@@ -137,10 +205,17 @@ async function deleteAttemptForUser(attemptId, userId) {
 module.exports = {
   createQuiz,
   getQuizWithQuestions,
-  createAttempt,
-  createAttemptAnswers,
+  findActiveAttempt,
+  createInProgressAttempt,
+  getAttemptById,
+  lockAttemptStatus,
+  getSavedAnswers,
+  upsertAttemptAnswer,
+  updateAttemptProgress,
+  gradeAttemptAnswer,
+  finalizeAttempt,
+  listActiveAttemptsForUser,
   listAttemptsForUser,
-  getAttemptDetail,
   getQuizAverageScore,
   deleteAttemptForUser,
 };

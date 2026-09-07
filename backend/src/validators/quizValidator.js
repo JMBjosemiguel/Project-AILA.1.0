@@ -17,10 +17,19 @@ const attemptIdParamValidator = [
   param('attemptId').isInt({ min: 1 }).withMessage('Invalid attempt id.'),
 ];
 
+// Legacy one-shot submission: POST /quizzes/:quizId/attempts
 const submitAttemptValidator = [
   body('answers').isArray().withMessage('Answers must be an array.'),
   body('answers.*.questionId').isInt({ min: 1 }),
   body('answers.*.selectedAnswer').optional({ values: 'null' }).trim(),
+];
+
+// Autosave one answer: PATCH /quizzes/attempts/:attemptId/answers
+const saveAnswerValidator = [
+  param('attemptId').isInt({ min: 1 }).withMessage('Invalid attempt id.'),
+  body('questionId').isInt({ min: 1 }).withMessage('A questionId is required.'),
+  body('selectedAnswer').optional({ values: 'null' }).isString().isLength({ max: 500 }).trim(),
+  body('currentIndex').optional({ values: 'null' }).isInt({ min: 0, max: 200 }),
 ];
 
 module.exports = {
@@ -28,4 +37,5 @@ module.exports = {
   quizIdParamValidator,
   attemptIdParamValidator,
   submitAttemptValidator,
+  saveAnswerValidator,
 };

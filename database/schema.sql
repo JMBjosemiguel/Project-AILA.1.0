@@ -694,31 +694,48 @@ CREATE TABLE quiz_questions (
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Attempts carry a lifecycle (migration 002): status = 'in_progress' while the
+-- student is taking the quiz, 'submitted' once graded. active_slot is 1 for an
+-- in-progress attempt and NULL otherwise, so UNIQUE(user_id, quiz_id, active_slot)
+-- enforces at most one active attempt per quiz while still allowing unlimited
+-- historical submitted attempts (multiple NULLs are permitted in a UNIQUE index).
 CREATE TABLE quiz_attempts (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   quiz_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
   score TINYINT UNSIGNED NOT NULL DEFAULT 0,
   total TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  status ENUM('in_progress','submitted','expired') NOT NULL DEFAULT 'submitted',
+  current_index SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  active_slot TINYINT UNSIGNED NULL DEFAULT NULL,
   started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NULL DEFAULT NULL,
   completed_at TIMESTAMP NULL DEFAULT NULL,
+  updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_quiz_attempts_active (user_id, quiz_id, active_slot),
   KEY idx_quiz_attempts_quiz_id (quiz_id),
   KEY idx_quiz_attempts_user_id (user_id),
   KEY idx_quiz_attempts_user_completed (user_id, completed_at),
+  KEY idx_quiz_attempts_user_status (user_id, status),
   CONSTRAINT fk_quiz_attempts_quiz FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
     ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_quiz_attempts_user FOREIGN KEY (user_id) REFERENCES users(id)
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- is_correct is NULL for an answer saved before submission; the server fills it
+-- (0/1) at submit time. UNIQUE(attempt_id, question_id) makes answer autosave an
+-- idempotent UPSERT.
 CREATE TABLE quiz_attempt_answers (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   attempt_id BIGINT UNSIGNED NOT NULL,
   question_id BIGINT UNSIGNED NOT NULL,
   selected_answer VARCHAR(500) NULL,
-  is_correct TINYINT(1) NOT NULL DEFAULT 0,
+  is_correct TINYINT(1) NULL DEFAULT NULL,
+  answered_at TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_quiz_attempt_answers_slot (attempt_id, question_id),
   KEY idx_quiz_attempt_answers_attempt_id (attempt_id),
   KEY idx_quiz_attempt_answers_question_id (question_id),
   CONSTRAINT fk_quiz_attempt_answers_attempt FOREIGN KEY (attempt_id) REFERENCES quiz_attempts(id)

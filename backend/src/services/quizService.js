@@ -162,6 +162,39 @@ function formatQuizForTake(quiz) {
 }
 
 /**
+ * Everything the client needs to resume an IN-PROGRESS attempt: the take-safe
+ * question list plus the answers already saved and the last position. Still no
+ * answer key.
+ */
+function formatAttemptForResume(quiz, attempt, savedAnswers) {
+  return {
+    attempt: {
+      id: attempt.id,
+      quizId: quiz.id,
+      status: 'in_progress',
+      currentIndex: Number(attempt.current_index) || 0,
+      startedAt: attempt.started_at,
+    },
+    quiz: {
+      id: quiz.id,
+      topic: quiz.topic,
+      quizType: quiz.quiz_type,
+      difficulty: quiz.difficulty,
+    },
+    items: quiz.questions.map((question) => ({
+      id: question.id,
+      question: question.question,
+      options: question.options,
+      orderIndex: question.order_index,
+    })),
+    answers: savedAnswers.map((row) => ({
+      questionId: row.question_id,
+      selectedAnswer: row.selected_answer ?? '',
+    })),
+  };
+}
+
+/**
  * REVIEW payload — only returned AFTER a server-side submission. Carries the
  * grade, the student's answers, the correct answers and the explanations.
  */
@@ -189,6 +222,20 @@ function formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpA
       };
     }),
   };
+}
+
+// Grade a quiz server-side. Only the DB `correct_answer` is trusted — any
+// client-supplied correctAnswer / isCorrect / score is ignored. Shared by the
+// lifecycle submit and the legacy one-shot endpoint so there is exactly one
+// grading implementation.
+function gradeQuiz(quiz, answerByQuestionId) {
+  const gradedAnswers = quiz.questions.map((question) => {
+    const selectedAnswer = answerByQuestionId.get(question.id) ?? '';
+    const isCorrect = normalizeAnswer(selectedAnswer) === normalizeAnswer(question.correct_answer);
+    return { questionId: question.id, selectedAnswer, isCorrect };
+  });
+  const score = gradedAnswers.filter((answer) => answer.isCorrect).length;
+  return { gradedAnswers, score, total: quiz.questions.length };
 }
 
 async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficulty = 'medium', sourceType, sourceId }) {
@@ -232,29 +279,179 @@ async function getQuizForUser(userId, quizId) {
   return formatQuizForTake(quiz);
 }
 
-async function submitAttempt(userId, quizId, answers) {
+// --- Resumable attempt lifecycle -----------------------------------------
+
+/**
+ * Begin — or resume — an attempt for a quiz. If the student already has an
+ * IN_PROGRESS attempt for this quiz it is returned as-is (with saved answers);
+ * otherwise a fresh one is created. Concurrency-safe: the UNIQUE
+ * (user_id, quiz_id, active_slot) index means two simultaneous calls cannot
+ * both create an active attempt — the loser re-reads the winner's row.
+ */
+async function startAttempt(userId, quizId) {
   const quiz = await quizModel.getQuizWithQuestions(Number(quizId), userId);
   if (!quiz) {
     throw new ApiError(404, 'Quiz not found.');
   }
 
-  const answerMap = new Map((answers || []).map((answer) => [Number(answer.questionId), answer.selectedAnswer]));
+  const existing = await quizModel.findActiveAttempt(userId, quiz.id);
+  if (existing) {
+    const saved = await quizModel.getSavedAnswers(existing.id);
+    return formatAttemptForResume(quiz, existing, saved);
+  }
 
-  // Grading is server-authoritative: only the DB `correct_answer` is trusted;
-  // any client-supplied correctAnswer / isCorrect / score is ignored.
-  const gradedAnswers = quiz.questions.map((question) => {
-    const selectedAnswer = answerMap.get(question.id) ?? '';
-    const isCorrect = normalizeAnswer(selectedAnswer) === normalizeAnswer(question.correct_answer);
-    return { questionId: question.id, selectedAnswer, isCorrect };
+  let attemptId;
+  try {
+    attemptId = await quizModel.createInProgressAttempt({
+      quizId: quiz.id,
+      userId,
+      total: quiz.questions.length,
+    });
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      const raced = await quizModel.findActiveAttempt(userId, quiz.id);
+      if (raced) {
+        const saved = await quizModel.getSavedAnswers(raced.id);
+        return formatAttemptForResume(quiz, raced, saved);
+      }
+    }
+    throw err;
+  }
+
+  const attempt = await quizModel.getAttemptById(attemptId, userId);
+  return formatAttemptForResume(quiz, attempt, []);
+}
+
+function clampIndex(value, total) {
+  const max = Math.max(0, total - 1);
+  if (value === undefined || value === null || !Number.isFinite(Number(value))) return null;
+  return Math.min(Math.max(0, Math.trunc(Number(value))), max);
+}
+
+/**
+ * Save (or change) one answer on an in-progress attempt. Grading is NOT done
+ * here — is_correct stays NULL until submission.
+ */
+async function saveAttemptAnswer(userId, attemptId, { questionId, selectedAnswer, currentIndex } = {}) {
+  const attempt = await quizModel.getAttemptById(Number(attemptId), userId);
+  if (!attempt) {
+    throw new ApiError(404, 'Quiz attempt not found.');
+  }
+  if (attempt.status !== 'in_progress') {
+    throw new ApiError(409, 'This attempt has already been submitted.');
+  }
+
+  const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
+  const question = quiz.questions.find((item) => item.id === Number(questionId));
+  if (!question) {
+    throw new ApiError(400, 'That question is not part of this quiz.');
+  }
+
+  const value = (selectedAnswer ?? '').toString().trim();
+  if (value && Array.isArray(question.options) && question.options.length) {
+    const allowed = question.options.some((option) => normalizeAnswer(option) === normalizeAnswer(value));
+    if (!allowed) {
+      throw new ApiError(400, 'That answer is not one of the options for this question.');
+    }
+  }
+
+  const nextIndex = clampIndex(currentIndex, quiz.questions.length);
+
+  await transaction(async (connection) => {
+    await quizModel.upsertAttemptAnswer(attempt.id, question.id, value || null, connection);
+    if (nextIndex !== null) {
+      await quizModel.updateAttemptProgress(attempt.id, nextIndex, connection);
+    } else {
+      await quizModel.updateAttemptProgress(attempt.id, Number(attempt.current_index) || 0, connection);
+    }
   });
 
-  const score = gradedAnswers.filter((answer) => answer.isCorrect).length;
-  const total = quiz.questions.length;
+  return {
+    saved: true,
+    attemptId: attempt.id,
+    currentIndex: nextIndex !== null ? nextIndex : (Number(attempt.current_index) || 0),
+  };
+}
+
+/**
+ * Resume/read an attempt. IN_PROGRESS -> take-safe payload + saved answers.
+ * SUBMITTED/EXPIRED -> full graded review (Batch 1 review serializer).
+ */
+async function getAttempt(userId, attemptId) {
+  const attempt = await quizModel.getAttemptById(Number(attemptId), userId);
+  if (!attempt) {
+    throw new ApiError(404, 'Quiz attempt not found.');
+  }
+
+  const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
+  const saved = await quizModel.getSavedAnswers(attempt.id);
+
+  if (attempt.status === 'in_progress') {
+    return formatAttemptForResume(quiz, attempt, saved);
+  }
+
+  const savedById = new Map(saved.map((row) => [row.question_id, row]));
+  const gradedAnswers = quiz.questions.map((question) => {
+    const row = savedById.get(question.id);
+    return {
+      questionId: question.id,
+      selectedAnswer: row?.selected_answer ?? '',
+      isCorrect: row ? Boolean(row.is_correct) : false,
+    };
+  });
+
+  return {
+    ...formatAttemptReview({
+      quiz,
+      attemptId: attempt.id,
+      gradedAnswers,
+      score: attempt.score,
+      total: attempt.total,
+      xpAwarded: 0,
+    }),
+    status: attempt.status,
+    completedAt: attempt.completed_at,
+  };
+}
+
+/**
+ * Submit an in-progress attempt. Grades the SAVED answers server-side, freezes
+ * the attempt (status -> submitted, active_slot -> NULL), awards XP once, and
+ * returns the review. Atomic; a double submit gets a 409.
+ */
+async function submitAttempt(userId, attemptId) {
+  const attempt = await quizModel.getAttemptById(Number(attemptId), userId);
+  if (!attempt) {
+    throw new ApiError(404, 'Quiz attempt not found.');
+  }
+  if (attempt.status !== 'in_progress') {
+    throw new ApiError(409, 'This attempt has already been submitted.');
+  }
+
+  const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
+  const saved = await quizModel.getSavedAnswers(attempt.id);
+  const answerByQuestionId = new Map(saved.map((row) => [row.question_id, row.selected_answer]));
+
+  const { gradedAnswers, score, total } = gradeQuiz(quiz, answerByQuestionId);
   const points = total > 0 ? Math.round((score / total) * QUIZ_XP_MAX) : 0;
 
-  const { attemptId, xpAwarded } = await transaction(async (connection) => {
-    const newAttemptId = await quizModel.createAttempt({ quizId: quiz.id, userId, score, total }, connection);
-    await quizModel.createAttemptAnswers(newAttemptId, gradedAnswers, connection);
+  const xpAwarded = await transaction(async (connection) => {
+    const status = await quizModel.lockAttemptStatus(attempt.id, connection);
+    if (status !== 'in_progress') {
+      throw new ApiError(409, 'This attempt has already been submitted.');
+    }
+
+    // Make sure every question has a graded row, even the unanswered ones.
+    for (const answer of gradedAnswers) {
+      await quizModel.upsertAttemptAnswer(attempt.id, answer.questionId, answer.selectedAnswer || null, connection);
+      await quizModel.gradeAttemptAnswer(attempt.id, answer.questionId, answer.isCorrect, connection);
+    }
+
+    await quizModel.finalizeAttempt(
+      { attemptId: attempt.id, score, total, currentIndex: Math.max(0, total - 1) },
+      connection
+    );
+
     await logActivity(userId, 'quiz_completed', quiz.id, `Scored ${score}/${total} on "${quiz.topic}" quiz`, connection);
 
     // First legitimate completion of THIS quiz earns XP; retakes earn nothing.
@@ -271,39 +468,73 @@ async function submitAttempt(userId, quizId, answers) {
       connection,
     });
 
-    return { attemptId: newAttemptId, xpAwarded: xp.awarded };
+    return xp.awarded;
   });
 
-  return formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpAwarded });
+  return formatAttemptReview({ quiz, attemptId: attempt.id, gradedAnswers, score, total, xpAwarded });
+}
+
+/**
+ * Legacy one-shot: POST /quizzes/:quizId/attempts { answers: [...] }.
+ * Kept for backward compatibility (older clients, the chatbot practice runner),
+ * but routed entirely through the lifecycle above so there is a single grading
+ * path. If a concurrent request finalized the attempt first, its review is
+ * returned instead of surfacing a 409 to these callers.
+ */
+async function submitQuizAnswers(userId, quizId, answers) {
+  const started = await startAttempt(userId, quizId);
+  const attemptId = started.attempt.id;
+
+  try {
+    for (const answer of Array.isArray(answers) ? answers : []) {
+      if (!answer || answer.questionId == null) continue;
+      try {
+        await saveAttemptAnswer(userId, attemptId, {
+          questionId: answer.questionId,
+          selectedAnswer: answer.selectedAnswer ?? '',
+        });
+      } catch (err) {
+        // A single unrecognised option should not abort a bulk legacy submission;
+        // the unsaved answer simply grades as incorrect (server-authoritative).
+        if (!(err instanceof ApiError && err.statusCode === 400)) throw err;
+      }
+    }
+
+    return await submitAttempt(userId, attemptId);
+  } catch (err) {
+    // A concurrent request already finalized this attempt (whether that surfaced
+    // during the answer saves or the submit) — return its review rather than a
+    // 409, which these legacy callers do not expect.
+    if (err instanceof ApiError && err.statusCode === 409) {
+      return getAttempt(userId, attemptId);
+    }
+    throw err;
+  }
+}
+
+async function listActiveAttempts(userId) {
+  const rows = await quizModel.listActiveAttemptsForUser(userId);
+  return rows.map((row) => {
+    const total = Number(row.total) || Number(row.item_count) || 0;
+    const answered = Number(row.answered) || 0;
+    return {
+      attemptId: row.attempt_id,
+      quizId: row.quiz_id,
+      topic: row.topic,
+      quizType: row.quiz_type,
+      difficulty: row.difficulty,
+      total,
+      answered,
+      progressPercent: total > 0 ? Math.round((answered / total) * 100) : 0,
+      currentIndex: Number(row.current_index) || 0,
+      startedAt: row.started_at,
+      updatedAt: row.updated_at,
+    };
+  });
 }
 
 async function listQuizHistory(userId) {
   return quizModel.listAttemptsForUser(userId);
-}
-
-async function getAttemptReview(userId, attemptId) {
-  const attempt = await quizModel.getAttemptDetail(Number(attemptId), userId);
-  if (!attempt) {
-    throw new ApiError(404, 'Quiz attempt not found.');
-  }
-
-  return {
-    attemptId: attempt.id,
-    quizId: attempt.quiz_id,
-    topic: attempt.topic,
-    quizType: attempt.quiz_type,
-    score: attempt.score,
-    total: attempt.total,
-    completedAt: attempt.completed_at,
-    items: attempt.answers.map((answer) => ({
-      id: answer.question_id,
-      question: answer.question,
-      yourAnswer: answer.selected_answer,
-      correctAnswer: answer.correct_answer,
-      explanation: answer.explanation ?? null,
-      isCorrect: Boolean(answer.is_correct),
-    })),
-  };
 }
 
 async function deleteAttempt(userId, attemptId) {
@@ -318,10 +549,15 @@ module.exports = {
   generateFlashcards,
   generateAndSaveQuiz,
   getQuizForUser,
+  startAttempt,
+  saveAttemptAnswer,
+  getAttempt,
   submitAttempt,
+  submitQuizAnswers,
+  listActiveAttempts,
   listQuizHistory,
-  getAttemptReview,
   deleteAttempt,
   formatQuizForTake,
+  formatAttemptForResume,
   formatAttemptReview,
 };

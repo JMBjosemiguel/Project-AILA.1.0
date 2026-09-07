@@ -5,6 +5,7 @@ const quizModel = require('../models/quizModel');
 const userModel = require('../models/userModel');
 const resourceModel = require('../models/resourceModel');
 const chatModel = require('../models/chatModel');
+const quizService = require('./quizService');
 const { weekdayLabel } = require('../utils/dateLabels');
 const { getStudentContext, buildRecommendation } = require('./studentContextService');
 
@@ -97,6 +98,7 @@ async function getSummary(userId) {
     recentlyOpenedResources,
     weeklyActivity,
     studentContext,
+    activeQuizAttempts,
   ] = await Promise.all([
     learningModel.listSubjectsForUser(userId),
     plannerModel.listTasksForUser(userId),
@@ -110,6 +112,7 @@ async function getSummary(userId) {
     resourceModel.listRecentlyOpened(userId, 3),
     getWeeklyActivity(userId),
     getStudentContext(userId),
+    quizService.listActiveAttempts(userId),
   ]);
 
   const recommendation = buildRecommendation(studentContext);
@@ -158,6 +161,7 @@ async function getSummary(userId) {
     recentQuizzes,
     recentlyOpenedResources,
     weeklyActivity,
+    activeQuizAttempts,
     continueLearning: findContinueLearning(subjects),
     recommendation: { ...recommendation, lessonId: recommendationLesson?.lessonId ?? null },
   };

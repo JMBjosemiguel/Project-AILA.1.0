@@ -23,8 +23,32 @@ const getQuiz = asyncHandler(async (req, res) => {
   sendSuccess(res, quiz, 200, 'Quiz retrieved.');
 });
 
+// POST /quizzes/:quizId/attempts/start — begin or resume an attempt.
+const startAttempt = asyncHandler(async (req, res) => {
+  const attempt = await quizService.startAttempt(req.auth.user.id, req.params.quizId);
+  sendSuccess(res, attempt, 200, 'Attempt ready.');
+});
+
+// PATCH /quizzes/attempts/:attemptId/answers — autosave one answer.
+const saveAnswer = asyncHandler(async (req, res) => {
+  const result = await quizService.saveAttemptAnswer(req.auth.user.id, req.params.attemptId, {
+    questionId: req.body.questionId,
+    selectedAnswer: req.body.selectedAnswer,
+    currentIndex: req.body.currentIndex,
+  });
+  sendSuccess(res, result, 200, 'Answer saved.');
+});
+
+// POST /quizzes/attempts/:attemptId/submit — grade + freeze an attempt.
 const submitAttempt = asyncHandler(async (req, res) => {
-  const result = await quizService.submitAttempt(req.auth.user.id, req.params.quizId, req.body.answers || []);
+  const result = await quizService.submitAttempt(req.auth.user.id, req.params.attemptId);
+  sendSuccess(res, result, 200, 'Quiz attempt submitted.');
+});
+
+// POST /quizzes/:quizId/attempts — legacy one-shot submission (kept for
+// backward compatibility; runs through the same lifecycle internally).
+const submitLegacyAttempt = asyncHandler(async (req, res) => {
+  const result = await quizService.submitQuizAnswers(req.auth.user.id, req.params.quizId, req.body.answers || []);
   sendSuccess(res, result, 201, 'Quiz attempt recorded.');
 });
 
@@ -33,8 +57,9 @@ const history = asyncHandler(async (req, res) => {
   sendSuccess(res, { attempts }, 200, 'Quiz history retrieved.');
 });
 
+// GET /quizzes/attempts/:attemptId — resume (in progress) or review (submitted).
 const getAttempt = asyncHandler(async (req, res) => {
-  const attempt = await quizService.getAttemptReview(req.auth.user.id, req.params.attemptId);
+  const attempt = await quizService.getAttempt(req.auth.user.id, req.params.attemptId);
   sendSuccess(res, attempt, 200, 'Quiz attempt retrieved.');
 });
 
@@ -46,7 +71,10 @@ const deleteAttempt = asyncHandler(async (req, res) => {
 module.exports = {
   generate,
   getQuiz,
+  startAttempt,
+  saveAnswer,
   submitAttempt,
+  submitLegacyAttempt,
   history,
   getAttempt,
   deleteAttempt,

@@ -2,6 +2,7 @@ import { BookOpen, Plus, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import Button from '../../../components/common/Button';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import { SkeletonGrid } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -17,7 +18,7 @@ import { consumeResumeQuiz } from '../../../utils/quizResumeTarget';
 
 export default function LearningHubPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data, loading } = useLearningHubData(refreshVersion);
+  const { data, loading, error } = useLearningHubData(refreshVersion);
   const [search, setSearch] = useState('');
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [quizRequest, setQuizRequest] = useState(null);
@@ -78,6 +79,12 @@ export default function LearningHubPage({ onNavigate }) {
 
       {loading ? (
         <SkeletonGrid count={4} />
+      ) : error ? (
+        <LoadError
+          title="Couldn't load your courses"
+          message={error.message || 'Something went wrong loading your courses.'}
+          onRetry={() => setRefreshVersion((version) => version + 1)}
+        />
       ) : filtered.length ? (
         <div className="grid sm:grid-cols-2 gap-4">
           {filtered.map((subject) => (

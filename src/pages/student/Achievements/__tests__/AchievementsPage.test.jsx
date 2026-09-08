@@ -63,7 +63,7 @@ describe('AchievementsPage', () => {
     const onNavigate = vi.fn();
     render(<AchievementsPage onNavigate={onNavigate} />);
 
-    await user.click(screen.getByRole('button', { name: 'Leaderboard' }));
+    await user.click(screen.getByRole('tab', { name: 'Leaderboard' }));
     expect(screen.getByText(/not on the leaderboard yet/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Show me on the leaderboard/i }));
@@ -84,7 +84,7 @@ describe('AchievementsPage', () => {
     };
 
     render(<AchievementsPage onNavigate={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Leaderboard' }));
+    await user.click(screen.getByRole('tab', { name: 'Leaderboard' }));
 
     expect(screen.queryByText(/not on the leaderboard yet/i)).not.toBeInTheDocument();
     expect(screen.getByText('Bruno B.')).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('AchievementsPage', () => {
       me: null,
     };
     render(<AchievementsPage onNavigate={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Leaderboard' }));
+    await user.click(screen.getByRole('tab', { name: 'Leaderboard' }));
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
     expect(screen.queryByText(/user_id/i)).not.toBeInTheDocument();
   });

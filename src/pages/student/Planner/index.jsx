@@ -3,6 +3,7 @@ import { CalendarClock, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import { SkeletonList } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -47,7 +48,7 @@ function toLocalInputValue(iso) {
 
 export default function PlannerPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data, loading } = usePlannerData(refreshVersion);
+  const { data, loading, error } = usePlannerData(refreshVersion);
   const { data: hubData } = useLearningHubData();
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
@@ -353,6 +354,13 @@ export default function PlannerPage() {
           <div>
             {loading ? (
               <SkeletonList count={4} />
+            ) : error ? (
+              <LoadError
+                bare
+                title="Couldn't load your tasks"
+                message={error.message || 'Something went wrong loading your planner.'}
+                onRetry={() => setRefreshVersion((version) => version + 1)}
+              />
             ) : filtered.length ? (
               <>
                 {pending.map((task) => (

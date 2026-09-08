@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Flame, Trophy } from 'lucide-react';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import ProgressBar from '../../../components/common/ProgressBar';
 import { SkeletonGrid, SkeletonList } from '../../../components/common/Skeleton';
 import AchievementBadge from '../../../components/student/gamification/AchievementBadge';
@@ -46,12 +47,18 @@ function XpHeader({ summary, loading }) {
   );
 }
 
-function AchievementsTab({ refreshKey }) {
-  const { data, loading } = useAchievementsData(refreshKey);
+function AchievementsTab({ refreshKey, onRetry }) {
+  const { data, loading, error } = useAchievementsData(refreshKey);
 
   if (loading) return <SkeletonGrid count={6} />;
-  if (!data) {
-    return <EmptyState icon={Trophy} title="Achievements unavailable" message="We couldn't load your achievements just now. Try again shortly." />;
+  if (error || !data) {
+    return (
+      <LoadError
+        title="Couldn't load your achievements"
+        message={error?.message || 'Please try again in a moment.'}
+        onRetry={onRetry}
+      />
+    );
   }
 
   const earned = data.earned ?? [];
@@ -92,19 +99,21 @@ function AchievementsTab({ refreshKey }) {
   );
 }
 
-function LeaderboardTab({ optedIn, onNavigate, refreshKey }) {
+function LeaderboardTab({ optedIn, onNavigate, refreshKey, onRetry }) {
   const [period, setPeriod] = useState('weekly');
-  const { data, loading } = useLeaderboardData(period, refreshKey);
+  const { data, loading, error } = useLeaderboardData(period, refreshKey);
 
   return (
     <Card padded>
       <CardHeader
         title="Leaderboard"
         action={
-          <div className="flex overflow-hidden rounded-lg border border-ink-100 text-xs font-semibold">
+          <div className="flex overflow-hidden rounded-lg border border-ink-100 text-xs font-semibold" role="group" aria-label="Leaderboard period">
             {[['weekly', 'This week'], ['all_time', 'All time']].map(([value, label]) => (
               <button
                 key={value}
+                type="button"
+                aria-pressed={period === value}
                 onClick={() => setPeriod(value)}
                 className={period === value ? 'bg-primary px-3 py-1.5 text-white' : 'px-3 py-1.5 text-ink-500 hover:bg-ink-50'}
               >
@@ -127,6 +136,8 @@ function LeaderboardTab({ optedIn, onNavigate, refreshKey }) {
 
       {loading ? (
         <SkeletonList count={5} />
+      ) : error ? (
+        <LoadError bare title="Couldn't load the leaderboard" message={error.message || 'Please try again in a moment.'} onRetry={onRetry} />
       ) : !data || data.entries.length === 0 ? (
         <EmptyState icon={Trophy} title="No one on the board yet" message="Students who opt in and earn XP this period will show up here." />
       ) : (
@@ -162,16 +173,21 @@ function LeaderboardTab({ optedIn, onNavigate, refreshKey }) {
 
 export default function AchievementsPage({ onNavigate }) {
   const [tab, setTab] = useState('achievements');
-  const { data: summary, loading: summaryLoading } = useGamificationSummary(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const retry = () => setRefreshKey((k) => k + 1);
+  const { data: summary, loading: summaryLoading } = useGamificationSummary(refreshKey);
 
   return (
     <div className="mx-auto max-w-4xl animate-fadeUp p-5 lg:p-8">
       <XpHeader summary={summary} loading={summaryLoading} />
 
-      <div className="mb-5 flex gap-1 border-b border-ink-100">
+      <div className="mb-5 flex gap-1 border-b border-ink-100" role="tablist" aria-label="Achievements and leaderboard">
         {TABS.map((t) => (
           <button
             key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
             className={[
               '-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors',
@@ -184,9 +200,9 @@ export default function AchievementsPage({ onNavigate }) {
       </div>
 
       {tab === 'achievements' ? (
-        <AchievementsTab refreshKey={0} />
+        <AchievementsTab refreshKey={refreshKey} onRetry={retry} />
       ) : (
-        <LeaderboardTab optedIn={Boolean(summary?.leaderboardOptIn)} onNavigate={onNavigate} refreshKey={0} />
+        <LeaderboardTab optedIn={Boolean(summary?.leaderboardOptIn)} onNavigate={onNavigate} refreshKey={refreshKey} onRetry={retry} />
       )}
     </div>
   );

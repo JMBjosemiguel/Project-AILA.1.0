@@ -4,6 +4,7 @@ import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import { DomainChip } from '../../../components/common/DomainChip';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import { SkeletonGrid } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -28,7 +29,7 @@ const ACCEPTED_FILE_TYPES = [
 
 export default function ResourcesPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data, loading } = useResourceLibraryData(refreshVersion);
+  const { data, loading, error } = useResourceLibraryData(refreshVersion);
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [subjectId, setSubjectId] = useState('all');
@@ -237,6 +238,13 @@ export default function ResourcesPage({ onNavigate }) {
 
           {loading ? (
             <SkeletonGrid count={4} />
+          ) : error ? (
+            <LoadError
+              bare
+              title="Couldn't load your resources"
+              message={error.message || 'Something went wrong loading your library.'}
+              onRetry={() => setRefreshVersion((version) => version + 1)}
+            />
           ) : (
             <div className="grid sm:grid-cols-2 gap-3">
               {filtered.length ? filtered.map((file) => (

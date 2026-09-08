@@ -28,7 +28,11 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
     setError('');
     try {
       const result = await generateCourse({ courseName: courseName.trim(), difficulty, goal: goal.trim() });
-      toast.success('Course generated. AILA built your roadmap.');
+      toast.success(
+        result.personalizationLevel === 'performance_aware'
+          ? 'Course generated. AILA tuned the roadmap to your recent progress.'
+          : 'Course generated. AILA built your roadmap.'
+      );
       onGenerated?.(result.subjectId);
     } catch (err) {
       setError(err.message || 'Could not generate that course right now.');

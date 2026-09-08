@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, CheckCircle2, ClipboardList, Cloud, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
+import PersonalizedBadge from '../common/PersonalizedBadge';
 
 const TYPE_LABELS = {
   multiple_choice: 'Multiple Choice',
@@ -127,7 +128,12 @@ export default function QuizCard({
       <CardHeader
         title={`Quiz: ${quiz.topic}`}
         subtitle={`${TYPE_LABELS[quiz.quizType] || 'Quiz'} · ${items.length} item${items.length === 1 ? '' : 's'}`}
-        action={<ClipboardList size={18} className="text-primary" />}
+        action={
+          <div className="flex items-center gap-2">
+            <PersonalizedBadge level={quiz.personalizationLevel} />
+            <ClipboardList size={18} className="text-primary" />
+          </div>
+        }
       />
 
       {submitted && (

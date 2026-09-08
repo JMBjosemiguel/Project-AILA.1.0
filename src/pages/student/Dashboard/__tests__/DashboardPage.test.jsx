@@ -81,4 +81,42 @@ describe('DashboardPage — reliability', () => {
     expect(setResumeQuiz).toHaveBeenCalledWith(42);
     expect(onNavigate).toHaveBeenCalledWith('hub');
   });
+
+  it('puts the Resume Test widget above the AI Insight', () => {
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      activeQuizAttempts: [{ attemptId: 9, quizId: 42, topic: 'Photosynthesis', total: 6, answered: 3, progressPercent: 50 }],
+    };
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    const resume = screen.getByText(/Resume a test/i);
+    const insight = screen.getByText(/AI Insight/i);
+    expect(resume.compareDocumentPosition(insight) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('hides "Continue learning" when the AI Insight already points at the same lesson', () => {
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      continueLearning: { lessonId: 7, lessonTitle: 'Cell Structure', topicTitle: 'Cells', subjectName: 'Biology' },
+      recommendation: { type: 'weak_topic', title: 'Review Cells', message: 'reinforce', lessonId: 7 },
+    };
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    expect(screen.queryByText('Continue learning')).not.toBeInTheDocument();
+    expect(screen.getByText('Review Cells')).toBeInTheDocument();
+  });
+
+  it('keeps "Continue learning" when it points somewhere different from the AI Insight', () => {
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      continueLearning: { lessonId: 7, lessonTitle: 'Cell Structure', topicTitle: 'Cells', subjectName: 'Biology' },
+      recommendation: { type: 'weak_topic', title: 'Review Photosynthesis', message: 'reinforce', lessonId: 99 },
+    };
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    expect(screen.getByText('Continue learning')).toBeInTheDocument();
+  });
 });

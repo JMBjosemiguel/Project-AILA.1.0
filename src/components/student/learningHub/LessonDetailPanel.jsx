@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Clock, ExternalLink, Loader2, Sparkles, X } 
 import Button from '../../common/Button';
 import Card, { CardHeader } from '../../common/Card';
 import EmptyState from '../../common/EmptyState';
+import PersonalizedBadge from '../../common/PersonalizedBadge';
 import { useToast } from '../../common/Toast';
 import MarkdownRenderer from '../../chatbot/MarkdownRenderer';
 import { getLesson, completeLesson } from '../../../services/api/learningService';
@@ -84,6 +85,7 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
               <span className="inline-flex items-center gap-1 text-xs text-ink-400">
                 <Clock size={12} /> ~{detail.lesson.estimated_minutes} min
               </span>
+              <PersonalizedBadge level={detail.lesson.personalizationLevel} />
             </div>
           )}
         </div>

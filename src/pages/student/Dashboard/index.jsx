@@ -27,6 +27,9 @@ export default function DashboardPage({ onNavigate }) {
   const stats = data?.stats ?? [];
   const continueLearning = data?.continueLearning;
   const recommendation = data?.recommendation;
+  // Don't show "Continue learning" when the AI Insight already points at the same lesson.
+  const continueLearningIsDuplicate =
+    continueLearning && recommendation?.lessonId && continueLearning.lessonId === recommendation.lessonId;
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -87,6 +90,9 @@ export default function DashboardPage({ onNavigate }) {
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <WelcomeHeader profile={data?.profile} onAskAI={() => onNavigate('assistant')} />
 
+      {/* An unfinished formal assessment is the most time-sensitive action — it comes first. */}
+      {!loading && <ResumeTestCard attempts={data?.activeQuizAttempts ?? []} onResume={handleResumeTest} />}
+
       {!loading && (
         <AIInsightCard
           recommendation={recommendation}
@@ -94,8 +100,6 @@ export default function DashboardPage({ onNavigate }) {
           onAskAila={handleAskAilaAboutRecommendation}
         />
       )}
-
-      {!loading && <ResumeTestCard attempts={data?.activeQuizAttempts ?? []} onResume={handleResumeTest} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {loading ? (
@@ -119,18 +123,20 @@ export default function DashboardPage({ onNavigate }) {
 
       {!loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">
-          <Card>
-            <CardHeader title="Continue learning" />
-            {continueLearning ? (
-              <div>
-                <p className="text-xs text-ink-400 mb-1">{continueLearning.subjectName} / {continueLearning.topicTitle}</p>
-                <p className="text-sm font-semibold text-ink-800 mb-3">{continueLearning.lessonTitle}</p>
-                <Button size="sm" icon={<ArrowRight size={14} />} onClick={handleContinueLearning}>Resume lesson</Button>
-              </div>
-            ) : (
-              <EmptyState icon={BookOpenCheck} title="All caught up" message="Every tracked lesson is complete. Explore Learning Hub for more." />
-            )}
-          </Card>
+          {!continueLearningIsDuplicate && (
+            <Card>
+              <CardHeader title="Continue learning" />
+              {continueLearning ? (
+                <div>
+                  <p className="text-xs text-ink-400 mb-1">{continueLearning.subjectName} / {continueLearning.topicTitle}</p>
+                  <p className="text-sm font-semibold text-ink-800 mb-3">{continueLearning.lessonTitle}</p>
+                  <Button size="sm" icon={<ArrowRight size={14} />} onClick={handleContinueLearning}>Resume lesson</Button>
+                </div>
+              ) : (
+                <EmptyState icon={BookOpenCheck} title="All caught up" message="Every tracked lesson is complete. Explore Learning Hub for more." />
+              )}
+            </Card>
+          )}
 
           <Card>
             <CardHeader title="Recent AI conversations" action={<button onClick={() => onNavigate('assistant')} className="text-xs font-semibold text-primary hover:underline">AI Assistant</button>} />

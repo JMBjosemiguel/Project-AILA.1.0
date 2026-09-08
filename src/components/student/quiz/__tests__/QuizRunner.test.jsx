@@ -20,10 +20,10 @@ const ITEMS = [
   { id: 11, question: 'Capital of Japan?', options: ['Kyoto', 'Tokyo'], orderIndex: 1 },
 ];
 
-function startPayload(answers = [], currentIndex = 0) {
+function startPayload(answers = [], currentIndex = 0, personalizationLevel = null) {
   return {
     attempt: { id: 77, quizId: 5, status: 'in_progress', currentIndex },
-    quiz: { id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium' },
+    quiz: { id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', personalizationLevel },
     items: ITEMS,
     answers,
   };
@@ -131,6 +131,19 @@ describe('QuizRunner — resumable formal quiz', () => {
     saveAttemptAnswer.mockClear();
     await user.click(screen.getByRole('button', { name: 'Paris' }));
     expect(saveAttemptAnswer).not.toHaveBeenCalled();
+  });
+
+  it('shows a "Personalized for you" badge only when generation was performance-aware', async () => {
+    startQuizAttempt.mockResolvedValueOnce(startPayload([], 0, 'performance_aware'));
+    const { unmount } = render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByText(/Capital of France?/));
+    expect(screen.getByText(/Personalized for you/i)).toBeInTheDocument();
+    unmount();
+
+    startQuizAttempt.mockResolvedValueOnce(startPayload([], 0, 'basic'));
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByText(/Capital of France?/));
+    expect(screen.queryByText(/Personalized for you/i)).not.toBeInTheDocument();
   });
 
   it('re-fetches server state on a fresh mount (refresh / reopen)', async () => {

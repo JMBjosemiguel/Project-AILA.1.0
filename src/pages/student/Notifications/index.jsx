@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BellOff, CheckCheck, Trash2 } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import { SkeletonList } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -11,7 +12,8 @@ import {
 } from '../../../services/api/notificationService';
 
 export default function NotificationsPage() {
-  const { data, loading } = useNotificationsData();
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const { data, loading, error } = useNotificationsData(refreshVersion);
   const [items, setItems] = useState([]);
   const confirm = useConfirm();
   const toast = useToast();
@@ -81,6 +83,12 @@ export default function NotificationsPage() {
       <div className="flex flex-col gap-2.5">
         {loading ? (
           <SkeletonList count={4} />
+        ) : error ? (
+          <LoadError
+            title="Couldn't load your notifications"
+            message={error.message || 'Something went wrong loading your notifications.'}
+            onRetry={() => setRefreshVersion((version) => version + 1)}
+          />
         ) : items.length ? items.map((notification) => (
           <div
             key={notification.id}

@@ -1,15 +1,18 @@
+import { useState } from 'react';
 import { Award, Clock, MessageCircle, TrendingUp, Zap } from 'lucide-react';
 import BarChart from '../../../components/analytics/BarChart';
 import DonutChart from '../../../components/analytics/DonutChart';
 import MasteryList from '../../../components/analytics/MasteryList';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import StatCard from '../../../components/common/StatCard';
 import { SkeletonStat } from '../../../components/common/Skeleton';
 import { useAnalyticsData } from '../../../hooks/useAnalyticsData';
 
 export default function AnalyticsPage() {
-  const { data, loading } = useAnalyticsData();
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const { data, loading, error } = useAnalyticsData(refreshVersion);
   const kpis = data?.kpis ?? [];
   const studyHours = data?.studyHours ?? [];
   const chatbotUsage = data?.chatbotUsage ?? [];
@@ -18,6 +21,18 @@ export default function AnalyticsPage() {
   const weakTopics = data?.weakTopics ?? [];
   const xpOverTime = data?.xpOverTime ?? [];
   const resourceUsage = data?.resourceUsage ?? [];
+
+  if (!loading && error) {
+    return (
+      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+        <LoadError
+          title="Couldn't load your analytics"
+          message={error.message || 'Something went wrong loading your analytics.'}
+          onRetry={() => setRefreshVersion((version) => version + 1)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">

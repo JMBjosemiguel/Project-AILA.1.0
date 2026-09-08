@@ -1,0 +1,55 @@
+-- Migration 003 — personalization context snapshots
+--
+-- Purpose:  make AILA's generated learning materials auditable. When a course,
+--           lesson, or formal quiz is generated, a concise snapshot of the
+--           student-learning context that shaped the prompt is stored on the
+--           row, so the team can answer "why did AILA generate this this way?"
+--           during the capstone defense.
+--
+-- Changes (all additive — nothing renamed, nothing dropped):
+--   subjects + personalization_context JSON NULL
+--   lessons  + personalization_context JSON NULL
+--   quizzes  + personalization_context JSON NULL
+--
+--   `JSON` matches the existing convention (`quiz_questions.options`,
+--   `admin_audit_log.details`). On MariaDB 10.4 that is `LONGTEXT` + a
+--   `CHECK (json_valid(...))` constraint; on MySQL 8.4 it is the native JSON
+--   type. NULL is always allowed, so every existing row stays valid.
+--
+-- The stored snapshot is small and non-sensitive, e.g.
+--   {"source":"course_generation","personalizationLevel":"performance_aware",
+--    "program":"BSIT","yearLevel":3,"preferredDifficulty":"intermediate",
+--    "requestedDifficulty":"intermediate","weakTopics":["Linked Lists"],
+--    "recentQuizAverage":58,"generatedAt":"2026-09-08T12:00:00.000Z"}
+-- It never contains secrets, tokens, passwords, emails, raw chat transcripts,
+-- IDs used as prompt content, or another student's data.
+--
+-- Existing materials: personalization_context stays NULL. No backfill — only
+-- material generated after this migration carries a snapshot (§12 of the spec).
+--
+-- Compatibility: MariaDB 10.4+ and MySQL 8.4. Applied ONCE (no
+-- `ADD COLUMN IF NOT EXISTS` — MySQL 8.4 lacks it).
+--
+-- Preflight (record the counts, they must be identical afterwards):
+--   SELECT (SELECT COUNT(*) FROM subjects) subjects,
+--          (SELECT COUNT(*) FROM lessons)  lessons,
+--          (SELECT COUNT(*) FROM quizzes)  quizzes;
+--
+-- Apply (local dev only — never against Aiven in this batch):
+--   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/003_personalization_context.sql
+--
+-- Verify after apply:
+--   SHOW COLUMNS FROM subjects LIKE 'personalization_context';
+--   SHOW COLUMNS FROM lessons  LIKE 'personalization_context';
+--   SHOW COLUMNS FROM quizzes  LIKE 'personalization_context';
+--   -- same subjects / lessons / quizzes counts as the preflight
+--   SELECT COUNT(*) FROM subjects WHERE personalization_context IS NOT NULL;  -- expect 0
+--
+-- Rollback:
+--   ALTER TABLE subjects DROP COLUMN personalization_context;
+--   ALTER TABLE lessons  DROP COLUMN personalization_context;
+--   ALTER TABLE quizzes  DROP COLUMN personalization_context;
+
+ALTER TABLE subjects ADD COLUMN personalization_context JSON NULL;
+ALTER TABLE lessons  ADD COLUMN personalization_context JSON NULL;
+ALTER TABLE quizzes  ADD COLUMN personalization_context JSON NULL;

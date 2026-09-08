@@ -299,6 +299,9 @@ CREATE TABLE subjects (
   goal VARCHAR(150) NULL,
   is_ai_generated TINYINT(1) NOT NULL DEFAULT 0,
   is_archived TINYINT(1) NOT NULL DEFAULT 0,
+  -- migration 003: concise snapshot of the student-learning context that shaped
+  -- AI generation (audit trail; NULL for non-AI or pre-migration rows).
+  personalization_context JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL DEFAULT NULL,
@@ -349,6 +352,7 @@ CREATE TABLE lessons (
   content LONGTEXT NULL,
   difficulty ENUM('easy','medium','hard') NOT NULL DEFAULT 'medium',
   estimated_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 15,
+  personalization_context JSON NULL,  -- migration 003: audit snapshot of the context used to generate `content`
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL DEFAULT NULL,
@@ -672,6 +676,7 @@ CREATE TABLE quizzes (
   source_type ENUM('chat','lesson','topic','resource','manual') NULL DEFAULT NULL,
   source_id BIGINT UNSIGNED NULL DEFAULT NULL,
   item_count TINYINT UNSIGNED NOT NULL DEFAULT 10,
+  personalization_context JSON NULL,  -- migration 003: audit snapshot of the context used to generate this quiz
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_quizzes_user_id (user_id),

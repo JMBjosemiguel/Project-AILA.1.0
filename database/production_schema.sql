@@ -638,11 +638,24 @@ CREATE TABLE quizzes (
   source_id BIGINT UNSIGNED NULL DEFAULT NULL,
   item_count TINYINT UNSIGNED NOT NULL DEFAULT 10,
   personalization_context JSON NULL,  -- migration 003: audit snapshot of the context used to generate this quiz
+  subject_id INT UNSIGNED NULL,        -- migration 004: course assessments
+  module_id INT UNSIGNED NULL,
+  assessment_kind ENUM('practice','module_checkpoint','course_final') NOT NULL DEFAULT 'practice',
+  passing_score TINYINT UNSIGNED NULL,
+  assessment_slot INT UNSIGNED NULL,   -- uniqueness discriminator: module_id / 0 / NULL
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_quizzes_assessment (user_id, subject_id, assessment_slot),
   KEY idx_quizzes_user_id (user_id),
   KEY idx_quizzes_user_created (user_id, created_at),
+  KEY idx_quizzes_subject_kind (subject_id, assessment_kind),
+  KEY idx_quizzes_module (module_id),
+  CONSTRAINT chk_quizzes_passing_score CHECK (passing_score IS NULL OR passing_score <= 100),
   CONSTRAINT fk_quizzes_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_quizzes_subject FOREIGN KEY (subject_id) REFERENCES subjects(id)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_quizzes_module FOREIGN KEY (module_id) REFERENCES modules(id)
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -673,6 +686,7 @@ CREATE TABLE quiz_attempts (
   status ENUM('in_progress','submitted','expired') NOT NULL DEFAULT 'submitted',
   current_index SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   active_slot TINYINT UNSIGNED NULL DEFAULT NULL,
+  passed TINYINT(1) NULL DEFAULT NULL,  -- migration 004: recorded at submit for formal assessments
   started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP NULL DEFAULT NULL,
   completed_at TIMESTAMP NULL DEFAULT NULL,

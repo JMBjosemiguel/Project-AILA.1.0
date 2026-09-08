@@ -2,8 +2,10 @@ const ApiError = require('../utils/ApiError');
 const { callGemini, getResponseText } = require('./geminiClient');
 const { transaction } = require('../config/database');
 const quizModel = require('../models/quizModel');
+const courseAssessmentModel = require('../models/courseAssessmentModel');
 const resourceModel = require('../models/resourceModel');
 const personalizationService = require('./personalizationService');
+const studentContextService = require('./studentContextService');
 const { awardXpOnce, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 const { truncateForAi } = require('../utils/pdfText');
@@ -15,6 +17,18 @@ const QUIZ_SYSTEM_RULES = [
 ].join(' ');
 
 const QUIZ_XP_MAX = 20;
+
+// Formal course assessments (migration 004). Question counts stay inside the
+// existing generateValidator ceiling of 30 and inside the Gemini output budget.
+const CHECKPOINT_ITEMS = 8;
+const FINAL_ITEMS = 16;
+const DEFAULT_PASSING_SCORE = 70;
+// XP for passing (once). Scaled to the existing economy: a lesson = 10, a
+// practice quiz = up to 20, a level = 100. A formal assessment awards ONLY this
+// pass XP — the `quiz_completed:<id>` reward is skipped for assessments so the
+// two never stack.
+const CHECKPOINT_PASS_XP = 30;
+const FINAL_PASS_XP = 100;
 
 const QUIZ_TYPE_LABELS = {
   multiple_choice: 'multiple choice',
@@ -206,6 +220,10 @@ function formatAttemptForResume(quiz, attempt, savedAnswers) {
       quizType: quiz.quiz_type,
       difficulty: quiz.difficulty,
       personalizationLevel: personalizationLevelFromSnapshot(quiz.personalization_context),
+      assessmentKind: quiz.assessment_kind || 'practice',
+      passingScore: quiz.assessment_kind && quiz.assessment_kind !== 'practice'
+        ? Number(quiz.passing_score ?? 70)
+        : null,
     },
     items: quiz.questions.map((question) => ({
       id: question.id,
@@ -247,6 +265,33 @@ function formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpA
         isCorrect: answer.isCorrect,
       };
     }),
+  };
+}
+
+function assessmentMeta(quiz) {
+  const kind = quiz.assessment_kind || 'practice';
+  if (kind === 'practice') return { kind, isFormal: false, passingScore: null };
+  return { kind, isFormal: true, passingScore: Number(quiz.passing_score ?? DEFAULT_PASSING_SCORE) };
+}
+
+// Deterministic (no Gemini) study advice shown after a failed formal assessment.
+async function buildFailRecommendation(userId, quiz) {
+  if (quiz.assessment_kind === 'module_checkpoint') {
+    return { message: `Review the "${quiz.topic}" module, then try the checkpoint again.` };
+  }
+  // course_final — point at the student's weakest topics in this course, or the
+  // whole course if we can't tell.
+  let weak = [];
+  try {
+    weak = (await studentContextService.getWeakTopics(userId, { subjectId: quiz.subject_id }))
+      .map((t) => t.topic).filter(Boolean).slice(0, 3);
+  } catch {
+    weak = [];
+  }
+  return {
+    message: weak.length
+      ? `Review these topics before your next attempt: ${weak.join(', ')}.`
+      : 'Review each module before your next attempt.',
   };
 }
 
@@ -326,6 +371,104 @@ async function getQuizForUser(userId, quizId) {
     throw new ApiError(404, 'Quiz not found.');
   }
   return formatQuizForTake(quiz);
+}
+
+// --- Course assessments (module checkpoints + course final) -------------
+
+/**
+ * Generate a checkpoint / final assessment's questions. Reuses QUIZ_SCHEMA,
+ * grading rules and personalization — an assessment is just a quiz with
+ * assessment_* columns. Personalization tunes emphasis/difficulty, never the
+ * grading standard.
+ */
+async function generateAssessmentItems({ kind, outlineText, itemCount, personalizationText }) {
+  const isFinal = kind === 'course_final';
+
+  const systemInstruction = [
+    QUIZ_SYSTEM_RULES,
+    isFinal
+      ? 'This is a COURSE FINAL / long test. Distribute the questions across ALL modules listed in the outline — do not over-weight any single module. Include a mix of recall and application.'
+      : 'This is a MODULE CHECKPOINT. Every question must test material from this one module.',
+    'Reinforce the student\'s weak areas where the outline naturally allows, but do not make the whole assessment about them.',
+    personalizationText,
+  ].filter(Boolean).join('\n\n');
+
+  const prompt = [
+    `Generate a ${itemCount}-item multiple-choice ${isFinal ? 'course final assessment' : 'module checkpoint quiz'} for a college student.`,
+    'Each item must have exactly 4 plausible "options", "correctAnswer" must exactly match one option, and "explanation" is one educational sentence.',
+    'Base every question ONLY on the course outline below.',
+    personalizationService.delimitStudentText('course_outline', outlineText),
+    'Do not include any text outside the JSON object.',
+  ].join('\n');
+
+  const payload = await callGemini({
+    systemInstruction,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.5,
+      maxOutputTokens: isFinal ? 3072 : 2048,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: 'application/json',
+      responseSchema: QUIZ_SCHEMA,
+    },
+  });
+
+  const result = parseJsonResponse(payload, `AILA could not generate that ${isFinal ? 'final assessment' : 'checkpoint'}. Please try again.`);
+  const items = (Array.isArray(result.items) ? result.items : []).slice(0, itemCount);
+  if (items.length < 3) {
+    throw new ApiError(502, `AILA could not generate that ${isFinal ? 'final assessment' : 'checkpoint'}. Please try again.`);
+  }
+  return items;
+}
+
+/**
+ * Generate + persist one course assessment quiz. The UNIQUE
+ * (user_id, subject_id, assessment_slot) index makes this safe against a
+ * concurrent duplicate — the loser catches ER_DUP_ENTRY and returns the
+ * existing quiz id.
+ */
+async function createAndSaveAssessment({ userId, kind, subjectId, moduleId, assessmentSlot, topic, difficulty, outlineText }) {
+  const itemCount = kind === 'course_final' ? FINAL_ITEMS : CHECKPOINT_ITEMS;
+
+  let context = null;
+  try {
+    context = await personalizationService.buildPersonalizationContext(userId, {
+      subjectId, requestedDifficulty: difficulty, generationType: 'quiz',
+    });
+  } catch {
+    context = null;
+  }
+
+  const items = await generateAssessmentItems({
+    kind,
+    outlineText,
+    itemCount,
+    personalizationText: personalizationService.formatPersonalizationPrompt(context),
+  });
+
+  try {
+    return await quizModel.createQuiz({
+      userId,
+      topic,
+      quizType: 'multiple_choice',
+      difficulty: difficulty || 'medium',
+      sourceType: null,
+      sourceId: null,
+      items,
+      personalizationContext: personalizationService.snapshotJson(context),
+      subjectId,
+      moduleId: moduleId || null,
+      assessmentKind: kind,
+      passingScore: DEFAULT_PASSING_SCORE,
+      assessmentSlot,
+    });
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      const existing = await courseAssessmentModel.findAssessmentQuiz(userId, subjectId, assessmentSlot);
+      if (existing) return existing.id;
+    }
+    throw err;
+  }
 }
 
 // --- Resumable attempt lifecycle -----------------------------------------
@@ -449,6 +592,7 @@ async function getAttempt(userId, attemptId) {
     };
   });
 
+  const { kind, isFormal, passingScore } = assessmentMeta(quiz);
   return {
     ...formatAttemptReview({
       quiz,
@@ -460,6 +604,10 @@ async function getAttempt(userId, attemptId) {
     }),
     status: attempt.status,
     completedAt: attempt.completed_at,
+    assessmentKind: kind,
+    passingScore: isFormal ? passingScore : null,
+    passed: attempt.passed === null || attempt.passed === undefined ? null : Boolean(attempt.passed),
+    percent: attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0,
   };
 }
 
@@ -482,7 +630,9 @@ async function submitAttempt(userId, attemptId) {
   const answerByQuestionId = new Map(saved.map((row) => [row.question_id, row.selected_answer]));
 
   const { gradedAnswers, score, total } = gradeQuiz(quiz, answerByQuestionId);
-  const points = total > 0 ? Math.round((score / total) * QUIZ_XP_MAX) : 0;
+  const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+  const { kind, isFormal, passingScore } = assessmentMeta(quiz);
+  const passed = isFormal ? percent >= passingScore : null;
 
   const xpAwarded = await transaction(async (connection) => {
     const status = await quizModel.lockAttemptStatus(attempt.id, connection);
@@ -497,30 +647,60 @@ async function submitAttempt(userId, attemptId) {
     }
 
     await quizModel.finalizeAttempt(
-      { attemptId: attempt.id, score, total, currentIndex: Math.max(0, total - 1) },
+      { attemptId: attempt.id, score, total, currentIndex: Math.max(0, total - 1), passed },
       connection
     );
 
-    await logActivity(userId, 'quiz_completed', quiz.id, `Scored ${score}/${total} on "${quiz.topic}" quiz`, connection);
-
-    // First legitimate completion of THIS quiz earns XP; retakes earn nothing.
-    const xp = await awardXpOnce(userId, {
-      eventKey: `quiz_completed:${quiz.id}`,
-      points,
-      reason: `Completed the "${quiz.topic}" quiz`,
-    }, connection);
-
-    await notifyUser(userId, {
-      type: 'system',
-      title: 'Quiz scored',
-      body: `You scored ${score}/${total} on the "${quiz.topic}" quiz.`,
-      connection,
-    });
+    let xp = { awarded: 0 };
+    if (!isFormal) {
+      // Practice quiz — first completion earns the usual XP; retakes earn nothing.
+      await logActivity(userId, 'quiz_completed', quiz.id, `Scored ${score}/${total} on "${quiz.topic}" quiz`, connection);
+      xp = await awardXpOnce(userId, {
+        eventKey: `quiz_completed:${quiz.id}`,
+        points: Math.round((score / Math.max(1, total)) * QUIZ_XP_MAX),
+        reason: `Completed the "${quiz.topic}" quiz`,
+      }, connection);
+      await notifyUser(userId, {
+        type: 'system', title: 'Quiz scored',
+        body: `You scored ${score}/${total} on the "${quiz.topic}" quiz.`, connection,
+      });
+    } else {
+      const label = kind === 'course_final' ? 'course final' : 'module checkpoint';
+      await logActivity(userId, 'quiz_completed', quiz.id, `${passed ? 'Passed' : 'Attempted'} the "${quiz.topic}" ${label} (${percent}%)`, connection);
+      if (passed) {
+        // Pass XP is awarded ONCE per module / course — never on a fail, never
+        // on a retake of an already-passed assessment. `quiz_completed:<id>` is
+        // deliberately NOT awarded for formal assessments.
+        xp = await awardXpOnce(userId, {
+          eventKey: kind === 'course_final'
+            ? `course_final_pass:${quiz.subject_id}`
+            : `module_checkpoint_pass:${quiz.module_id}`,
+          points: kind === 'course_final' ? FINAL_PASS_XP : CHECKPOINT_PASS_XP,
+          reason: `Passed the "${quiz.topic}" ${label}`,
+        }, connection);
+      }
+      await notifyUser(userId, {
+        type: 'system',
+        title: passed ? `${kind === 'course_final' ? 'Course final' : 'Checkpoint'} passed` : `${kind === 'course_final' ? 'Course final' : 'Checkpoint'} not passed`,
+        body: `You scored ${percent}% on the "${quiz.topic}" ${label} (passing is ${passingScore}%).`,
+        connection,
+      });
+    }
 
     return xp.awarded;
   });
 
-  return formatAttemptReview({ quiz, attemptId: attempt.id, gradedAnswers, score, total, xpAwarded });
+  const review = {
+    ...formatAttemptReview({ quiz, attemptId: attempt.id, gradedAnswers, score, total, xpAwarded }),
+    assessmentKind: kind,
+    passingScore,
+    passed,
+    percent,
+  };
+  if (isFormal && !passed) {
+    review.recommendation = await buildFailRecommendation(userId, quiz);
+  }
+  return review;
 }
 
 /**
@@ -572,6 +752,7 @@ async function listActiveAttempts(userId) {
       topic: row.topic,
       quizType: row.quiz_type,
       difficulty: row.difficulty,
+      assessmentKind: row.assessment_kind || 'practice',
       total,
       answered,
       progressPercent: total > 0 ? Math.round((answered / total) * 100) : 0,
@@ -583,6 +764,8 @@ async function listActiveAttempts(userId) {
 }
 
 async function listQuizHistory(userId) {
+  // Raw rows now also carry assessment_kind / passed / passing_score so a
+  // consumer can distinguish Practice Quiz / Module Checkpoint / Course Final.
   return quizModel.listAttemptsForUser(userId);
 }
 
@@ -598,6 +781,7 @@ module.exports = {
   generateFlashcards,
   generateAndSaveQuiz,
   getQuizForUser,
+  createAndSaveAssessment,
   startAttempt,
   saveAttemptAnswer,
   getAttempt,
@@ -609,4 +793,9 @@ module.exports = {
   formatQuizForTake,
   formatAttemptForResume,
   formatAttemptReview,
+  CHECKPOINT_ITEMS,
+  FINAL_ITEMS,
+  DEFAULT_PASSING_SCORE,
+  CHECKPOINT_PASS_XP,
+  FINAL_PASS_XP,
 };

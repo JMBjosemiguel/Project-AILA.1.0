@@ -1,13 +1,21 @@
 const { query, execute } = require('../config/database');
 
-async function createQuiz({ userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null }, connection = null) {
+async function createQuiz({
+  userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null,
+  subjectId = null, moduleId = null, assessmentKind = 'practice', passingScore = null, assessmentSlot = null,
+}, connection = null) {
   const quizResult = await execute(
     connection,
     `
-      INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, source_type, source_id, item_count, personalization_context)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO quizzes
+        (user_id, topic, quiz_type, difficulty, source_type, source_id, item_count, personalization_context,
+         subject_id, module_id, assessment_kind, passing_score, assessment_slot)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [userId, topic, quizType, difficulty, sourceType || null, sourceId || null, items.length, personalizationContext || null]
+    [
+      userId, topic, quizType, difficulty, sourceType || null, sourceId || null, items.length, personalizationContext || null,
+      subjectId, moduleId, assessmentKind, passingScore, assessmentSlot,
+    ]
   );
 
   const quizId = quizResult.insertId;
@@ -33,7 +41,9 @@ async function createQuiz({ userId, topic, quizType, difficulty, sourceType, sou
 
 async function getQuizWithQuestions(quizId, userId) {
   const quizRows = await query(
-    'SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, created_at FROM quizzes WHERE id = ? AND user_id = ? LIMIT 1',
+    `SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, created_at,
+            subject_id, module_id, assessment_kind, passing_score, assessment_slot
+       FROM quizzes WHERE id = ? AND user_id = ? LIMIT 1`,
     [quizId, userId]
   );
   const quiz = quizRows[0];
@@ -82,9 +92,10 @@ async function createInProgressAttempt({ quizId, userId, total }, connection = n
 async function getAttemptById(attemptId, userId, connection = null) {
   const rows = await execute(
     connection,
-    `SELECT qa.id, qa.quiz_id, qa.user_id, qa.status, qa.current_index, qa.score, qa.total,
+    `SELECT qa.id, qa.quiz_id, qa.user_id, qa.status, qa.current_index, qa.score, qa.total, qa.passed,
             qa.started_at, qa.completed_at, qa.updated_at,
-            q.topic, q.quiz_type, q.difficulty
+            q.topic, q.quiz_type, q.difficulty,
+            q.assessment_kind, q.passing_score, q.subject_id, q.module_id
        FROM quiz_attempts qa
        INNER JOIN quizzes q ON q.id = qa.quiz_id
       WHERE qa.id = ? AND qa.user_id = ?
@@ -143,21 +154,21 @@ async function gradeAttemptAnswer(attemptId, questionId, isCorrect, connection =
 
 // Finalize only if still in progress — the WHERE guard plus the FOR UPDATE lock
 // makes a double submit impossible. Returns the driver result (affectedRows).
-async function finalizeAttempt({ attemptId, score, total, currentIndex }, connection = null) {
+async function finalizeAttempt({ attemptId, score, total, currentIndex, passed = null }, connection = null) {
   return execute(
     connection,
     `UPDATE quiz_attempts
-        SET status = 'submitted', active_slot = NULL, score = ?, total = ?, current_index = ?,
+        SET status = 'submitted', active_slot = NULL, score = ?, total = ?, current_index = ?, passed = ?,
             completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'in_progress'`,
-    [score, total, currentIndex, attemptId]
+    [score, total, currentIndex, passed === null ? null : (passed ? 1 : 0), attemptId]
   );
 }
 
 async function listActiveAttemptsForUser(userId, limit = 10) {
   return query(
     `SELECT qa.id AS attempt_id, qa.quiz_id, qa.current_index, qa.total, qa.started_at, qa.updated_at,
-            q.topic, q.quiz_type, q.difficulty, q.item_count,
+            q.topic, q.quiz_type, q.difficulty, q.item_count, q.assessment_kind,
             (SELECT COUNT(*) FROM quiz_attempt_answers x
               WHERE x.attempt_id = qa.id AND x.selected_answer IS NOT NULL AND x.selected_answer <> '') AS answered
        FROM quiz_attempts qa
@@ -174,7 +185,8 @@ async function listActiveAttemptsForUser(userId, limit = 10) {
 async function listAttemptsForUser(userId, limit = 10) {
   return query(
     `
-      SELECT qa.id, qa.quiz_id, qa.score, qa.total, qa.completed_at, q.topic, q.quiz_type, q.difficulty
+      SELECT qa.id, qa.quiz_id, qa.score, qa.total, qa.passed, qa.completed_at,
+             q.topic, q.quiz_type, q.difficulty, q.assessment_kind, q.passing_score
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
       WHERE qa.user_id = ? AND qa.status = 'submitted'

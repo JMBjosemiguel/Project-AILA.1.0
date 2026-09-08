@@ -131,6 +131,32 @@ async function getSubjectProgress(userId, subjectId) {
   return { totalLessons: total, completedLessons: completed, progressPercent: total ? Math.round((completed / total) * 100) : 0 };
 }
 
+// Formal assessments (checkpoint / final) the student has attempted and not yet
+// passed, and is not mid-retake on (an in-progress retake is surfaced by the
+// Resume Test widget instead). Newest failure first.
+async function getFailedAssessments(userId) {
+  return query(
+    `
+      SELECT q.id AS quiz_id, q.assessment_kind, q.subject_id, q.module_id, q.topic, q.passing_score,
+        (SELECT MAX(ROUND(a.score / a.total * 100))
+           FROM quiz_attempts a
+          WHERE a.quiz_id = q.id AND a.status = 'submitted' AND a.total > 0) AS best_score,
+        (SELECT MAX(a.completed_at)
+           FROM quiz_attempts a
+          WHERE a.quiz_id = q.id AND a.status = 'submitted') AS last_attempt_at
+      FROM quizzes q
+      INNER JOIN subjects s ON s.id = q.subject_id AND s.deleted_at IS NULL
+      WHERE q.user_id = ? AND q.assessment_kind <> 'practice'
+        AND EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'submitted')
+        AND NOT EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.passed = 1)
+        AND NOT EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'in_progress')
+      ORDER BY last_attempt_at DESC
+      LIMIT 3
+    `,
+    [userId]
+  );
+}
+
 async function getStreakRisk(userId) {
   const rows = await query(
     'SELECT current_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
@@ -166,19 +192,34 @@ async function getPreferredDifficulty(userId) {
 }
 
 async function getStudentContext(userId) {
-  const [courses, weakTopics, staleTopics, streakRisk, preferredDifficulty] = await Promise.all([
+  const [courses, weakTopics, staleTopics, streakRisk, preferredDifficulty, failedAssessments] = await Promise.all([
     getCurrentCourses(userId),
     getWeakTopics(userId),
     getStaleTopics(userId),
     getStreakRisk(userId),
     getPreferredDifficulty(userId),
+    getFailedAssessments(userId),
   ]);
 
-  return { courses, weakTopics, staleTopics, streakRisk, preferredDifficulty };
+  return { courses, weakTopics, staleTopics, streakRisk, preferredDifficulty, failedAssessments };
 }
 
 function buildRecommendation(context) {
-  const { weakTopics, staleTopics, streakRisk, courses } = context;
+  const { weakTopics, staleTopics, streakRisk, courses, failedAssessments } = context;
+
+  // Highest priority: a formal assessment attempted and not yet passed. (An
+  // in-progress retake is handled by the Resume Test widget, so it is excluded.)
+  if (failedAssessments?.length) {
+    const top = failedAssessments[0];
+    const label = top.assessment_kind === 'course_final' ? 'course final' : 'module checkpoint';
+    return {
+      type: 'failed_assessment',
+      title: `Retry the "${top.topic}" ${label}`,
+      message: `You scored ${top.best_score ?? 0}% (passing is ${top.passing_score ?? 70}%). Review the material and take it again when you're ready.`,
+      topicId: null,
+      subjectId: top.subject_id,
+    };
+  }
 
   if (weakTopics.length) {
     const top = weakTopics[0];

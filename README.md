@@ -51,6 +51,7 @@ Student:
 - `/student/resources`
 - `/student/planner`
 - `/student/analytics`
+- `/student/achievements`
 - `/student/notifications`
 - `/student/profile`
 - `/student/feedback`
@@ -118,12 +119,22 @@ The active Admin Portal is database-ready and only references tables from the fi
 
 ## Backend Integration Notes
 
-Future feature endpoint integration should stay mostly inside:
+All network code lives in `src/services/api` (one `<feature>Service.js` per domain,
+`endpoints.js` for URLs); pages consume `use<Feature>Data` hooks, never axios directly.
+Session state lives in `src/contexts/AuthContext.jsx`.
 
-- `src/services/api`
-- `src/contexts/AuthContext.jsx`
+As of v1.1 every student page is wired to a real backend endpoint (personalized
+course/lesson/quiz generation, resumable assessments, course checkpoints + final,
+material sharing, gamification, chatbot "Save as Quiz"). A page shows a proper empty
+state when the API succeeds with no data, and a retry-able error (`components/common/LoadError`)
+when the request fails.
 
-Authentication is already backend-connected. Current non-auth feature pages intentionally show empty states until real feature endpoints are connected.
+## Database
+
+Local dev uses `aila_db` on XAMPP MySQL/MariaDB. For a **fresh install** import
+`database/schema.sql` + `seed.sql` (see `database/migration_notes.md`). For an
+**existing database on v1.0.0**, apply the ordered migrations in
+`database/migrations/` (`001`–`007`) — see `database/migrations/README.md`.
 
 ## Run
 

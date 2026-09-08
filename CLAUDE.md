@@ -111,7 +111,7 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 
 SQL package lives in `database/`. **Local** import order (phpMyAdmin SQL tab or the `mysql` CLI):
 
-1. `schema.sql`  — creates `aila_db` + all 43 tables. **Destructive: drops existing tables first.** Local only (hardcodes `aila_db`).
+1. `schema.sql`  — creates `aila_db` + all 47 tables (v1.1 destination schema). **Destructive: drops existing tables first.** Local only (hardcodes `aila_db`).
 2. `seed.sql`    — dev data + the login accounts below. Local only.
 3. `indexes.sql` — idempotent; adds recommended indexes if missing.
 4. `constraints.sql` — idempotent; adds foreign keys if missing.
@@ -128,8 +128,14 @@ done
 DB on the connection). Full steps in `database/AIVEN_MIGRATION.md`. Never run `schema.sql`
 or `seed.sql` against a cloud DB.
 
-`database/database_documentation.md` documents every table; `database/migration_notes.md`
-covers validation and phpMyAdmin steps.
+**Upgrading an existing v1.0.0 database:** do NOT re-import `production_schema.sql`. Apply
+the ordered additive migrations `database/migrations/001`–`007` (one each, gated by each
+file's preflight) — see `database/migrations/README.md`. After `006`, run the achievement
+reconciliation utility once.
+
+`database/database_documentation.md` documents every table as of v1.0.0;
+`database/migrations/README.md` lists the v1.1 delta (migrations 001–007);
+`database/migration_notes.md` covers validation and phpMyAdmin steps.
 
 ### Dev login accounts (from `seed.sql`, local only)
 

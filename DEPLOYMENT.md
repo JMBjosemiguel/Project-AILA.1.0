@@ -72,6 +72,22 @@ For migrating existing local data:
 5. Import reviewed data.
 6. Verify row counts for users, subjects, resources, planner tasks, chats, quizzes, and feedback.
 
+### Upgrading an existing v1.0.0 deployment to v1.1
+
+`production_schema.sql` is the *destination* schema. A database already running
+v1.0.0 must instead apply the ordered, additive migrations in
+`database/migrations/` — `001` through `007` — **in order, once each**. Full
+per-migration preflight → apply → verify → rollback checklist and STOP
+conditions are in `database/migrations/README.md`.
+
+- All seven migrations are additive (new tables + nullable columns + indexes).
+  v1.0.0 application code keeps working against the migrated schema, so the
+  database can be migrated **before** the new backend is deployed.
+- After migration `006`, run the achievement reconciliation **once**
+  (`node -e "require('./backend/src/services/achievementService').reconcileAllUsers()..."`)
+  to grant already-earned historical achievements — no bonus XP, no notifications.
+- Take an Aiven snapshot/backup immediately before starting.
+
 ## 5. Cloudflare R2 Setup
 
 1. Create a private R2 bucket, for example `aila-resources`.
@@ -131,6 +147,7 @@ NODE_ENV=production
 PORT=5000
 APP_URL=https://your-cloudflare-pages-site.pages.dev
 CORS_ORIGINS=https://your-cloudflare-pages-site.pages.dev
+APP_TIMEZONE=Asia/Manila
 
 DB_HOST=your-aiven-host                # e.g. project-aila-xxx.a.aivencloud.com
 DB_PORT=your-aiven-port                # Aiven assigns a custom port, NOT 3306

@@ -1,5 +1,11 @@
 # AILA Database Documentation
 
+> **v1.1 note:** this document describes the v1.0.0 schema. AILA v1.1 adds four
+> tables (`xp_events`, `material_shares`, `achievements`, `user_achievements`) and
+> a set of additive nullable columns / indexes via `database/migrations/001`–`007`.
+> The current `schema.sql` / `production_schema.sql` (47 tables) already include
+> all of them. See `database/migrations/README.md` for the exact delta.
+
 The schema contains all 38 tables enumerated in the finalized AILA architecture document. The document's summary says "Total tables: 34," but the actual inventory, ERD, and table definitions list 38 tables; no listed table was skipped. All tables use InnoDB, `utf8mb4`, and `utf8mb4_unicode_ci`.
 
 ## roles

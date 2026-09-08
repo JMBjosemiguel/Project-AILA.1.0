@@ -23,6 +23,9 @@ import AdminSettingsPage from '../pages/admin/Settings';
 import AdminUsersPage from '../pages/admin/Users';
 import LoginPage from '../pages/auth/Login';
 import RegisterPage from '../pages/auth/Register';
+import SharedMaterialPage from '../pages/SharedMaterial';
+
+const SHARE_PREFIX = '/share/';
 import AssistantPage from '../pages/student/AIAssistant';
 import AnalyticsPage from '../pages/student/Analytics';
 import DashboardPage from '../pages/student/Dashboard';
@@ -101,6 +104,9 @@ export default function AppRouter() {
   useEffect(() => {
     if (!isReady) return;
 
+    // Public unlisted share links render for anyone, logged in or not — no redirects.
+    if (pathname.startsWith(SHARE_PREFIX)) return;
+
     const isAuthPath = pathname === AUTH_PATHS.LOGIN || pathname === AUTH_PATHS.REGISTER;
 
     if (!isAuthenticated && !isAuthPath) {
@@ -129,6 +135,18 @@ export default function AppRouter() {
   }, [isAuthenticated, isReady, pathname, role, route.id, route.path]);
 
   if (!isReady) return null;
+
+  // Public read-only shared material — works with or without a session.
+  if (pathname.startsWith(SHARE_PREFIX)) {
+    return (
+      <SharedMaterialPage
+        token={decodeURIComponent(pathname.slice(SHARE_PREFIX.length))}
+        isAuthenticated={isAuthenticated}
+        onNavigate={navigate}
+        onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)}
+      />
+    );
+  }
 
   if (!isAuthenticated) {
     if (pathname === AUTH_PATHS.REGISTER) {

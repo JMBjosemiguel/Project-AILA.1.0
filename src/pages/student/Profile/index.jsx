@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({ program: '', year_level: '', bio: '' });
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '' });
   const [passwordStatus, setPasswordStatus] = useState('');
+  const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const toast = useToast();
 
   const user = data?.user;
@@ -52,6 +53,21 @@ export default function ProfilePage() {
       toast.error(error.message || 'Could not save your profile.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLeaderboardToggle = async () => {
+    if (!profile) return;
+    const next = !profile.leaderboard_opt_in;
+    setLeaderboardSaving(true);
+    try {
+      await updateProfile({ leaderboard_opt_in: next });
+      setRefreshVersion((version) => version + 1);
+      toast.success(next ? "You'll now appear on the leaderboard." : "You've been removed from the leaderboard.");
+    } catch (error) {
+      toast.error(error.message || 'Could not update that setting.');
+    } finally {
+      setLeaderboardSaving(false);
     }
   };
 
@@ -118,6 +134,38 @@ export default function ProfilePage() {
                 onChange={(value) => setForm((current) => ({ ...current, year_level: value }))}
                 displayValue={profile?.year_level ? `Year ${profile.year_level}` : null}
               />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Leaderboard" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-ink-800">Show me on the leaderboard</p>
+                <p className="mt-0.5 text-xs text-ink-400">
+                  When on, other students see your first name, last initial, level, and XP. Your email, program, year,
+                  and scores are never shown.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(profile?.leaderboard_opt_in)}
+                aria-label="Show me on the leaderboard"
+                disabled={leaderboardSaving || !profile}
+                onClick={handleLeaderboardToggle}
+                className={[
+                  'relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50',
+                  profile?.leaderboard_opt_in ? 'bg-primary' : 'bg-ink-200',
+                ].join(' ')}
+              >
+                <span
+                  className={[
+                    'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                    profile?.leaderboard_opt_in ? 'translate-x-[22px]' : 'translate-x-0.5',
+                  ].join(' ')}
+                />
+              </button>
             </div>
           </Card>
 

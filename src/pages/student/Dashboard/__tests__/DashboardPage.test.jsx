@@ -6,6 +6,9 @@ const state = { data: null, loading: false, error: null };
 vi.mock('../../../../hooks/useDashboardData', () => ({
   useDashboardData: () => state,
 }));
+vi.mock('../../../../hooks/useGamificationData', () => ({
+  useGamificationSummary: () => ({ data: null, loading: false, error: null }),
+}));
 vi.mock('../../../../services/api/quizService', () => ({ deleteQuizAttempt: vi.fn() }));
 vi.mock('../../../../components/common/ConfirmDialog', () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
 vi.mock('../../../../components/common/Toast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));

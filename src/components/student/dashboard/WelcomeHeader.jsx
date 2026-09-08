@@ -2,6 +2,10 @@ import { Sparkles } from 'lucide-react';
 import Button from '../../common/Button';
 import ProgressBar from '../../common/ProgressBar';
 
+// Mirrors the server's gamification helper: level = floor(xp / 100) + 1, so each
+// level is a flat 100 XP and "progress into this level" is xp - (level - 1) * 100.
+const XP_PER_LEVEL = 100;
+
 function greeting() {
   const hour = new Date().getHours();
   return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -9,9 +13,10 @@ function greeting() {
 
 export default function WelcomeHeader({ profile, onAskAI }) {
   const firstName = profile?.first_name;
-  const xp = profile?.xp_points ?? 0;
-  const level = profile?.level;
-  const pct = xp ? ((xp % 500) / 500) * 100 : 0;
+  const xp = Math.max(0, Math.round(Number(profile?.xp_points) || 0));
+  const level = profile?.level || Math.floor(xp / XP_PER_LEVEL) + 1;
+  const xpIntoLevel = xp - (level - 1) * XP_PER_LEVEL;
+  const pct = Math.min(100, Math.max(0, xpIntoLevel));
 
   return (
     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
@@ -25,7 +30,7 @@ export default function WelcomeHeader({ profile, onAskAI }) {
         <div className="flex items-center gap-3 mt-3 max-w-xs">
           <ProgressBar value={pct} color="#2563EB" className="flex-1" />
           <span className="text-xs font-semibold text-ink-600 whitespace-nowrap">
-            {level ? `Lvl ${level} - ` : ''}{xp} XP
+            Lvl {level} &middot; {xpIntoLevel}/{XP_PER_LEVEL} XP
           </span>
         </div>
       </div>

@@ -26,6 +26,7 @@ import RegisterPage from '../pages/auth/Register';
 import SharedMaterialPage from '../pages/SharedMaterial';
 
 const SHARE_PREFIX = '/share/';
+import AchievementsPage from '../pages/student/Achievements';
 import AssistantPage from '../pages/student/AIAssistant';
 import AnalyticsPage from '../pages/student/Analytics';
 import DashboardPage from '../pages/student/Dashboard';
@@ -43,6 +44,7 @@ const STUDENT_PAGES = {
   [STUDENT_ROUTE_IDS.RESOURCES]: ResourcesPage,
   [STUDENT_ROUTE_IDS.PLANNER]: PlannerPage,
   [STUDENT_ROUTE_IDS.ANALYTICS]: AnalyticsPage,
+  [STUDENT_ROUTE_IDS.ACHIEVEMENTS]: AchievementsPage,
   [STUDENT_ROUTE_IDS.PROFILE]: ProfilePage,
   [STUDENT_ROUTE_IDS.NOTIFICATIONS]: NotificationsPage,
   [STUDENT_ROUTE_IDS.FEEDBACK]: FeedbackPage,

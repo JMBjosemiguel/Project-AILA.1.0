@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   MessageSquareHeart,
   Sparkles,
+  Trophy,
   UserRound,
 } from 'lucide-react';
 import { ROLES } from '../../constants/roles';
@@ -18,6 +19,7 @@ export const STUDENT_ROUTE_IDS = {
   RESOURCES: 'student.resources',
   PLANNER: 'student.planner',
   ANALYTICS: 'student.analytics',
+  ACHIEVEMENTS: 'student.achievements',
   NOTIFICATIONS: 'student.notifications',
   PROFILE: 'student.profile',
   FEEDBACK: 'student.feedback',
@@ -79,6 +81,15 @@ export const STUDENT_ROUTES = {
     icon: BarChart3,
     allowedRoles: [ROLES.STUDENT],
   },
+  [STUDENT_ROUTE_IDS.ACHIEVEMENTS]: {
+    id: STUDENT_ROUTE_IDS.ACHIEVEMENTS,
+    path: '/student/achievements',
+    label: 'Achievements',
+    title: 'Achievements',
+    subtitle: 'Badges, streaks, and the leaderboard.',
+    icon: Trophy,
+    allowedRoles: [ROLES.STUDENT],
+  },
   [STUDENT_ROUTE_IDS.NOTIFICATIONS]: {
     id: STUDENT_ROUTE_IDS.NOTIFICATIONS,
     path: '/student/notifications',
@@ -123,6 +134,7 @@ export const STUDENT_NAV_GROUPS = [
     label: 'Insights',
     items: [
       STUDENT_ROUTES[STUDENT_ROUTE_IDS.ANALYTICS],
+      STUDENT_ROUTES[STUDENT_ROUTE_IDS.ACHIEVEMENTS],
       STUDENT_ROUTES[STUDENT_ROUTE_IDS.NOTIFICATIONS],
     ],
   },
@@ -142,6 +154,7 @@ export const STUDENT_ROUTE_ALIASES = {
   resources: STUDENT_ROUTE_IDS.RESOURCES,
   planner: STUDENT_ROUTE_IDS.PLANNER,
   analytics: STUDENT_ROUTE_IDS.ANALYTICS,
+  achievements: STUDENT_ROUTE_IDS.ACHIEVEMENTS,
   notifications: STUDENT_ROUTE_IDS.NOTIFICATIONS,
   profile: STUDENT_ROUTE_IDS.PROFILE,
   feedback: STUDENT_ROUTE_IDS.FEEDBACK,

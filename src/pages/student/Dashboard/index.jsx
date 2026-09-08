@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, FolderOpen, Messag
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
 import ResumeTestCard from '../../../components/student/dashboard/ResumeTestCard';
+import AchievementsPreviewCard from '../../../components/student/dashboard/AchievementsPreviewCard';
 import ActivityCard from '../../../components/student/dashboard/ActivityCard';
 import CourseProgressCard from '../../../components/student/dashboard/CourseProgressCard';
 import DeadlinesCard from '../../../components/student/dashboard/DeadlinesCard';
@@ -16,6 +17,7 @@ import { SkeletonStat } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
 import { useDashboardData } from '../../../hooks/useDashboardData';
+import { useGamificationSummary } from '../../../hooks/useGamificationData';
 import { deleteQuizAttempt } from '../../../services/api/quizService';
 import { setResumeLesson } from '../../../utils/learningHubTarget';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
@@ -24,6 +26,7 @@ import { setPrefillPrompt } from '../../../utils/aiPrefill';
 export default function DashboardPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useDashboardData(refreshVersion);
+  const { data: gamification, loading: gamificationLoading } = useGamificationSummary(refreshVersion);
   const stats = data?.stats ?? [];
   const continueLearning = data?.continueLearning;
   const recommendation = data?.recommendation;
@@ -123,6 +126,7 @@ export default function DashboardPage({ onNavigate }) {
         <ActivityCard activities={data?.activities ?? []} loading={loading} />
         <DeadlinesCard deadlines={data?.deadlines ?? []} loading={loading} onViewAll={() => onNavigate('planner')} />
         <StreakCard streak={data?.streak} loading={loading} />
+        <AchievementsPreviewCard summary={gamification} loading={gamificationLoading} onNavigate={onNavigate} />
       </div>
 
       {!loading && (

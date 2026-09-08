@@ -44,9 +44,13 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
   const handleComplete = async () => {
     setCompleting(true);
     try {
-      await completeLesson(lessonId);
+      const result = await completeLesson(lessonId);
       setDetail((current) => (current ? { ...current, lesson: { ...current.lesson, completed: true } } : current));
-      toast.success('Lesson completed. +10 XP earned.');
+      if (!result?.alreadyCompleted) {
+        toast.success(`Lesson completed. +${result?.xpAwarded ?? 10} XP earned.`);
+        if (result?.leveledUp) toast.success(`Level up! You're now Level ${result.level}.`);
+        (result?.newAchievements ?? []).forEach((a) => toast.success(`Achievement unlocked: ${a.name}`));
+      }
       onCompleted?.();
     } catch (err) {
       setError(err.message || 'Could not mark this lesson complete.');

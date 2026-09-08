@@ -154,6 +154,8 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
           ? (review.passed ? `Passed — ${review.percent}%` : `Not passed — ${review.percent}% (need ${review.passingScore}%)`)
           : 'Quiz submitted — saved to your history.'
       );
+      if (review.leveledUp) toast.success(`Level up! You're now Level ${review.level}.`);
+      (review.newAchievements ?? []).forEach((a) => toast.success(`Achievement unlocked: ${a.name}`));
       return review;
     } catch (err) {
       toast.error(err.message || 'Could not submit your quiz.');

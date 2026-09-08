@@ -21,3 +21,18 @@ export function generateCourse({ courseName, difficulty, goal }) {
 export function deleteCourse(subjectId) {
   return apiClient.delete(API_ENDPOINTS.learning.subject(subjectId));
 }
+
+// --- Course assessments (module checkpoints + course final) ---
+
+export function getCourseAssessments(subjectId) {
+  return apiClient.get(API_ENDPOINTS.learning.assessments(subjectId));
+}
+
+// Generates on first call, returns the same quiz thereafter. Take-safe payload.
+export function openModuleCheckpoint(subjectId, moduleId) {
+  return apiClient.post(API_ENDPOINTS.learning.moduleCheckpoint(subjectId, moduleId));
+}
+
+export function openCourseFinal(subjectId) {
+  return apiClient.post(API_ENDPOINTS.learning.courseFinal(subjectId));
+}

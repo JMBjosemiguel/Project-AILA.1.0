@@ -19,6 +19,9 @@ export const API_ENDPOINTS = {
     generateCourse: '/subjects/generate',
     lesson: (id) => `/lessons/${id}`,
     completeLesson: (id) => `/lessons/${id}/complete`,
+    assessments: (subjectId) => `/subjects/${subjectId}/assessments`,
+    moduleCheckpoint: (subjectId, moduleId) => `/subjects/${subjectId}/modules/${moduleId}/checkpoint`,
+    courseFinal: (subjectId) => `/subjects/${subjectId}/final`,
   },
   aiTools: {
     generate: '/ai/study-tools',

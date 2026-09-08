@@ -4,6 +4,7 @@ import Card from '../../common/Card';
 import ActionMenu from '../../common/ActionMenu';
 import { domainColor, domainTint } from '../../common/DomainChip';
 import ProgressBar from '../../common/ProgressBar';
+import CourseAssessments from './CourseAssessments';
 
 const DIFFICULTY_STYLE = {
   beginner: 'bg-emerald-50 text-emerald-600',
@@ -44,7 +45,7 @@ function formatMinutes(totalMinutes) {
   return `~${minutes}m`;
 }
 
-export default function SubjectCard({ subject, onSelectLesson, onDelete }) {
+export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunchAssessment, assessmentsRefreshKey = 0 }) {
   const [open, setOpen] = useState(false);
   const [openModuleId, setOpenModuleId] = useState(null);
   const color = domainColor(subject);
@@ -173,6 +174,14 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete }) {
             <div className="px-4 py-3 text-xs text-ink-400">No modules available for this subject.</div>
           )}
         </div>
+      )}
+
+      {open && modules.length > 0 && onLaunchAssessment && (
+        <CourseAssessments
+          subjectId={subject.id}
+          refreshKey={assessmentsRefreshKey}
+          onLaunchAssessment={onLaunchAssessment}
+        />
       )}
     </Card>
   );

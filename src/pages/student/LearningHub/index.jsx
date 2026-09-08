@@ -22,6 +22,8 @@ export default function LearningHubPage({ onNavigate }) {
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [quizRequest, setQuizRequest] = useState(null);
   const [resumeQuizId, setResumeQuizId] = useState(null);
+  const [assessmentLaunch, setAssessmentLaunch] = useState(null); // { quizId? , reviewAttemptId? }
+  const [assessmentsRefreshKey, setAssessmentsRefreshKey] = useState(0);
   const [addingCourse, setAddingCourse] = useState(false);
   const subjects = data?.subjects ?? [];
   const confirm = useConfirm();
@@ -79,7 +81,14 @@ export default function LearningHubPage({ onNavigate }) {
       ) : filtered.length ? (
         <div className="grid sm:grid-cols-2 gap-4">
           {filtered.map((subject) => (
-            <SubjectCard key={subject.id} subject={subject} onSelectLesson={setSelectedLessonId} onDelete={handleDeleteCourse} />
+            <SubjectCard
+              key={subject.id}
+              subject={subject}
+              onSelectLesson={setSelectedLessonId}
+              onDelete={handleDeleteCourse}
+              onLaunchAssessment={setAssessmentLaunch}
+              assessmentsRefreshKey={assessmentsRefreshKey}
+            />
           ))}
         </div>
       ) : (
@@ -108,6 +117,18 @@ export default function LearningHubPage({ onNavigate }) {
           resumeQuizId={resumeQuizId}
           onClose={() => {
             setResumeQuizId(null);
+            setRefreshVersion((version) => version + 1);
+          }}
+        />
+      )}
+
+      {assessmentLaunch && (
+        <QuizRunner
+          resumeQuizId={assessmentLaunch.quizId ?? null}
+          reviewAttemptId={assessmentLaunch.reviewAttemptId ?? null}
+          onClose={() => {
+            setAssessmentLaunch(null);
+            setAssessmentsRefreshKey((key) => key + 1);
             setRefreshVersion((version) => version + 1);
           }}
         />

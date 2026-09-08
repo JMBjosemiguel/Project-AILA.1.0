@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, GraduationCap, Loader2, X, XCircle } from 'lucide-react';
 import Button from '../../common/Button';
 import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
-import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt } from '../../../services/api/quizService';
+import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt } from '../../../services/api/quizService';
 
 const QUIZ_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -14,24 +14,29 @@ const QUIZ_TYPES = [
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
-export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
+const ASSESSMENT_LABEL = {
+  module_checkpoint: 'Module Checkpoint',
+  course_final: 'Course Final Assessment',
+};
+
+export default function QuizRunner({ request, resumeQuizId = null, reviewAttemptId = null, onClose }) {
   const [quizType, setQuizType] = useState('multiple_choice');
   const [difficulty, setDifficulty] = useState('medium');
   const [itemCount, setItemCount] = useState(5);
-  const [step, setStep] = useState(resumeQuizId ? 'starting' : 'setup');
-  const [quiz, setQuiz] = useState(null);            // { topic, quizType, difficulty, items }
-  const [attempt, setAttempt] = useState(null);      // { id, currentIndex }
+  const [step, setStep] = useState(reviewAttemptId ? 'starting' : resumeQuizId ? 'starting' : 'setup');
+  const [quiz, setQuiz] = useState(null);
+  const [attempt, setAttempt] = useState(null);
   const [initialAnswers, setInitialAnswers] = useState([]);
+  const [presetReview, setPresetReview] = useState(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [saveState, setSaveState] = useState('idle');
   const submittingRef = useRef(false);
   const toast = useToast();
 
-  // --- answer autosave: a serialized "latest write per question" queue --------
   const attemptIdRef = useRef(null);
-  const quizIdRef = useRef(resumeQuizId);   // which quiz beginAttempt should (re)open
-  const pendingRef = useRef(new Map());   // questionId -> { selectedAnswer, index }
+  const quizIdRef = useRef(resumeQuizId);
+  const pendingRef = useRef(new Map());
   const chainRef = useRef(Promise.resolve());
 
   const drain = useCallback(async () => {
@@ -41,12 +46,10 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await saveAttemptAnswer(attemptIdRef.current, {
-          questionId,
-          selectedAnswer: payload.selectedAnswer,
-          currentIndex: payload.index,
+          questionId, selectedAnswer: payload.selectedAnswer, currentIndex: payload.index,
         });
       } catch {
-        pendingRef.current.set(questionId, payload); // keep it for a retry
+        pendingRef.current.set(questionId, payload);
         setSaveState('error');
         return;
       }
@@ -85,11 +88,34 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
     }
   }, []);
 
-  // Resume path: jump straight to the unfinished attempt.
+  const loadReview = useCallback(async (id) => {
+    setStep('starting');
+    setError('');
+    try {
+      const data = await getQuizAttempt(id);
+      setQuiz({
+        topic: data.topic,
+        quizType: data.quizType,
+        assessmentKind: data.assessmentKind,
+        items: data.items.map((i) => ({ id: i.id, question: i.question, options: i.options })),
+      });
+      setPresetReview({
+        answers: data.items.map((i) => ({ questionId: i.id, selectedAnswer: i.yourAnswer })),
+        graded: data.items.map((i) => ({ correctAnswer: i.correctAnswer, explanation: i.explanation, isCorrect: i.isCorrect })),
+      });
+      setResult({ ...data, assessmentKind: data.assessmentKind });
+      setStep('review');
+    } catch (err) {
+      setError(err.message || 'Could not load that result.');
+      setStep('error');
+    }
+  }, []);
+
   useEffect(() => {
-    if (resumeQuizId) beginAttempt(resumeQuizId);
+    if (reviewAttemptId) loadReview(reviewAttemptId);
+    else if (resumeQuizId) beginAttempt(resumeQuizId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeQuizId]);
+  }, [resumeQuizId, reviewAttemptId]);
 
   const handleGenerate = async () => {
     if (submittingRef.current) return;
@@ -98,12 +124,8 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
     setError('');
     try {
       const generated = await generateQuiz({
-        topic: request.topic,
-        quizType,
-        itemCount,
-        difficulty,
-        sourceType: request.sourceType,
-        sourceId: request.sourceId,
+        topic: request.topic, quizType, itemCount, difficulty,
+        sourceType: request.sourceType, sourceId: request.sourceId,
       });
       await beginAttempt(generated.id);
     } catch (err) {
@@ -124,24 +146,40 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
     try {
       const review = await submitAttempt(attemptIdRef.current);
       setResult(review);
-      toast.success('Quiz submitted — saved to your history.');
-      return review; // QuizCard renders the graded review from this
+      const formal = review.assessmentKind && review.assessmentKind !== 'practice';
+      toast[formal && !review.passed ? 'error' : 'success'](
+        formal
+          ? (review.passed ? `Passed — ${review.percent}%` : `Not passed — ${review.percent}% (need ${review.passingScore}%)`)
+          : 'Quiz submitted — saved to your history.'
+      );
+      return review;
     } catch (err) {
       toast.error(err.message || 'Could not submit your quiz.');
       throw err;
     }
   };
 
-  const headerTitle = step === 'ready' && quiz ? `Quiz: ${quiz.topic}` : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
+  const assessmentKind = quiz?.assessmentKind && quiz.assessmentKind !== 'practice' ? quiz.assessmentKind : null;
+  const passingScore = quiz?.passingScore ?? result?.passingScore ?? null;
+  const headerTitle = assessmentKind
+    ? ASSESSMENT_LABEL[assessmentKind]
+    : step === 'ready' && quiz ? `Quiz: ${quiz.topic}` : reviewAttemptId ? 'Review' : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
   const resumedCount = step === 'ready' && !result ? initialAnswers.filter((a) => a.selectedAnswer).length : 0;
+  const formalResult = result && result.assessmentKind && result.assessmentKind !== 'practice';
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="quiz-runner-title">
       <div className="w-full max-w-xl max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
-          <div>
-            <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800">{headerTitle}</h3>
-            <p className="text-xs text-ink-400 mt-0.5">Topic: {quiz?.topic || request?.topic || '—'}</p>
+          <div className="min-w-0">
+            <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800 flex items-center gap-1.5">
+              {assessmentKind === 'course_final' && <GraduationCap size={15} className="text-primary" />}
+              {headerTitle}
+            </h3>
+            <p className="text-xs text-ink-400 mt-0.5 truncate">
+              {quiz?.topic || request?.topic || '—'}
+              {assessmentKind && passingScore != null && <span> · Passing {passingScore}%</span>}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -216,7 +254,7 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
           {(step === 'loading' || step === 'starting') && (
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
               <Loader2 size={16} className="animate-spin" />
-              {step === 'loading' ? 'AILA is generating your quiz...' : 'Opening your quiz...'}
+              {step === 'loading' ? 'AILA is generating your assessment...' : 'Opening...'}
             </div>
           )}
 
@@ -224,30 +262,47 @@ export default function QuizRunner({ request, resumeQuizId = null, onClose }) {
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <AlertTriangle size={22} className="text-amber-500" />
               <p className="text-sm text-ink-600">{error || 'Something went wrong.'}</p>
-              {quizIdRef.current && (
+              {quizIdRef.current && !reviewAttemptId && (
                 <Button size="sm" variant="outline" onClick={() => beginAttempt(quizIdRef.current)}>Try again</Button>
               )}
             </div>
           )}
 
-          {step === 'ready' && quiz && (
+          {(step === 'ready' || step === 'review') && quiz && (
             <div>
+              {formalResult && (
+                <div className={`mb-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm ${result.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {result.passed ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" /> : <XCircle size={16} className="mt-0.5 flex-shrink-0" />}
+                  <div>
+                    <p className="font-semibold">
+                      {result.passed ? 'Passed' : 'Not passed'} — {result.percent}% (passing {result.passingScore}%)
+                    </p>
+                    {!result.passed && result.recommendation?.message && (
+                      <p className="text-xs mt-0.5 text-rose-600">{result.recommendation.message}</p>
+                    )}
+                  </div>
+                </div>
+              )}
               {resumedCount > 0 && (
                 <p className="text-xs text-ink-400 mb-3">Resumed — {resumedCount} saved answer{resumedCount === 1 ? '' : 's'} restored.</p>
               )}
               <QuizCard
                 quiz={quiz}
-                onSubmit={handleSubmit}
+                onSubmit={step === 'review' ? undefined : handleSubmit}
+                presetReview={presetReview}
                 initialAnswers={initialAnswers}
                 initialIndex={attempt?.currentIndex ?? 0}
-                onAnswerChange={queueSave}
+                onAnswerChange={step === 'review' ? undefined : queueSave}
                 saveState={saveState}
                 onRetrySave={flushSaves}
               />
-              {result && (
+              {result && !formalResult && (
                 <p className="text-center text-xs text-ink-400 mt-2">
                   Saved to your quiz history{result.xpAwarded > 0 ? ` · +${result.xpAwarded} XP` : ''}
                 </p>
+              )}
+              {formalResult && result.passed && result.xpAwarded > 0 && (
+                <p className="text-center text-xs text-emerald-600 mt-2 font-semibold">+{result.xpAwarded} XP earned</p>
               )}
             </div>
           )}

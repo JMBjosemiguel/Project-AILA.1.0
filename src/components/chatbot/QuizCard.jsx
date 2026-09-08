@@ -67,10 +67,13 @@ export default function QuizCard({
   onAnswerChange,
   saveState = 'idle',
   onRetrySave,
+  presetReview = null,
 }) {
   const items = quiz?.items ?? [];
-  const [answers, setAnswers] = useState(() => seedAnswers(items, initialAnswers));
-  const [review, setReview] = useState(null);
+  const [answers, setAnswers] = useState(() =>
+    presetReview ? seedAnswers(items, presetReview.answers) : seedAnswers(items, initialAnswers)
+  );
+  const [review, setReview] = useState(() => presetReview?.graded ?? null);
   const [submitting, setSubmitting] = useState(false);
   const submitted = review !== null;
   const itemRefs = useRef([]);

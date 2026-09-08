@@ -7,13 +7,14 @@ vi.mock('../../../../services/api/quizService', () => ({
   startQuizAttempt: vi.fn(),
   saveAttemptAnswer: vi.fn(),
   submitAttempt: vi.fn(),
+  getQuizAttempt: vi.fn(),
 }));
 vi.mock('../../../common/Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 
 import QuizRunner from '../QuizRunner.jsx';
-import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt } from '../../../../services/api/quizService';
+import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt } from '../../../../services/api/quizService';
 
 const ITEMS = [
   { id: 10, question: 'Capital of France?', options: ['Paris', 'Berlin'], orderIndex: 0 },
@@ -158,5 +159,46 @@ describe('QuizRunner — resumable formal quiz', () => {
     await waitFor(() => screen.getByText(/Capital of France?/));
     expect(startQuizAttempt).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Berlin' }).className).toMatch(/bg-primary-50/);
+  });
+
+  it('formal assessment: shows kind + passing score, and a pass/fail banner after submit', async () => {
+    const user = userEvent.setup();
+    startQuizAttempt.mockResolvedValue({
+      attempt: { id: 77, quizId: 5, status: 'in_progress', currentIndex: 0 },
+      quiz: { id: 5, topic: 'Indexes', quizType: 'multiple_choice', assessmentKind: 'module_checkpoint', passingScore: 70 },
+      items: ITEMS, answers: [],
+    });
+    submitAttempt.mockResolvedValue({
+      ...REVIEW, assessmentKind: 'module_checkpoint', passed: false, passingScore: 70, percent: 40,
+      recommendation: { message: 'Review the "Indexes" module, then try the checkpoint again.' },
+    });
+
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByText(/Capital of France?/));
+    expect(screen.getByText('Module Checkpoint')).toBeInTheDocument();
+    expect(screen.getByText(/Passing 70%/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/Not passed — 40% \(passing 70%\)/)).toBeInTheDocument());
+    expect(screen.getByText(/Review the "Indexes" module/)).toBeInTheDocument();
+  });
+
+  it('review mode: loads a submitted attempt, shows the key, and has no submit button', async () => {
+    getQuizAttempt.mockResolvedValue({
+      attemptId: 77, topic: 'Indexes', quizType: 'multiple_choice', status: 'submitted',
+      assessmentKind: 'module_checkpoint', passed: true, passingScore: 70, percent: 90, score: 9, total: 10,
+      items: [
+        { id: 10, question: 'Capital of France?', options: ['Paris', 'Berlin'], yourAnswer: 'Paris', correctAnswer: 'Paris', explanation: 'Paris since 987.', isCorrect: true },
+        { id: 11, question: 'Capital of Japan?', options: ['Kyoto', 'Tokyo'], yourAnswer: 'Kyoto', correctAnswer: 'Tokyo', explanation: 'Tokyo since 1868.', isCorrect: false },
+      ],
+    });
+
+    render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);
+    await waitFor(() => expect(getQuizAttempt).toHaveBeenCalledWith(77));
+    await waitFor(() => expect(screen.getByText(/Passed — 90%/)).toBeInTheDocument());
+    expect(screen.getByText(/Correct answer: Tokyo/)).toBeInTheDocument();
+    expect(screen.getByText(/Tokyo since 1868/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Check Answers/i })).not.toBeInTheDocument();
+    expect(startQuizAttempt).not.toHaveBeenCalled();
   });
 });

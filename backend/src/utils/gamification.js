@@ -7,6 +7,23 @@ function levelForXp(xp) {
   return Math.floor(Math.max(0, xp) / XP_PER_LEVEL) + 1;
 }
 
+// Single source of truth for "how far into this level" — Dashboard, Profile and
+// the gamification summary all use this so they can never disagree.
+function xpProgress(xp) {
+  const currentXp = Math.max(0, Math.round(Number(xp) || 0));
+  const level = levelForXp(currentXp);
+  const xpIntoLevel = currentXp - (level - 1) * XP_PER_LEVEL;
+  const xpForNextLevel = XP_PER_LEVEL;
+  return {
+    currentXp,
+    level,
+    xpIntoLevel,
+    xpForNextLevel,
+    xpToNextLevel: xpForNextLevel - xpIntoLevel,
+    progressPercent: Math.round((xpIntoLevel / xpForNextLevel) * 100),
+  };
+}
+
 function toDateStr(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
@@ -56,7 +73,8 @@ async function awardXpOnce(userId, { eventKey, points, reason }, connection = nu
     [userId, 'xp_earned', amount, `+${amount} XP - ${reason || 'Learning activity'}`]
   );
 
-  if (level > previousLevel) {
+  const leveledUp = level > previousLevel;
+  if (leveledUp) {
     await notifyUser(userId, {
       type: 'system',
       title: 'Level up!',
@@ -65,42 +83,46 @@ async function awardXpOnce(userId, { eventKey, points, reason }, connection = nu
     });
   }
 
-  return { awarded: amount, duplicate: false, total, level };
+  return { awarded: amount, duplicate: false, total, level, previousLevel, leveledUp };
 }
 
+/**
+ * Record that the user did something streak-worthy today (UTC calendar day).
+ *
+ * A single INSERT ... ON DUPLICATE KEY UPDATE so it is safe when two qualifying
+ * events land in the same transaction window or race concurrently: the
+ * UNIQUE(user_id) row lock serializes them and the second one is a no-op because
+ * `last_active_date` is already today. The day-to-day advance rule (consecutive
+ * day -> +1, gap -> reset to 1, same day -> unchanged) is expressed entirely in
+ * the UPDATE clause against the pre-update row values. `longest_streak` is
+ * assigned before `current_streak` so it still sees the old count.
+ */
 async function touchStreak(userId, connection = null) {
   const run = runner(connection);
 
-  const rows = await run(
-    'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
-    [userId]
-  );
-
   const todayStr = toDateStr(new Date());
-
-  if (!rows.length) {
-    await run(
-      'INSERT INTO learning_streaks (user_id, current_streak, longest_streak, last_active_date) VALUES (?, 1, 1, ?)',
-      [userId, todayStr]
-    );
-    return;
-  }
-
-  const { current_streak: currentStreak, longest_streak: longestStreak, last_active_date: lastActiveDate } = rows[0];
-  const lastActiveStr = lastActiveDate ? toDateStr(lastActiveDate) : null;
-
-  if (lastActiveStr === todayStr) return;
-
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = toDateStr(yesterday);
 
-  const nextStreak = lastActiveStr === yesterdayStr ? currentStreak + 1 : 1;
-  const nextLongest = Math.max(longestStreak, nextStreak);
-
   await run(
-    'UPDATE learning_streaks SET current_streak = ?, longest_streak = ?, last_active_date = ? WHERE user_id = ?',
-    [nextStreak, nextLongest, todayStr, userId]
+    `
+      INSERT INTO learning_streaks (user_id, current_streak, longest_streak, last_active_date)
+      VALUES (?, 1, 1, ?)
+      ON DUPLICATE KEY UPDATE
+        longest_streak = GREATEST(
+          longest_streak,
+          CASE WHEN last_active_date = ? THEN current_streak
+               WHEN last_active_date = ? THEN current_streak + 1
+               ELSE 1 END
+        ),
+        current_streak = CASE
+          WHEN last_active_date = ? THEN current_streak
+          WHEN last_active_date = ? THEN current_streak + 1
+          ELSE 1 END,
+        last_active_date = ?
+    `,
+    [userId, todayStr, todayStr, yesterdayStr, todayStr, yesterdayStr, todayStr]
   );
 }
 
@@ -116,7 +138,9 @@ async function logActivity(userId, activityType, referenceId, description, conne
 }
 
 module.exports = {
+  XP_PER_LEVEL,
   levelForXp,
+  xpProgress,
   awardXpOnce,
   touchStreak,
   logActivity,

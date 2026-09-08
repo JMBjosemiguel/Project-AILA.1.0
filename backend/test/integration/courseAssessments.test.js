@@ -36,6 +36,13 @@ async function dbReachable() {
   try { await db.query('SELECT 1'); return true; } catch { return false; }
 }
 
+// One-time achievement XP bonuses (migration 006) also move user_profiles.xp_points,
+// so exact-delta assertions net them out.
+async function achievementXp(userId) {
+  const [row] = await db.query("SELECT COALESCE(SUM(points),0) AS s FROM xp_events WHERE user_id = ? AND event_key LIKE 'achievement:%'", [userId]);
+  return Number(row.s);
+}
+
 async function makeStudent(suffix) {
   const email = `${TAG}.${suffix}@example.com`;
   const r = await db.query(
@@ -177,6 +184,7 @@ test('course assessments — module checkpoints + course final', async (t) => {
     const map = await svc.assessmentService.getCourseAssessments(A.id, subjectId);
     const quizId = map.modules[0].checkpoint.quizId;
     const xpBefore = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [A.id]))[0].xp_points;
+    const achBefore = await achievementXp(A.id);
 
     const pass = await attempt(svc, A.id, quizId, 8);
     assert.equal(pass.passed, true);
@@ -186,7 +194,9 @@ test('course assessments — module checkpoints + course final', async (t) => {
     assert.equal(worseRetake.xpAwarded, 0, 'retake of a passed checkpoint awards no pass XP');
 
     const xpAfter = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [A.id]))[0].xp_points;
-    assert.equal(xpAfter, xpBefore + svc.quizService.CHECKPOINT_PASS_XP);
+    // +CHECKPOINT_PASS_XP once, plus any one-time achievement bonus unlocked by
+    // the pass ("Checkpoint Cleared", a perfect score, …). The retake adds nothing.
+    assert.equal(xpAfter, xpBefore + svc.quizService.CHECKPOINT_PASS_XP + (await achievementXp(A.id)) - achBefore);
     const led = await db.query("SELECT COUNT(*) c FROM xp_events WHERE user_id = ? AND event_key = ?", [A.id, `module_checkpoint_pass:${mods[0].moduleId}`]);
     assert.equal(Number(led[0].c), 1);
 
@@ -224,6 +234,7 @@ test('course assessments — module checkpoints + course final', async (t) => {
     const map = await svc.assessmentService.getCourseAssessments(A.id, subjectId);
     const finalQuizId = map.final.quizId;
     const xpBefore = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [A.id]))[0].xp_points;
+    const achBefore = await achievementXp(A.id);
 
     // concurrent submit of one fresh attempt
     const start = await svc.quizService.startAttempt(A.id, finalQuizId);
@@ -241,7 +252,9 @@ test('course assessments — module checkpoints + course final', async (t) => {
     assert.equal(ok[0].xpAwarded, svc.quizService.FINAL_PASS_XP);
 
     const xpAfter = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [A.id]))[0].xp_points;
-    assert.equal(xpAfter, xpBefore + svc.quizService.FINAL_PASS_XP);
+    // +FINAL_PASS_XP once, plus any one-time achievement bonus the pass unlocks
+    // ("Course Completer", …); the concurrent duplicate submit adds nothing.
+    assert.equal(xpAfter, xpBefore + svc.quizService.FINAL_PASS_XP + (await achievementXp(A.id)) - achBefore);
     const led = await db.query("SELECT COUNT(*) c FROM xp_events WHERE user_id = ? AND event_key = ?", [A.id, `course_final_pass:${subjectId}`]);
     assert.equal(Number(led[0].c), 1);
 

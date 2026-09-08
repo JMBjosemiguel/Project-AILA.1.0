@@ -46,7 +46,16 @@ async function query(sql, params = []) {
   return rows;
 }
 
-async function transaction(callback) {
+// InnoDB may pick either side of a lock cycle as the deadlock victim and abort it
+// with ER_LOCK_DEADLOCK (or ER_LOCK_WAIT_TIMEOUT under heavy contention). The
+// documented remedy is simply to retry the whole transaction — the victim rolled
+// back cleanly, so a fresh attempt is safe. Callbacks here are already written to
+// be idempotent (INSERT IGNORE / ON DUPLICATE KEY / re-checked state), so a
+// bounded retry turns a rare concurrent 500 into a transparent success.
+const TRANSIENT_TX_ERRORS = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT']);
+const TX_MAX_ATTEMPTS = 3;
+
+async function runTransactionOnce(callback) {
   const connection = await pool.getConnection();
 
   try {
@@ -59,6 +68,21 @@ async function transaction(callback) {
     throw error;
   } finally {
     connection.release();
+  }
+}
+
+async function transaction(callback) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await runTransactionOnce(callback);
+    } catch (error) {
+      if (attempt >= TX_MAX_ATTEMPTS || !TRANSIENT_TX_ERRORS.has(error && error.code)) {
+        throw error;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => { setTimeout(resolve, 25 * attempt); });
+    }
   }
 }
 

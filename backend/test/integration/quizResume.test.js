@@ -193,6 +193,8 @@ test('resumable formal quiz attempts', async (t) => {
   await t.test('RETAKE — a new attempt starts after submit, old history stays, XP is not farmed', async () => {
     const { quizId, questionIds } = await makeQuiz(student.id, `${TAG} retake`);
     const xpBefore = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [student.id]))[0].xp_points;
+    // One-time achievement bonuses (migration 006) also move the cached total.
+    const achBefore = Number((await db.query("SELECT COALESCE(SUM(points),0) s FROM xp_events WHERE user_id = ? AND event_key LIKE 'achievement:%'", [student.id]))[0].s);
 
     const a1 = await api('POST', `/quizzes/${quizId}/attempts/start`, { token: student.token });
     const id1 = a1.json.data.attempt.id;
@@ -210,7 +212,8 @@ test('resumable formal quiz attempts', async (t) => {
     assert.equal(sub2.json.data.xpAwarded, 0, 'the retake farms no XP');
 
     const xpAfter = (await db.query('SELECT xp_points FROM user_profiles WHERE user_id = ?', [student.id]))[0].xp_points;
-    assert.equal(xpAfter, xpBefore + 20);
+    const achAfter = Number((await db.query("SELECT COALESCE(SUM(points),0) s FROM xp_events WHERE user_id = ? AND event_key LIKE 'achievement:%'", [student.id]))[0].s);
+    assert.equal(xpAfter, xpBefore + 20 + (achAfter - achBefore), 'only the first completion (+20) and any new achievement bonuses moved XP');
     const attempts = await db.query("SELECT COUNT(*) AS c FROM quiz_attempts WHERE quiz_id = ? AND status = 'submitted'", [quizId]);
     assert.equal(Number(attempts[0].c), 2, 'both attempts are kept in history');
     const led = await db.query("SELECT COUNT(*) AS c FROM xp_events WHERE user_id = ? AND event_key = ?", [student.id, `quiz_completed:${quizId}`]);

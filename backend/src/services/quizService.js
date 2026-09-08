@@ -6,7 +6,8 @@ const courseAssessmentModel = require('../models/courseAssessmentModel');
 const resourceModel = require('../models/resourceModel');
 const personalizationService = require('./personalizationService');
 const studentContextService = require('./studentContextService');
-const { awardXpOnce, logActivity } = require('../utils/gamification');
+const achievementService = require('./achievementService');
+const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 const { truncateForAi } = require('../utils/pdfText');
 
@@ -634,7 +635,7 @@ async function submitAttempt(userId, attemptId) {
   const { kind, isFormal, passingScore } = assessmentMeta(quiz);
   const passed = isFormal ? percent >= passingScore : null;
 
-  const xpAwarded = await transaction(async (connection) => {
+  const outcome = await transaction(async (connection) => {
     const status = await quizModel.lockAttemptStatus(attempt.id, connection);
     if (status !== 'in_progress') {
       throw new ApiError(409, 'This attempt has already been submitted.');
@@ -687,15 +688,31 @@ async function submitAttempt(userId, attemptId) {
       });
     }
 
-    return xp.awarded;
+    return xp;
   });
 
+  // Streak + achievement evaluation are eventually-consistent signals and run
+  // AFTER the attempt is durably committed. This keeps the submit transaction
+  // from holding locks on the hot user_profiles / learning_streaks rows while it
+  // evaluates, and every step here is independently idempotent (XP event keys +
+  // UNIQUE(user_id, achievement_id)).
+  await touchStreak(userId);
+
+  const triggers = ['quiz_submitted', 'streak_updated'];
+  if (passed && kind === 'module_checkpoint') triggers.push('checkpoint_passed');
+  if (passed && kind === 'course_final') triggers.push('course_final_passed');
+  if (outcome.leveledUp) triggers.push('level_changed');
+  const newAchievements = await achievementService.evaluateForEvent(userId, triggers);
+
   const review = {
-    ...formatAttemptReview({ quiz, attemptId: attempt.id, gradedAnswers, score, total, xpAwarded }),
+    ...formatAttemptReview({ quiz, attemptId: attempt.id, gradedAnswers, score, total, xpAwarded: outcome.awarded }),
     assessmentKind: kind,
     passingScore,
     passed,
     percent,
+    leveledUp: Boolean(outcome.leveledUp),
+    level: outcome.level ?? null,
+    newAchievements,
   };
   if (isFormal && !passed) {
     review.recommendation = await buildFailRecommendation(userId, quiz);

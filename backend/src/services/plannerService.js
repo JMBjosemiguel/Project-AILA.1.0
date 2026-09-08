@@ -1,8 +1,14 @@
 const ApiError = require('../utils/ApiError');
 const plannerModel = require('../models/plannerModel');
 const learningModel = require('../models/learningModel');
+const achievementService = require('./achievementService');
 const { notifyUser } = require('../utils/notify');
-const { logActivity } = require('../utils/gamification');
+const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
+
+// Completing a real planner task is a small, deterministic learning reward.
+// The `task_completed:<id>` event key makes it a one-time award per task —
+// re-opening and re-completing the same task never re-awards.
+const TASK_COMPLETE_XP = 5;
 
 async function assertSubjectOwnership(userId, subjectId) {
   if (!subjectId) return;
@@ -137,6 +143,7 @@ async function updateTask(userId, taskId, updates) {
     fields.subject_id = updates.subjectId;
   }
 
+  let justCompleted = false;
   if (updates.status !== undefined && updates.status !== existing.status) {
     fields.status = updates.status;
     fields.completed_at = updates.status === 'completed' ? new Date() : null;
@@ -144,6 +151,7 @@ async function updateTask(userId, taskId, updates) {
     await plannerModel.logStatusChange(existing.id, existing.status, updates.status);
 
     if (updates.status === 'completed') {
+      justCompleted = true;
       await logActivity(userId, 'task_completed', existing.id, `Completed task: ${existing.title}`);
     }
   }
@@ -156,11 +164,35 @@ async function updateTask(userId, taskId, updates) {
     await plannerModel.updateTask(existing.id, fields);
   }
 
+  // Gamification side-effects run only after the task write succeeds, and only
+  // on a genuine pending -> completed transition. Each is idempotent on its own
+  // key, so a repeated complete/re-open/complete cycle never farms XP or streak.
+  let gamification = null;
+  if (justCompleted) {
+    const xp = await awardXpOnce(userId, {
+      eventKey: `task_completed:${existing.id}`,
+      points: TASK_COMPLETE_XP,
+      reason: `Completed planner task "${existing.title}"`,
+    });
+    await touchStreak(userId);
+    const newAchievements = await achievementService.evaluateForEvent(
+      userId,
+      ['streak_updated', ...(xp.leveledUp ? ['level_changed'] : [])],
+    );
+    gamification = {
+      xpAwarded: xp.awarded,
+      leveledUp: Boolean(xp.leveledUp),
+      level: xp.level ?? null,
+      newAchievements,
+    };
+  }
+
   const updated = await plannerModel.getTaskForUser(existing.id, userId);
   const priorities = await plannerModel.listPriorities();
   const priority = priorities.find((item) => item.id === updated.priority_id);
 
-  return decorateTask({ ...updated, priority_label: priority?.label });
+  const task = decorateTask({ ...updated, priority_label: priority?.label });
+  return gamification ? { ...task, ...gamification } : task;
 }
 
 async function deleteTask(userId, taskId) {

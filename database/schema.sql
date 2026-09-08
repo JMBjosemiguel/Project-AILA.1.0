@@ -8,6 +8,8 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS admin_audit_log;
+DROP TABLE IF EXISTS user_achievements;
+DROP TABLE IF EXISTS achievements;
 DROP TABLE IF EXISTS material_shares;
 DROP TABLE IF EXISTS quiz_attempt_answers;
 DROP TABLE IF EXISTS quiz_attempts;
@@ -94,6 +96,7 @@ CREATE TABLE user_profiles (
   bio TEXT NULL,
   xp_points INT UNSIGNED NOT NULL DEFAULT 0,
   level INT UNSIGNED NOT NULL DEFAULT 1,
+  leaderboard_opt_in TINYINT(1) NOT NULL DEFAULT 0,  -- migration 006: opt-in leaderboard visibility
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -114,6 +117,41 @@ CREATE TABLE xp_events (
   CONSTRAINT uq_xp_events_user_event UNIQUE (user_id, event_key),
   KEY idx_xp_events_user_created (user_id, created_at),
   CONSTRAINT fk_xp_events_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- migration 006: gamification. `achievements` is the catalog (a "badge" is just
+-- an achievement's icon); `user_achievements` records unlocks, UNIQUE per pair.
+CREATE TABLE achievements (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  slug VARCHAR(60) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  category ENUM('learning','course','streak','level') NOT NULL,
+  icon_key VARCHAR(30) NOT NULL,
+  xp_reward SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  criteria_type ENUM('lessons_completed','first_quiz','perfect_quiz','checkpoint_passed','course_completed','streak_days','level_reached') NOT NULL,
+  criteria_value INT UNSIGNED NOT NULL DEFAULT 1,
+  sort_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_achievements_slug (slug),
+  KEY idx_achievements_criteria (criteria_type, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_achievements (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  achievement_id INT UNSIGNED NOT NULL,
+  earned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  source ENUM('earned','backfill') NOT NULL DEFAULT 'earned',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_achievements (user_id, achievement_id),
+  KEY idx_user_achievements_user_earned (user_id, earned_at),
+  CONSTRAINT fk_user_achievements_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_user_achievements_achievement FOREIGN KEY (achievement_id) REFERENCES achievements(id)
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

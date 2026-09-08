@@ -3,6 +3,7 @@ const { transaction } = require('../config/database');
 const learningModel = require('../models/learningModel');
 const courseGenerationService = require('./courseGenerationService');
 const personalizationService = require('./personalizationService');
+const achievementService = require('./achievementService');
 const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 
@@ -98,15 +99,14 @@ async function completeLesson(userId, lessonId) {
     return { alreadyCompleted: true, lessonId: lesson.id };
   }
 
-  return transaction(async (connection) => {
+  const result = await transaction(async (connection) => {
     await learningModel.markLessonComplete(userId, lesson.id, connection);
     const topicProgress = await learningModel.recomputeTopicProgress(userId, lesson.topic_id, connection);
-    await awardXpOnce(userId, {
+    const xp = await awardXpOnce(userId, {
       eventKey: `lesson_completed:${lesson.id}`,
       points: LESSON_COMPLETE_XP,
       reason: `Completed lesson "${lesson.title}"`,
     }, connection);
-    await touchStreak(userId, connection);
     await logActivity(userId, 'lesson_completed', lesson.id, `Completed lesson "${lesson.title}"`, connection);
     await notifyUser(userId, {
       type: 'system',
@@ -114,9 +114,28 @@ async function completeLesson(userId, lessonId) {
       body: `You completed "${lesson.title}". +${LESSON_COMPLETE_XP} XP earned.`,
       connection,
     });
-
-    return { alreadyCompleted: false, lessonId: lesson.id, topicProgress };
+    return { topicProgress, xp };
   });
+
+  // Streak + achievement evaluation are eventually-consistent and run AFTER the
+  // lesson is committed, so the transaction never holds locks on the shared
+  // learning_streaks / user_profiles rows while it evaluates. Each step is
+  // idempotent on its own key.
+  await touchStreak(userId);
+  const newAchievements = await achievementService.evaluateForEvent(
+    userId,
+    ['lesson_completed', 'streak_updated', ...(result.xp.leveledUp ? ['level_changed'] : [])],
+  );
+
+  return {
+    alreadyCompleted: false,
+    lessonId: lesson.id,
+    topicProgress: result.topicProgress,
+    xpAwarded: result.xp.awarded,
+    leveledUp: Boolean(result.xp.leveledUp),
+    level: result.xp.level ?? null,
+    newAchievements,
+  };
 }
 
 async function deleteSubject(userId, subjectId) {

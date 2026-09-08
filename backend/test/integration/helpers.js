@@ -72,7 +72,7 @@ async function purgeByTag(tag) {
       'chat_messages', 'chat_conversations',
       'resource_views_log', 'resource_subjects', 'resources',
       'study_tasks', 'task_status_log',
-      'notification_recipients', 'dashboard_activity_log', 'learning_streaks', 'xp_events',
+      'notification_recipients', 'dashboard_activity_log', 'learning_streaks', 'user_achievements', 'xp_events',
       'lesson_progress', 'learning_progress', 'user_sessions', 'feedback', 'user_profiles',
     ]) {
       const col = t === 'resources' ? 'uploaded_by' : (t === 'quiz_questions' || t === 'quiz_attempt_answers' || t === 'chat_messages' || t === 'resource_views_log' || t === 'resource_subjects' || t === 'task_status_log') ? null : 'user_id';

@@ -8,6 +8,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS admin_audit_log;
+DROP TABLE IF EXISTS material_shares;
 DROP TABLE IF EXISTS quiz_attempt_answers;
 DROP TABLE IF EXISTS quiz_attempts;
 DROP TABLE IF EXISTS quiz_questions;
@@ -302,6 +303,9 @@ CREATE TABLE subjects (
   -- migration 003: concise snapshot of the student-learning context that shaped
   -- AI generation (audit trail; NULL for non-AI or pre-migration rows).
   personalization_context JSON NULL,
+  -- migration 005: sharing. 'unlisted' = viewable read-only via an active share token.
+  visibility ENUM('private','unlisted') NOT NULL DEFAULT 'private',
+  copied_from_subject_id INT UNSIGNED NULL,  -- provenance (metadata only)
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL DEFAULT NULL,
@@ -309,8 +313,11 @@ CREATE TABLE subjects (
   CONSTRAINT uq_subjects_code UNIQUE (code),
   KEY idx_subjects_deleted_at (deleted_at),
   KEY idx_subjects_created_by (created_by),
+  KEY idx_subjects_copied_from (copied_from_subject_id),
   CONSTRAINT fk_subjects_created_by FOREIGN KEY (created_by) REFERENCES users(id)
-    ON UPDATE CASCADE ON DELETE CASCADE
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_subjects_copied_from FOREIGN KEY (copied_from_subject_id) REFERENCES subjects(id)
+    ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE modules (
@@ -689,6 +696,8 @@ CREATE TABLE quizzes (
   assessment_kind ENUM('practice','module_checkpoint','course_final') NOT NULL DEFAULT 'practice',
   passing_score TINYINT UNSIGNED NULL, -- 0-100, set when a formal assessment is created
   assessment_slot INT UNSIGNED NULL,   -- uniqueness discriminator: module_id / 0 / NULL
+  visibility ENUM('private','unlisted') NOT NULL DEFAULT 'private',  -- migration 005: sharing
+  copied_from_quiz_id BIGINT UNSIGNED NULL,                         -- provenance (metadata only)
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_quizzes_assessment (user_id, subject_id, assessment_slot),
@@ -696,12 +705,34 @@ CREATE TABLE quizzes (
   KEY idx_quizzes_user_created (user_id, created_at),
   KEY idx_quizzes_subject_kind (subject_id, assessment_kind),
   KEY idx_quizzes_module (module_id),
+  KEY idx_quizzes_copied_from (copied_from_quiz_id),
   CONSTRAINT chk_quizzes_passing_score CHECK (passing_score IS NULL OR passing_score <= 100),
   CONSTRAINT fk_quizzes_user FOREIGN KEY (user_id) REFERENCES users(id)
     ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_quizzes_subject FOREIGN KEY (subject_id) REFERENCES subjects(id)
     ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_quizzes_module FOREIGN KEY (module_id) REFERENCES modules(id)
+    ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_quizzes_copied_from FOREIGN KEY (copied_from_quiz_id) REFERENCES quizzes(id)
+    ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- migration 005: one row per share link. The raw token is never stored — only
+-- its sha256 hash. At most one active (revoked_at IS NULL) share per material.
+CREATE TABLE material_shares (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  material_type ENUM('subject','quiz') NOT NULL,
+  material_id BIGINT UNSIGNED NOT NULL,
+  created_by BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  token_hint VARCHAR(16) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_material_shares_token_hash (token_hash),
+  KEY idx_material_shares_material (material_type, material_id, revoked_at),
+  KEY idx_material_shares_creator (created_by),
+  CONSTRAINT fk_material_shares_creator FOREIGN KEY (created_by) REFERENCES users(id)
     ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

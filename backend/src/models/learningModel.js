@@ -15,6 +15,8 @@ function buildSubjectTree(rows) {
         is_ai_generated: Boolean(row.is_ai_generated),
         difficulty: row.subject_difficulty,
         goal: row.subject_goal,
+        visibility: row.subject_visibility ?? 'private',
+        copied_from_subject_id: row.subject_copied_from ?? null,
         color,
         tint,
         modules: new Map(),
@@ -89,7 +91,7 @@ async function listSubjectsForUser(userId) {
     `
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
-        s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal,
+        s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,
         l.id AS lesson_id, l.title AS lesson_title, l.difficulty AS lesson_difficulty, l.estimated_minutes AS lesson_estimated_minutes,
@@ -115,7 +117,7 @@ async function getSubjectTreeById(subjectId, userId) {
     `
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
-        s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal,
+        s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,
         l.id AS lesson_id, l.title AS lesson_title, l.difficulty AS lesson_difficulty, l.estimated_minutes AS lesson_estimated_minutes,
@@ -362,6 +364,18 @@ async function deleteSubjectCascade(subjectId, userId, connection) {
     connection,
     'UPDATE study_tasks SET subject_id = NULL WHERE subject_id = ? AND user_id = ?',
     [subjectId, userId]
+  );
+  // migration 005: a deleted course's share links (and its assessment quizzes')
+  // stop working immediately.
+  await execute(
+    connection,
+    `UPDATE material_shares ms
+       LEFT JOIN quizzes q ON ms.material_type = 'quiz' AND q.id = ms.material_id
+        SET ms.revoked_at = CURRENT_TIMESTAMP
+      WHERE ms.revoked_at IS NULL
+        AND ( (ms.material_type = 'subject' AND ms.material_id = ?)
+           OR (ms.material_type = 'quiz' AND q.subject_id = ?) )`,
+    [subjectId, subjectId]
   );
   await execute(
     connection,

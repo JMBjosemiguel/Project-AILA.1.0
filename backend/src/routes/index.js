@@ -14,6 +14,7 @@ const notificationRoutes = require('./notificationRoutes');
 const profileRoutes = require('./profileRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const feedbackRoutes = require('./feedbackRoutes');
+const { materialsRouter, shareRouter } = require('./materialShareRoutes');
 const { createScaffoldRouter } = require('./scaffoldRoutes');
 
 const router = express.Router();
@@ -35,5 +36,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/users/me', profileRoutes);
 router.use('/users', createScaffoldRouter('Users'));
 router.use('/feedback', feedbackRoutes);
+router.use('/materials', materialsRouter);
+router.use('/share', shareRouter);
 
 module.exports = router;

@@ -23,7 +23,20 @@ vi.mock('../../../../services/api/chatService', () => ({
   regenerateLastResponse: vi.fn(),
 }));
 
+const saveChatQuizAsQuiz = vi.fn();
+vi.mock('../../../../services/api/quizService', () => ({
+  saveChatQuizAsQuiz: (...args) => saveChatQuizAsQuiz(...args),
+}));
+const setResumeQuiz = vi.fn();
+vi.mock('../../../../utils/quizResumeTarget', () => ({ setResumeQuiz: (id) => setResumeQuiz(id) }));
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+vi.mock('../../../../components/common/Toast', () => ({
+  useToast: () => ({ success: toastSuccess, error: toastError }),
+}));
+
 import AssistantPage from '../index.jsx';
+import { _resetChatbotQuizState } from '../../../../utils/chatbotQuizState';
 import {
   sendChatMessage,
   getConversationMessages,
@@ -68,6 +81,7 @@ async function typeAndSend(user, text) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  _resetChatbotQuizState();
   getConversationMessages.mockImplementation((id) => Promise.resolve(historyFor[id]));
 });
 
@@ -232,5 +246,81 @@ describe('AssistantPage — conversation-scoped thinking / message state', () =>
     d.resolve({ conversationId: 99, messageType: 'text', response: 'reply to the new chat' });
     await waitFor(() => expect(screen.getByText('reply to the new chat')).toBeInTheDocument());
     expect(thinkingVisible()).toBe(false);
+  });
+});
+
+describe('AssistantPage — chatbot mini-quiz state', () => {
+  const quizData = {
+    topic: 'Geography', quizType: 'multiple_choice',
+    items: [
+      { question: 'Capital of France?', options: ['Paris', 'Berlin'], correctAnswer: 'Paris', explanation: 'Since 987.' },
+    ],
+  };
+
+  beforeEach(() => {
+    historyFor[1] = { messages: [
+      { id: 100, sender: 'user', text: 'quiz me', type: 'text', data: null },
+      { id: 101, sender: 'bot', text: null, type: 'quiz', data: quizData },
+    ] };
+    historyFor[2] = { messages: [
+      { id: 200, sender: 'user', text: 'hi from B', type: 'text', data: null },
+      { id: 201, sender: 'bot', text: 'B history reply', type: 'text', data: null },
+    ] };
+  });
+
+  it('preserves a selected answer and the submitted review across a conversation switch', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await openChat(user, 'Chat A');
+    await waitFor(() => expect(screen.getByText(/Capital of France\?/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Paris' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored 1 \/ 1/)).toBeInTheDocument());
+
+    await openChat(user, 'Chat B');
+    await waitFor(() => expect(screen.getByText('B history reply')).toBeInTheDocument());
+    expect(screen.queryByText(/You scored/)).not.toBeInTheDocument();
+
+    await openChat(user, 'Chat A');
+    await waitFor(() => expect(screen.getByText(/Capital of France\?/)).toBeInTheDocument());
+    expect(screen.getByText(/You scored 1 \/ 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Since 987/)).toBeInTheDocument();
+  });
+
+  it('a quiz in another conversation has independent state', async () => {
+    const user = userEvent.setup();
+    historyFor[2] = { messages: [
+      { id: 202, sender: 'bot', text: null, type: 'quiz', data: { ...quizData, topic: 'Chemistry' } },
+    ] };
+
+    render(<AssistantPage onNavigate={vi.fn()} />);
+    await openChat(user, 'Chat A');
+    await waitFor(() => screen.getByText(/Capital of France\?/));
+    await user.click(screen.getByRole('button', { name: 'Paris' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+
+    await openChat(user, 'Chat B');
+    await waitFor(() => expect(screen.getByText(/Quiz: Chemistry/)).toBeInTheDocument());
+    expect(screen.queryByText(/You scored/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Check Answers/i })).toBeInTheDocument();
+  });
+
+  it('"Save as Quiz" persists the quiz and hands off to the Learning Hub', async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    saveChatQuizAsQuiz.mockResolvedValue({ quizId: 555, alreadySaved: false });
+
+    render(<AssistantPage onNavigate={onNavigate} />);
+    await openChat(user, 'Chat A');
+    await waitFor(() => screen.getByText(/Capital of France\?/));
+
+    await user.click(screen.getByRole('button', { name: /Save as Quiz/i }));
+    await waitFor(() => expect(saveChatQuizAsQuiz).toHaveBeenCalledWith(101));
+    expect(setResumeQuiz).toHaveBeenCalledWith(555);
+    expect(onNavigate).toHaveBeenCalledWith('hub');
+    expect(toastSuccess).toHaveBeenCalled();
   });
 });

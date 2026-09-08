@@ -9,11 +9,15 @@ const {
   attemptIdParamValidator,
   submitAttemptValidator,
   saveAnswerValidator,
+  chatMessageIdParamValidator,
 } = require('../validators/quizValidator');
 
 const router = express.Router();
 
 router.post('/generate', authenticate, aiRateLimiter, generateValidator, validateRequest, quizController.generate);
+// Persist an informal chatbot mini-quiz as the student's own practice quiz. No
+// AI call, no aiRateLimiter — it copies already-generated questions.
+router.post('/from-chat-message/:messageId', authenticate, chatMessageIdParamValidator, validateRequest, quizController.saveFromChatMessage);
 router.get('/history', authenticate, quizController.history);
 
 // Resumable attempt lifecycle.

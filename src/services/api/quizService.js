@@ -9,6 +9,12 @@ export function getQuiz(quizId) {
   return apiClient.get(API_ENDPOINTS.quizzes.quiz(quizId));
 }
 
+// Persist an informal chatbot mini-quiz as the student's own practice quiz.
+// Idempotent server-side: a repeat returns { alreadySaved: true, quizId, quiz }.
+export function saveChatQuizAsQuiz(messageId) {
+  return apiClient.post(API_ENDPOINTS.quizzes.fromChatMessage(messageId));
+}
+
 // --- Resumable attempt lifecycle ---
 
 // Begin or resume an attempt. Returns { attempt, quiz, items, answers }.

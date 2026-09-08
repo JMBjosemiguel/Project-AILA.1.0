@@ -677,6 +677,7 @@ CREATE TABLE quizzes (
   difficulty ENUM('easy','medium','hard') NOT NULL DEFAULT 'medium',
   source_type ENUM('chat','lesson','topic','resource','manual') NULL DEFAULT NULL,
   source_id BIGINT UNSIGNED NULL DEFAULT NULL,
+  source_chat_message_id BIGINT UNSIGNED NULL,  -- migration 007: "Save as Quiz" provenance
   item_count TINYINT UNSIGNED NOT NULL DEFAULT 10,
   personalization_context JSON NULL,  -- migration 003: audit snapshot of the context used to generate this quiz
   subject_id INT UNSIGNED NULL,        -- migration 004: course assessments
@@ -689,6 +690,7 @@ CREATE TABLE quizzes (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_quizzes_assessment (user_id, subject_id, assessment_slot),
+  UNIQUE KEY uq_quizzes_source_chat_message (user_id, source_chat_message_id),  -- migration 007
   KEY idx_quizzes_user_id (user_id),
   KEY idx_quizzes_user_created (user_id, created_at),
   KEY idx_quizzes_subject_kind (subject_id, assessment_kind),
@@ -702,6 +704,8 @@ CREATE TABLE quizzes (
   CONSTRAINT fk_quizzes_module FOREIGN KEY (module_id) REFERENCES modules(id)
     ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_quizzes_copied_from FOREIGN KEY (copied_from_quiz_id) REFERENCES quizzes(id)
+    ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT fk_quizzes_source_chat_message FOREIGN KEY (source_chat_message_id) REFERENCES chat_messages(id)
     ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

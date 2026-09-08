@@ -4,9 +4,12 @@ import ChatSidebar from '../../../components/chatbot/ChatSidebar';
 import MessageBubble, { TypingBubble } from '../../../components/chatbot/MessageBubble';
 import SuggestedPrompts from '../../../components/chatbot/SuggestedPrompts';
 import AilaOrb from '../../../components/common/AilaOrb';
+import { useToast } from '../../../components/common/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChatbotData } from '../../../hooks/useChatbotData';
 import { consumePrefillPrompt } from '../../../utils/aiPrefill';
+import { setResumeQuiz } from '../../../utils/quizResumeTarget';
+import { readChatbotQuizState, writeChatbotQuizState } from '../../../utils/chatbotQuizState';
 import {
   sendChatMessage,
   getConversationMessages,
@@ -14,6 +17,7 @@ import {
   deleteConversation,
   regenerateLastResponse,
 } from '../../../services/api/chatService';
+import { saveChatQuizAsQuiz } from '../../../services/api/quizService';
 
 // Sentinel for an AI request that started on a brand-new chat (no server id yet).
 const NEW_CHAT = Symbol('new-chat');
@@ -22,8 +26,23 @@ function conversationKey(activeChat) {
   return activeChat ?? NEW_CHAT;
 }
 
+// Stable per-render-session client id for optimistic messages that don't have a
+// chat_messages row id yet. Keeps React keys — and chatbot quiz UI state — stable.
+let clientMessageSeq = 0;
+function nextClientId() {
+  clientMessageSeq += 1;
+  return clientMessageSeq;
+}
+
+// A message's stable React key: the DB row id once we have one, else a client id.
+function messageKey(message) {
+  return message.id != null ? `m${message.id}` : `c${message.clientId}`;
+}
+
 function mapHistoryMessages(messages) {
   return messages.map((message) => ({
+    id: message.id ?? null,
+    clientId: message.id == null ? nextClientId() : null,
     role: message.sender,
     text: message.text,
     type: message.type,
@@ -31,7 +50,7 @@ function mapHistoryMessages(messages) {
   }));
 }
 
-export default function AssistantPage() {
+export default function AssistantPage({ onNavigate }) {
   const { user } = useAuth();
   const [historyVersion, setHistoryVersion] = useState(0);
   const { data } = useChatbotData(historyVersion);
@@ -42,6 +61,9 @@ export default function AssistantPage() {
   const [error, setError] = useState('');
   const [activeChat, setActiveChat] = useState(null);
   const [loadingChat, setLoadingChat] = useState(false);
+  // Per-message "Save as Quiz" status, keyed by messageKey(message).
+  const [saveQuizStates, setSaveQuizStates] = useState({});
+  const toast = useToast();
   const scrollRef = useRef(null);
   const sendingRef = useRef(false);
   const pendingResourceIdRef = useRef(null);
@@ -109,7 +131,7 @@ export default function AssistantPage() {
     const reqChat = conversationKey(activeChat);
     sendingRef.current = true;
     setError('');
-    setMessages((current) => [...current, { role: 'user', text: value, type: 'text', data: null }]);
+    setMessages((current) => [...current, { id: null, clientId: nextClientId(), role: 'user', text: value, type: 'text', data: null }]);
     setInput('');
     startPending(reqChat);
 
@@ -127,7 +149,7 @@ export default function AssistantPage() {
       if (isStillOnRequestChat(reqChat)) {
         setMessages((current) => [
           ...current,
-          { role: 'bot', text: result.response, type: result.messageType, data: result.data },
+          { id: result.messageId ?? null, clientId: nextClientId(), role: 'bot', text: result.response, type: result.messageType, data: result.data },
         ]);
         if (resolvedId && activeChatRef.current !== resolvedId) {
           setActiveChat(resolvedId);
@@ -201,7 +223,7 @@ export default function AssistantPage() {
       if (isStillOnRequestChat(reqChat)) {
         setMessages((current) => [
           ...current,
-          { role: 'bot', text: result.response, type: result.messageType, data: result.data },
+          { id: result.messageId ?? null, clientId: nextClientId(), role: 'bot', text: result.response, type: result.messageType, data: result.data },
         ]);
       }
       setHistoryVersion((version) => version + 1);
@@ -216,6 +238,27 @@ export default function AssistantPage() {
     } finally {
       clearPending(reqChat);
       sendingRef.current = false;
+    }
+  };
+
+  // "Save as Quiz" — turn an informal chatbot mini-quiz into a persisted practice
+  // quiz, then hand off to the Learning Hub QuizRunner to take it formally.
+  const handleSaveAsQuiz = async (message) => {
+    if (message.id == null) {
+      toast.error('Give the quiz a moment to finish saving, then try again.');
+      return;
+    }
+    const key = messageKey(message);
+    setSaveQuizStates((current) => ({ ...current, [key]: 'saving' }));
+    try {
+      const result = await saveChatQuizAsQuiz(message.id);
+      setSaveQuizStates((current) => ({ ...current, [key]: 'saved' }));
+      toast.success(result.alreadySaved ? 'Already in your quizzes — opening it.' : 'Saved to your quizzes.');
+      setResumeQuiz(result.quizId);
+      onNavigate?.('hub');
+    } catch (saveError) {
+      setSaveQuizStates((current) => ({ ...current, [key]: 'error' }));
+      toast.error(saveError.message || 'Could not save that quiz.');
     }
   };
 
@@ -271,19 +314,27 @@ export default function AssistantPage() {
             <SuggestedPrompts questions={data?.suggestedQuestions ?? []} onPick={send} />
           ) : (
             <div className="flex flex-col gap-5 max-w-2xl mx-auto">
-              {messages.map((message, index) => (
-                <MessageBubble
-                  key={`${message.role}-${index}`}
-                  role={message.role}
-                  text={message.text}
-                  type={message.type}
-                  data={message.data}
-                  avatarLetter={avatarLetter}
-                  isLast={index === messages.length - 1}
-                  onRegenerate={handleRegenerate}
-                  regenerateDisabled={isBusy}
-                />
-              ))}
+              {messages.map((message, index) => {
+                const key = messageKey(message);
+                const isChatbotQuiz = message.role === 'bot' && message.type === 'quiz';
+                return (
+                  <MessageBubble
+                    key={key}
+                    role={message.role}
+                    text={message.text}
+                    type={message.type}
+                    data={message.data}
+                    avatarLetter={avatarLetter}
+                    isLast={index === messages.length - 1}
+                    onRegenerate={handleRegenerate}
+                    regenerateDisabled={isBusy}
+                    quizLocalState={isChatbotQuiz ? readChatbotQuizState(message) : null}
+                    onQuizLocalStateChange={isChatbotQuiz ? (state) => writeChatbotQuizState(message, state) : undefined}
+                    onSaveAsQuiz={isChatbotQuiz ? () => handleSaveAsQuiz(message) : undefined}
+                    saveAsQuizState={isChatbotQuiz ? (saveQuizStates[key] ?? 'idle') : 'idle'}
+                  />
+                );
+              })}
               {showTyping && <TypingBubble />}
             </div>
           )}

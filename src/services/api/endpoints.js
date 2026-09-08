@@ -29,6 +29,7 @@ export const API_ENDPOINTS = {
   },
   quizzes: {
     generate: '/quizzes/generate',
+    fromChatMessage: (messageId) => `/quizzes/from-chat-message/${messageId}`,
     quiz: (id) => `/quizzes/${id}`,
     attempts: (id) => `/quizzes/${id}/attempts`,
     startAttempt: (id) => `/quizzes/${id}/attempts/start`,

@@ -170,13 +170,13 @@ async function persistExchange({ userId, conversationId, isFirstMessage, prompt,
   return transaction(async (connection) => {
     const resolvedId = conversationId || (await chatModel.createConversation(userId, connection, resourceId));
 
-    await chatModel.appendMessages(resolvedId, prompt, responseText, messageType, connection);
+    const { botMessageId } = await chatModel.appendMessages(resolvedId, prompt, responseText, messageType, connection);
 
     if (isFirstMessage) {
       await chatModel.setConversationTitleIfMissing(resolvedId, title, connection);
     }
 
-    return resolvedId;
+    return { conversationId: resolvedId, botMessageId };
   });
 }
 
@@ -203,7 +203,7 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
 
   const { messageType, data, responseText } = await generateReply(prompt, priorMessages, userId, effectiveResourceId);
 
-  const resolvedConversationId = await persistExchange({
+  const { conversationId: resolvedConversationId, botMessageId } = await persistExchange({
     userId,
     conversationId: existingConversationId,
     isFirstMessage: priorMessages.length === 0,
@@ -215,6 +215,7 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
 
   return {
     conversationId: resolvedConversationId,
+    messageId: botMessageId,
     messageType,
     response: messageType === 'text' ? responseText : null,
     data,
@@ -244,6 +245,7 @@ async function regenerateLastResponse(userId, conversationId) {
 
   return {
     conversationId: conversation.id,
+    messageId: lastMessage.id,
     messageType,
     response: messageType === 'text' ? responseText : null,
     data,

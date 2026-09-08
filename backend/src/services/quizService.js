@@ -2,6 +2,7 @@ const ApiError = require('../utils/ApiError');
 const { callGemini, getResponseText } = require('./geminiClient');
 const { transaction } = require('../config/database');
 const quizModel = require('../models/quizModel');
+const chatModel = require('../models/chatModel');
 const courseAssessmentModel = require('../models/courseAssessmentModel');
 const resourceModel = require('../models/resourceModel');
 const personalizationService = require('./personalizationService');
@@ -372,6 +373,78 @@ async function getQuizForUser(userId, quizId) {
     throw new ApiError(404, 'Quiz not found.');
   }
   return formatQuizForTake(quiz);
+}
+
+/**
+ * "Save as Quiz" — persist an informal chatbot mini-quiz (stored inside a chat
+ * message) as the student's OWN practice quiz so it can use the formal TAKE
+ * serializer / server grading / resumable attempts / history / XP rules.
+ *
+ * No Gemini call — the already-generated questions are copied verbatim. Ownership
+ * is enforced by the join in getQuizMessageForUser (another user's chat quiz
+ * 404s). One save per chat message: the DB UNIQUE(user_id, source_chat_message_id)
+ * is the final guard, and a repeat click returns the existing quiz instead of
+ * erroring.
+ */
+async function saveQuizFromChatMessage(userId, messageId) {
+  const message = await chatModel.getQuizMessageForUser(Number(messageId), userId);
+  if (!message) {
+    throw new ApiError(404, 'That chat quiz could not be found.');
+  }
+
+  const existingId = await quizModel.findQuizIdByChatMessage(userId, message.id);
+  if (existingId) {
+    const existing = await quizModel.getQuizWithQuestions(existingId, userId);
+    return { quizId: existingId, alreadySaved: true, quiz: formatQuizForTake(existing) };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(message.message_text);
+  } catch {
+    throw new ApiError(422, 'That chat quiz is no longer readable.');
+  }
+
+  const items = (Array.isArray(parsed?.items) ? parsed.items : []).filter(
+    (item) => item && typeof item.question === 'string' && item.question.trim() && item.correctAnswer != null
+  );
+  if (!items.length) {
+    throw new ApiError(422, 'That chat quiz has no gradable questions to save.');
+  }
+
+  const quizType = QUIZ_TYPE_LABELS[parsed.quizType] ? parsed.quizType : 'multiple_choice';
+
+  let quizId;
+  try {
+    quizId = await quizModel.createQuiz({
+      userId,
+      topic: (parsed.topic || 'Practice quiz').toString().slice(0, 200),
+      quizType,
+      difficulty: 'medium',
+      sourceType: 'chat',
+      sourceId: message.conversation_id,
+      sourceChatMessageId: message.id,
+      items: items.map((item) => ({
+        question: item.question,
+        options: Array.isArray(item.options) ? item.options : [],
+        correctAnswer: (item.correctAnswer ?? '').toString(),
+        explanation: item.explanation || null,
+      })),
+      assessmentKind: 'practice',
+    });
+  } catch (err) {
+    if (err && err.code === 'ER_DUP_ENTRY') {
+      const raced = await quizModel.findQuizIdByChatMessage(userId, message.id);
+      if (raced) {
+        const quiz = await quizModel.getQuizWithQuestions(raced, userId);
+        return { quizId: raced, alreadySaved: true, quiz: formatQuizForTake(quiz) };
+      }
+    }
+    throw err;
+  }
+
+  const quiz = await quizModel.getQuizWithQuestions(quizId, userId);
+  return { quizId, alreadySaved: false, quiz: formatQuizForTake(quiz) };
 }
 
 // --- Course assessments (module checkpoints + course final) -------------
@@ -798,6 +871,7 @@ module.exports = {
   generateFlashcards,
   generateAndSaveQuiz,
   getQuizForUser,
+  saveQuizFromChatMessage,
   createAndSaveAssessment,
   startAttempt,
   saveAttemptAnswer,

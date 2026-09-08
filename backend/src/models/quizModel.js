@@ -3,18 +3,19 @@ const { query, execute } = require('../config/database');
 async function createQuiz({
   userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null,
   subjectId = null, moduleId = null, assessmentKind = 'practice', passingScore = null, assessmentSlot = null,
+  sourceChatMessageId = null,
 }, connection = null) {
   const quizResult = await execute(
     connection,
     `
       INSERT INTO quizzes
-        (user_id, topic, quiz_type, difficulty, source_type, source_id, item_count, personalization_context,
-         subject_id, module_id, assessment_kind, passing_score, assessment_slot)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (user_id, topic, quiz_type, difficulty, source_type, source_id, source_chat_message_id, item_count,
+         personalization_context, subject_id, module_id, assessment_kind, passing_score, assessment_slot)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
-      userId, topic, quizType, difficulty, sourceType || null, sourceId || null, items.length, personalizationContext || null,
-      subjectId, moduleId, assessmentKind, passingScore, assessmentSlot,
+      userId, topic, quizType, difficulty, sourceType || null, sourceId || null, sourceChatMessageId || null, items.length,
+      personalizationContext || null, subjectId, moduleId, assessmentKind, passingScore, assessmentSlot,
     ]
   );
 
@@ -235,8 +236,19 @@ async function getSubjectIdForSource(sourceType, sourceId) {
   return null;
 }
 
+// The user's already-saved practice quiz for a given chat message, if any — the
+// UNIQUE(user_id, source_chat_message_id) also guards this at the DB level.
+async function findQuizIdByChatMessage(userId, chatMessageId) {
+  const rows = await query(
+    'SELECT id FROM quizzes WHERE user_id = ? AND source_chat_message_id = ? LIMIT 1',
+    [userId, chatMessageId]
+  );
+  return rows[0]?.id ?? null;
+}
+
 module.exports = {
   createQuiz,
+  findQuizIdByChatMessage,
   getQuizWithQuestions,
   findActiveAttempt,
   createInProgressAttempt,

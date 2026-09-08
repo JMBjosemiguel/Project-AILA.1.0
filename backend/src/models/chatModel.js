@@ -12,19 +12,38 @@ async function createConversation(userId, connection = null, resourceId = null) 
   return result.insertId;
 }
 
+// Two INSERTs (not one multi-row) so we can return the bot message's id — the
+// frontend keys the message (and its interactive quiz state) by that stable id.
 async function appendMessages(conversationId, userText, botText, botMessageType, connection = null) {
-  const sql = `
-    INSERT INTO chat_messages (conversation_id, sender, message_type, message_text)
-    VALUES (?, 'user', 'text', ?), (?, 'bot', ?, ?)
-  `;
-  const params = [conversationId, userText, conversationId, botMessageType, botText];
+  const userSql = "INSERT INTO chat_messages (conversation_id, sender, message_type, message_text) VALUES (?, 'user', 'text', ?)";
+  const botSql = 'INSERT INTO chat_messages (conversation_id, sender, message_type, message_text) VALUES (?, ?, ?, ?)';
 
   if (connection) {
-    await connection.execute(sql, params);
-    return;
+    await connection.execute(userSql, [conversationId, userText]);
+    const [botResult] = await connection.execute(botSql, [conversationId, 'bot', botMessageType, botText]);
+    return { botMessageId: botResult.insertId };
   }
 
-  await query(sql, params);
+  await query(userSql, [conversationId, userText]);
+  const botResult = await query(botSql, [conversationId, 'bot', botMessageType, botText]);
+  return { botMessageId: botResult.insertId };
+}
+
+// The stored quiz JSON for one chat message, if it is a `quiz`-type bot message
+// in a conversation this user owns. Used by "Save as Quiz".
+async function getQuizMessageForUser(messageId, userId) {
+  const rows = await query(
+    `
+      SELECT m.id, m.conversation_id, m.message_text
+      FROM chat_messages m
+      INNER JOIN chat_conversations c ON c.id = m.conversation_id
+      WHERE m.id = ? AND c.user_id = ? AND c.deleted_at IS NULL
+        AND m.sender = 'bot' AND m.message_type = 'quiz'
+      LIMIT 1
+    `,
+    [messageId, userId]
+  );
+  return rows[0] || null;
 }
 
 async function updateMessage(messageId, messageText, messageType) {
@@ -219,6 +238,7 @@ module.exports = {
   listSuggestedQuestions,
   getConversationForUser,
   getMessagesForConversation,
+  getQuizMessageForUser,
   listConversationUsersAdmin,
   listConversationsForUserAdmin,
   getConversationAdmin,

@@ -23,6 +23,18 @@ const getQuiz = asyncHandler(async (req, res) => {
   sendSuccess(res, quiz, 200, 'Quiz retrieved.');
 });
 
+// POST /quizzes/from-chat-message/:messageId — save a chatbot mini-quiz as a
+// persisted practice quiz. Idempotent: a repeat returns the existing quiz (200).
+const saveFromChatMessage = asyncHandler(async (req, res) => {
+  const result = await quizService.saveQuizFromChatMessage(req.auth.user.id, req.params.messageId);
+  sendSuccess(
+    res,
+    { quizId: result.quizId, alreadySaved: result.alreadySaved, quiz: result.quiz },
+    result.alreadySaved ? 200 : 201,
+    result.alreadySaved ? 'Already saved to your quizzes.' : 'Saved to your quizzes.'
+  );
+});
+
 // POST /quizzes/:quizId/attempts/start — begin or resume an attempt.
 const startAttempt = asyncHandler(async (req, res) => {
   const attempt = await quizService.startAttempt(req.auth.user.id, req.params.quizId);
@@ -71,6 +83,7 @@ const deleteAttempt = asyncHandler(async (req, res) => {
 module.exports = {
   generate,
   getQuiz,
+  saveFromChatMessage,
   startAttempt,
   saveAnswer,
   submitAttempt,

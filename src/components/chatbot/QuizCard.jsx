@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, CheckCircle2, ClipboardList, Cloud, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { BookmarkPlus, Check, CheckCircle2, ClipboardList, Cloud, Loader2, RotateCcw, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 import PersonalizedBadge from '../common/PersonalizedBadge';
@@ -68,12 +68,18 @@ export default function QuizCard({
   saveState = 'idle',
   onRetrySave,
   presetReview = null,
+  // Informal chatbot mini-quiz only: session-scoped state lift + "Save as Quiz".
+  localState = null,
+  onLocalStateChange,
+  onSaveAsQuiz,
+  saveAsQuizState = 'idle',
 }) {
   const items = quiz?.items ?? [];
-  const [answers, setAnswers] = useState(() =>
-    presetReview ? seedAnswers(items, presetReview.answers) : seedAnswers(items, initialAnswers)
-  );
-  const [review, setReview] = useState(() => presetReview?.graded ?? null);
+  const [answers, setAnswers] = useState(() => {
+    if (localState?.answers) return localState.answers;
+    return presetReview ? seedAnswers(items, presetReview.answers) : seedAnswers(items, initialAnswers);
+  });
+  const [review, setReview] = useState(() => localState?.review ?? presetReview?.graded ?? null);
   const [submitting, setSubmitting] = useState(false);
   const submitted = review !== null;
   const itemRefs = useRef([]);
@@ -98,7 +104,11 @@ export default function QuizCard({
 
   const setAnswer = (index, value) => {
     if (submitted || submitting) return;
-    setAnswers((current) => ({ ...current, [index]: value }));
+    setAnswers((current) => {
+      const next = { ...current, [index]: value };
+      onLocalStateChange?.({ answers: next, review });
+      return next;
+    });
     onAnswerChange?.({ questionId: items[index]?.id, selectedAnswer: value, index });
   };
 
@@ -121,7 +131,9 @@ export default function QuizCard({
     }
 
     // No server round-trip — informal practice quiz self-checked on the client.
-    setReview(reviewFromInlineKey(items, answers));
+    const graded = reviewFromInlineKey(items, answers);
+    setReview(graded);
+    onLocalStateChange?.({ answers, review: graded });
   };
 
   const showSaveStatus = !submitted && typeof onAnswerChange === 'function' && saveState !== 'idle';
@@ -247,6 +259,25 @@ export default function QuizCard({
         <Button className="mt-4" full onClick={handleSubmit} disabled={submitting}>
           {submitting ? <><Loader2 size={14} className="animate-spin" /> Checking...</> : 'Check Answers'}
         </Button>
+      )}
+
+      {onSaveAsQuiz && (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-50 pt-3">
+          <p className="text-xs text-ink-400">
+            Practice quiz — not graded. Save it to take it formally with XP and history.
+          </p>
+          <button
+            type="button"
+            onClick={onSaveAsQuiz}
+            disabled={saveAsQuizState === 'saving' || saveAsQuizState === 'saved'}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-primary-200 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary-50 disabled:opacity-60"
+          >
+            {saveAsQuizState === 'saving' && <><Loader2 size={12} className="animate-spin" /> Saving…</>}
+            {saveAsQuizState === 'saved' && <><Check size={12} className="text-emerald-500" /> Saved</>}
+            {saveAsQuizState === 'error' && <><XCircle size={12} className="text-rose-500" /> Try again</>}
+            {saveAsQuizState === 'idle' && <><BookmarkPlus size={12} /> Save as Quiz</>}
+          </button>
+        </div>
       )}
     </Card>
   );

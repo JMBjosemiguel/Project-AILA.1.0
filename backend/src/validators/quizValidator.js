@@ -17,6 +17,10 @@ const attemptIdParamValidator = [
   param('attemptId').isInt({ min: 1 }).withMessage('Invalid attempt id.'),
 ];
 
+const chatMessageIdParamValidator = [
+  param('messageId').isInt({ min: 1 }).withMessage('Invalid message id.'),
+];
+
 // Legacy one-shot submission: POST /quizzes/:quizId/attempts
 const submitAttemptValidator = [
   body('answers').isArray().withMessage('Answers must be an array.'),
@@ -36,6 +40,7 @@ module.exports = {
   generateValidator,
   quizIdParamValidator,
   attemptIdParamValidator,
+  chatMessageIdParamValidator,
   submitAttemptValidator,
   saveAnswerValidator,
 };

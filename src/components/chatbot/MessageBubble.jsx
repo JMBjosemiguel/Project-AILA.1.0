@@ -14,6 +14,11 @@ export default function MessageBubble({
   isLast = false,
   onRegenerate,
   regenerateDisabled = false,
+  // Informal chatbot quiz: session-scoped state lift + "Save as Quiz".
+  quizLocalState = null,
+  onQuizLocalStateChange,
+  onSaveAsQuiz,
+  saveAsQuizState = 'idle',
 }) {
   const isUser = role === 'user';
   const isRichContent = !isUser && (type === 'quiz' || type === 'flashcards');
@@ -42,7 +47,15 @@ export default function MessageBubble({
 
         {isRichContent ? (
           <div className="flex-1 min-w-0">
-            {type === 'quiz' && <QuizCard quiz={data} />}
+            {type === 'quiz' && (
+              <QuizCard
+                quiz={data}
+                localState={quizLocalState}
+                onLocalStateChange={onQuizLocalStateChange}
+                onSaveAsQuiz={onSaveAsQuiz}
+                saveAsQuizState={saveAsQuizState}
+              />
+            )}
             {type === 'flashcards' && <FlashcardDeck flashcards={data} />}
           </div>
         ) : (

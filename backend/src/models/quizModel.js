@@ -1,13 +1,13 @@
 const { query, execute } = require('../config/database');
 
-async function createQuiz({ userId, topic, quizType, difficulty, sourceType, sourceId, items }, connection = null) {
+async function createQuiz({ userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null }, connection = null) {
   const quizResult = await execute(
     connection,
     `
-      INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, source_type, source_id, item_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, source_type, source_id, item_count, personalization_context)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [userId, topic, quizType, difficulty, sourceType || null, sourceId || null, items.length]
+    [userId, topic, quizType, difficulty, sourceType || null, sourceId || null, items.length, personalizationContext || null]
   );
 
   const quizId = quizResult.insertId;
@@ -33,7 +33,7 @@ async function createQuiz({ userId, topic, quizType, difficulty, sourceType, sou
 
 async function getQuizWithQuestions(quizId, userId) {
   const quizRows = await query(
-    'SELECT id, user_id, topic, quiz_type, difficulty, item_count, created_at FROM quizzes WHERE id = ? AND user_id = ? LIMIT 1',
+    'SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, created_at FROM quizzes WHERE id = ? AND user_id = ? LIMIT 1',
     [quizId, userId]
   );
   const quiz = quizRows[0];
@@ -202,6 +202,27 @@ async function deleteAttemptForUser(attemptId, userId) {
   return result.affectedRows;
 }
 
+// The subject a quiz's source belongs to, so personalization signals can be
+// scoped to that course. Only 'lesson' and 'topic' sources map to a subject.
+async function getSubjectIdForSource(sourceType, sourceId) {
+  if (!sourceId) return null;
+  if (sourceType === 'lesson') {
+    const rows = await query(
+      'SELECT m.subject_id FROM lessons l INNER JOIN topics t ON t.id = l.topic_id INNER JOIN modules m ON m.id = t.module_id WHERE l.id = ? LIMIT 1',
+      [sourceId]
+    );
+    return rows[0]?.subject_id ?? null;
+  }
+  if (sourceType === 'topic') {
+    const rows = await query(
+      'SELECT m.subject_id FROM topics t INNER JOIN modules m ON m.id = t.module_id WHERE t.id = ? LIMIT 1',
+      [sourceId]
+    );
+    return rows[0]?.subject_id ?? null;
+  }
+  return null;
+}
+
 module.exports = {
   createQuiz,
   getQuizWithQuestions,
@@ -218,4 +239,5 @@ module.exports = {
   listAttemptsForUser,
   getQuizAverageScore,
   deleteAttemptForUser,
+  getSubjectIdForSource,
 };

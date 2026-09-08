@@ -171,6 +171,7 @@ async function getLessonDetail(lessonId, userId) {
     `
       SELECT
         l.id, l.title, l.content, l.topic_id, l.difficulty, l.estimated_minutes,
+        l.personalization_context,
         t.title AS topic_title, t.module_id,
         m.title AS module_title, m.subject_id,
         s.name AS subject_name, s.goal AS subject_goal,
@@ -237,6 +238,7 @@ async function getLessonDetail(lessonId, userId) {
       completed: Boolean(lesson.completed_at),
       difficulty: lesson.difficulty,
       estimated_minutes: lesson.estimated_minutes,
+      personalization_context: lesson.personalization_context,
     },
     topic: { id: lesson.topic_id, title: lesson.topic_title },
     module: { id: lesson.module_id, title: lesson.module_title },

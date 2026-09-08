@@ -2,18 +2,45 @@ const ApiError = require('../utils/ApiError');
 const { transaction } = require('../config/database');
 const learningModel = require('../models/learningModel');
 const courseGenerationService = require('./courseGenerationService');
+const personalizationService = require('./personalizationService');
 const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 
 const LESSON_COMPLETE_XP = 10;
+
+// Pull just the personalization LEVEL out of a stored snapshot — never the whole
+// snapshot, which stays server-side only.
+function personalizationLevelFromSnapshot(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed?.personalizationLevel ?? null;
+  } catch {
+    return null;
+  }
+}
 
 async function listSubjects(userId) {
   return learningModel.listSubjectsForUser(userId);
 }
 
 async function generateCourse(userId, { courseName, difficulty, goal }) {
-  const subjectId = await courseGenerationService.generateRoadmap({ userId, courseName, difficulty, goal });
-  return { subjectId };
+  // The course does not exist yet, so performance signals are global (not
+  // subject-scoped). Context building is best-effort — a failure here must not
+  // block course generation.
+  let context = null;
+  try {
+    context = await personalizationService.buildPersonalizationContext(userId, {
+      requestedDifficulty: difficulty,
+      generationType: 'course',
+      knownSubject: { name: courseName, goal },
+    });
+  } catch {
+    context = null;
+  }
+
+  const subjectId = await courseGenerationService.generateRoadmap({ userId, courseName, difficulty, goal, context });
+  return { subjectId, personalizationLevel: context?.personalizationLevel ?? 'basic' };
 }
 
 async function getLesson(userId, lessonId) {
@@ -23,6 +50,17 @@ async function getLesson(userId, lessonId) {
   }
 
   if (!detail.lesson.content) {
+    let context = null;
+    try {
+      context = await personalizationService.buildPersonalizationContext(userId, {
+        subjectId: detail.subject.id,
+        generationType: 'lesson',
+        knownSubject: { id: detail.subject.id, name: detail.subject.name, goal: detail.subject.goal },
+      });
+    } catch {
+      context = null; // optional context failed — generate generically
+    }
+
     try {
       detail.lesson.content = await courseGenerationService.generateLessonContent({
         id: detail.lesson.id,
@@ -32,7 +70,8 @@ async function getLesson(userId, lessonId) {
         module_title: detail.module.title,
         subject_name: detail.subject.name,
         goal: detail.subject.goal,
-      });
+      }, context);
+      detail.lesson.personalizationLevel = context?.personalizationLevel ?? null;
     } catch {
       // AI is unavailable right now — return the lesson shell so the page can
       // render a retry instead of failing the whole request. Nothing partial
@@ -40,8 +79,11 @@ async function getLesson(userId, lessonId) {
       detail.lesson.content = null;
       detail.lesson.contentError = true;
     }
+  } else {
+    detail.lesson.personalizationLevel = personalizationLevelFromSnapshot(detail.lesson.personalization_context);
   }
 
+  delete detail.lesson.personalization_context; // never expose the raw snapshot to the client
   return detail;
 }
 

@@ -19,7 +19,8 @@ const publicUserSelect = `
     user_profiles.avatar_url,
     user_profiles.bio,
     user_profiles.xp_points,
-    user_profiles.level
+    user_profiles.level,
+    user_profiles.leaderboard_opt_in
   FROM users
   INNER JOIN roles ON roles.id = users.role_id
   LEFT JOIN user_profiles ON user_profiles.user_id = users.id
@@ -50,6 +51,7 @@ function mapUser(row) {
           bio: row.bio,
           xp_points: row.xp_points,
           level: row.level,
+          leaderboard_opt_in: Boolean(row.leaderboard_opt_in),
         }
       : null,
   };

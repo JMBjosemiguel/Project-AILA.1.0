@@ -5,6 +5,7 @@ const updateProfileValidator = [
   body('year_level').optional({ values: 'null' }).isInt({ min: 1, max: 6 }),
   body('bio').optional({ values: 'null' }).trim().isLength({ max: 2000 }),
   body('avatar_url').optional({ values: 'null' }).trim().isLength({ max: 255 }),
+  body('leaderboard_opt_in').optional().isBoolean().withMessage('leaderboard_opt_in must be true or false.'),
 ];
 
 const changePasswordValidator = [

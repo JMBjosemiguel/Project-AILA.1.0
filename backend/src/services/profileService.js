@@ -28,6 +28,7 @@ async function updateProfile(userId, updates) {
   if (updates.year_level !== undefined) fields.year_level = updates.year_level;
   if (updates.bio !== undefined) fields.bio = updates.bio;
   if (updates.avatar_url !== undefined) fields.avatar_url = updates.avatar_url;
+  if (updates.leaderboard_opt_in !== undefined) fields.leaderboard_opt_in = updates.leaderboard_opt_in ? 1 : 0;
 
   if (Object.keys(fields).length) {
     await userModel.updateProfileFields(userId, fields);

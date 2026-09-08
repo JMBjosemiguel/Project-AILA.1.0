@@ -8,8 +8,10 @@ const getProfile = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { program, year_level: yearLevel, bio, avatar_url: avatarUrl } = req.body;
-  const result = await profileService.updateProfile(req.auth.user.id, { program, year_level: yearLevel, bio, avatar_url: avatarUrl });
+  const { program, year_level: yearLevel, bio, avatar_url: avatarUrl, leaderboard_opt_in: leaderboardOptIn } = req.body;
+  const result = await profileService.updateProfile(req.auth.user.id, {
+    program, year_level: yearLevel, bio, avatar_url: avatarUrl, leaderboard_opt_in: leaderboardOptIn,
+  });
   sendSuccess(res, result, 200, 'Profile updated.');
 });
 

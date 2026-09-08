@@ -61,9 +61,13 @@ export default function DashboardPage({ onNavigate }) {
   };
 
   const handleReviewRecommendation = () => {
-    if (!recommendation?.lessonId) return;
-    setResumeLesson(recommendation.lessonId);
-    onNavigate('hub');
+    if (recommendation?.lessonId) {
+      setResumeLesson(recommendation.lessonId);
+      onNavigate('hub');
+      return;
+    }
+    // A failed assessment points at a course, not a lesson — open Learning Hub.
+    if (recommendation?.subjectId) onNavigate('hub');
   };
 
   const handleAskAilaAboutRecommendation = () => {

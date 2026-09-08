@@ -119,4 +119,33 @@ describe('DashboardPage — reliability', () => {
     render(<DashboardPage onNavigate={vi.fn()} />);
     expect(screen.getByText('Continue learning')).toBeInTheDocument();
   });
+
+  it('labels an unfinished module checkpoint in the Resume Test widget', () => {
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      activeQuizAttempts: [{ attemptId: 9, quizId: 42, topic: 'Indexes', assessmentKind: 'module_checkpoint', total: 8, answered: 3, progressPercent: 38 }],
+    };
+    render(<DashboardPage onNavigate={vi.fn()} />);
+    expect(screen.getByText('Module Checkpoint — Indexes')).toBeInTheDocument();
+  });
+
+  it('a failed assessment recommendation shows "Review now" and routes to the hub', async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      recommendation: {
+        type: 'failed_assessment', title: 'Retry the "Indexes" module checkpoint',
+        message: 'You scored 40% (passing is 70%).', lessonId: null, subjectId: 5,
+      },
+    };
+    render(<DashboardPage onNavigate={onNavigate} />);
+    expect(screen.getByText('Retry the "Indexes" module checkpoint')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Review now/i }));
+    expect(onNavigate).toHaveBeenCalledWith('hub');
+  });
 });

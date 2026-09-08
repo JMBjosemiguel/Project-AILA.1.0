@@ -2,6 +2,16 @@ import { ArrowRight, PlayCircle } from 'lucide-react';
 import Card, { CardHeader } from '../../common/Card';
 import Button from '../../common/Button';
 
+const KIND_PREFIX = {
+  module_checkpoint: 'Module Checkpoint',
+  course_final: 'Course Final',
+};
+
+function attemptLabel(attempt) {
+  const prefix = KIND_PREFIX[attempt.assessmentKind];
+  return prefix ? `${prefix} — ${attempt.topic || 'Assessment'}` : (attempt.topic || 'Quiz');
+}
+
 // Shown only when the student has an unfinished formal quiz attempt. The real
 // progress lives on the server; this is just the way back into it.
 export default function ResumeTestCard({ attempts = [], onResume }) {
@@ -23,7 +33,7 @@ export default function ResumeTestCard({ attempts = [], onResume }) {
           return (
             <div key={attempt.attemptId} className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-ink-800 truncate">{attempt.topic || 'Quiz'}</p>
+                <p className="text-sm font-semibold text-ink-800 truncate">{attemptLabel(attempt)}</p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="h-1.5 flex-1 bg-ink-100 rounded-full overflow-hidden max-w-[180px]">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />

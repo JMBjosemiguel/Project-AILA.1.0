@@ -15,7 +15,7 @@ export default function AIInsightCard({ recommendation, onReview, onAskAila }) {
         <h3 className="font-display font-semibold text-ink-800 text-base mb-1">{recommendation.title}</h3>
         <p className="text-sm text-ink-500 leading-relaxed mb-3">{recommendation.message}</p>
         <div className="flex gap-2">
-          {recommendation.lessonId && (
+          {(recommendation.lessonId || recommendation.subjectId) && (
             <Button size="sm" icon={<ArrowRight size={14} />} onClick={onReview}>Review now</Button>
           )}
           <Button size="sm" variant="outline" icon={<Sparkles size={14} />} onClick={onAskAila}>Ask AILA about it</Button>

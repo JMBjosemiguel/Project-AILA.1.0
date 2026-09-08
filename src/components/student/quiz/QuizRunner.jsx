@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, GraduationCap, Loader2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, GraduationCap, Loader2, Share2, X, XCircle } from 'lucide-react';
 import Button from '../../common/Button';
+import ShareDialog from '../../common/ShareDialog';
 import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
 import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt } from '../../../services/api/quizService';
@@ -31,6 +32,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [saveState, setSaveState] = useState('idle');
+  const [sharing, setSharing] = useState(false);
   const submittingRef = useRef(false);
   const toast = useToast();
 
@@ -270,6 +272,15 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
 
           {(step === 'ready' || step === 'review') && quiz && (
             <div>
+              {quiz.id && step === 'ready' && !result && !assessmentKind && (
+                <button
+                  type="button"
+                  onClick={() => setSharing(true)}
+                  className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-600"
+                >
+                  <Share2 size={13} /> Share this quiz
+                </button>
+              )}
               {formalResult && (
                 <div className={`mb-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-sm ${result.passed ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                   {result.passed ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" /> : <XCircle size={16} className="mt-0.5 flex-shrink-0" />}
@@ -314,6 +325,10 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
           </div>
         )}
       </div>
+
+      {sharing && quiz?.id && (
+        <ShareDialog materialType="quiz" materialId={quiz.id} materialName={quiz.topic} onClose={() => setSharing(false)} />
+      )}
     </div>,
     document.body
   );

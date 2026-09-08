@@ -1,7 +1,8 @@
-import { ArrowRight, BookOpenCheck, CheckCheck, ChevronDown, CheckCircle2, Circle, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowRight, BookOpenCheck, CheckCheck, ChevronDown, CheckCircle2, Circle, Share2, Sparkles, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import Card from '../../common/Card';
 import ActionMenu from '../../common/ActionMenu';
+import ShareDialog from '../../common/ShareDialog';
 import { domainColor, domainTint } from '../../common/DomainChip';
 import ProgressBar from '../../common/ProgressBar';
 import CourseAssessments from './CourseAssessments';
@@ -48,6 +49,7 @@ function formatMinutes(totalMinutes) {
 export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunchAssessment, assessmentsRefreshKey = 0 }) {
   const [open, setOpen] = useState(false);
   const [openModuleId, setOpenModuleId] = useState(null);
+  const [sharing, setSharing] = useState(false);
   const color = domainColor(subject);
   const tint = domainTint(subject);
   const modules = subject.modules ?? [];
@@ -57,6 +59,7 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
 
   const menuItems = [
     ...(nextLesson ? [{ label: 'Open', icon: <BookOpenCheck size={14} />, onClick: () => onSelectLesson?.(nextLesson.id) }] : []),
+    { label: 'Share', icon: <Share2 size={14} />, onClick: () => setSharing(true) },
     { label: 'Delete', icon: <Trash2 size={14} />, danger: true, onClick: () => onDelete?.(subject) },
   ];
 
@@ -74,6 +77,14 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
                 <span className="inline-flex items-center gap-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-primary bg-primary-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
                   <Sparkles size={9} /> AI
                 </span>
+              )}
+              {subject.visibility === 'unlisted' && (
+                <span className="inline-flex items-center gap-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-ink-500 bg-ink-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  <Share2 size={9} /> Shared
+                </span>
+              )}
+              {subject.copied_from_subject_id && (
+                <span className="text-[0.6rem] font-bold uppercase tracking-wide text-ink-400 bg-ink-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Copied</span>
               )}
             </div>
             <div className="text-xs text-ink-400">{subject.code || (subject.difficulty ? `${subject.difficulty} level` : '')}</div>
@@ -182,6 +193,10 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
           refreshKey={assessmentsRefreshKey}
           onLaunchAssessment={onLaunchAssessment}
         />
+      )}
+
+      {sharing && (
+        <ShareDialog materialType="subject" materialId={subject.id} materialName={subject.name} onClose={() => setSharing(false)} />
       )}
     </Card>
   );

@@ -37,6 +37,13 @@ export const API_ENDPOINTS = {
     attemptAnswers: (id) => `/quizzes/attempts/${id}/answers`,
     submitAttempt: (id) => `/quizzes/attempts/${id}/submit`,
   },
+  materials: {
+    share: (type, id) => `/materials/${type}/${id}/share`,
+  },
+  share: {
+    view: (token) => `/share/${token}`,
+    copy: (token) => `/share/${token}/copy`,
+  },
   chatbot: {
     conversations: '/chat/conversations',
     messages: '/chat',

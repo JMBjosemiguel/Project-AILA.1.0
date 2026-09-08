@@ -92,6 +92,7 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 | `PORT` | `5000` | Backend listen port. |
 | `APP_URL` | `http://localhost:5173` | Primary allowed CORS origin. |
 | `CORS_ORIGINS` | `http://localhost:5173` | Extra allowed origins, comma-separated. |
+| `APP_TIMEZONE` | `Asia/Manila` | IANA zone for streak "days" + the weekly leaderboard week boundary (no per-user timezone). Unset / invalid → `UTC`. `utils/appTime.js`. |
 | `DB_HOST` / `DB_PORT` | `localhost` / `3306` | MySQL connection. |
 | `DB_USER` / `DB_PASSWORD` | `root` / *(empty)* | XAMPP default credentials. |
 | `DB_NAME` | `aila_db` | Database name. |

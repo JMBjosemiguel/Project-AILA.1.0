@@ -49,6 +49,16 @@ if ((process.env.JWT_SECRET || '').length < 32) {
   fail('JWT_SECRET should be at least 32 characters.');
 }
 
+// APP_TIMEZONE is optional (defaults to UTC) but a typo would silently mean UTC,
+// which the deployer did not intend — so reject an unknown IANA name.
+if (!isMissing('APP_TIMEZONE')) {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: process.env.APP_TIMEZONE });
+  } catch {
+    fail('APP_TIMEZONE must be a valid IANA timezone name (e.g. Asia/Manila), or unset for UTC.');
+  }
+}
+
 if (process.env.STORAGE_DRIVER === 'r2') {
   for (const key of REQUIRED_R2) {
     if (isMissing(key)) fail(`${key} is required when STORAGE_DRIVER=r2.`);

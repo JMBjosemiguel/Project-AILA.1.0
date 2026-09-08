@@ -77,4 +77,11 @@ test('validateDeploymentConfig', async (t) => {
     assert.equal(r.code, 1);
     assert.match(r.out, /R2_SECRET_ACCESS_KEY is required/);
   });
+
+  await t.test('accepts a valid APP_TIMEZONE and rejects an invalid one', () => {
+    assert.equal(run({ APP_TIMEZONE: 'Asia/Manila' }).code, 0);
+    const bad = run({ APP_TIMEZONE: 'Mars/Olympus' });
+    assert.equal(bad.code, 1);
+    assert.match(bad.out, /APP_TIMEZONE must be a valid IANA/);
+  });
 });

@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { notifyUser } = require('./notify');
+const { appDateStr, appYesterdayStr } = require('./appTime');
 
 const XP_PER_LEVEL = 100;
 
@@ -22,10 +23,6 @@ function xpProgress(xp) {
     xpToNextLevel: xpForNextLevel - xpIntoLevel,
     progressPercent: Math.round((xpIntoLevel / xpForNextLevel) * 100),
   };
-}
-
-function toDateStr(value) {
-  return new Date(value).toISOString().slice(0, 10);
 }
 
 function runner(connection) {
@@ -87,7 +84,8 @@ async function awardXpOnce(userId, { eventKey, points, reason }, connection = nu
 }
 
 /**
- * Record that the user did something streak-worthy today (UTC calendar day).
+ * Record that the user did something streak-worthy today (application-timezone
+ * calendar day — see utils/appTime, configured by APP_TIMEZONE).
  *
  * A single INSERT ... ON DUPLICATE KEY UPDATE so it is safe when two qualifying
  * events land in the same transaction window or race concurrently: the
@@ -100,10 +98,9 @@ async function awardXpOnce(userId, { eventKey, points, reason }, connection = nu
 async function touchStreak(userId, connection = null) {
   const run = runner(connection);
 
-  const todayStr = toDateStr(new Date());
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = toDateStr(yesterday);
+  const now = new Date();
+  const todayStr = appDateStr(now);
+  const yesterdayStr = appYesterdayStr(now);
 
   await run(
     `

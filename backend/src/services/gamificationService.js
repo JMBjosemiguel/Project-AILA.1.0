@@ -2,6 +2,7 @@ const ApiError = require('../utils/ApiError');
 const gamificationModel = require('../models/gamificationModel');
 const achievementService = require('./achievementService');
 const { xpProgress } = require('../utils/gamification');
+const { appStartOfWeek, APP_TIMEZONE } = require('../utils/appTime');
 
 const LEADERBOARD_PERIODS = ['weekly', 'all_time'];
 const BOARD_SIZE = 10;
@@ -16,18 +17,16 @@ function displayName(firstName, lastName) {
 }
 
 /**
- * Start of the current leaderboard week: Monday 00:00 UTC.
+ * Start of the current leaderboard week — Monday 00:00 in the application
+ * timezone (APP_TIMEZONE), returned as the equivalent UTC instant so it compares
+ * directly against `xp_events.created_at`.
  *
- * The whole app treats a "day" as a UTC calendar day (see learning_streaks /
- * touchStreak), so the weekly board uses the same clock — no per-user timezone.
- * A student in UTC+8 sees the week roll over at 08:00 local; documented, and the
- * simplest rule that cannot drift between server restarts or DST.
+ * This is the SAME clock the streak uses (see utils/appTime + touchStreak), so a
+ * student never sees "today counted for my streak" and "today didn't count for
+ * the weekly board" disagree.
  */
-function startOfWeekUtc(now = new Date()) {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const daysSinceMonday = (d.getUTCDay() + 6) % 7; // getUTCDay: 0 = Sunday
-  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
-  return d;
+function startOfWeek(now = new Date()) {
+  return appStartOfWeek(now);
 }
 
 // How close a locked achievement is to unlocking, 0..1. Binary achievements
@@ -105,7 +104,7 @@ async function getLeaderboard(userId, period = 'all_time') {
     throw new ApiError(400, 'Unsupported leaderboard period.');
   }
 
-  const weekStart = startOfWeekUtc();
+  const weekStart = startOfWeek();
   const rows = await gamificationModel.leaderboardRows(weekStart);
 
   const periodXp = (r) => (period === 'weekly' ? Number(r.weekly_xp) : Number(r.total_xp));
@@ -138,6 +137,7 @@ async function getLeaderboard(userId, period = 'all_time') {
   return {
     period,
     weekStart: period === 'weekly' ? weekStart.toISOString() : null,
+    timezone: period === 'weekly' ? APP_TIMEZONE : null,
     entries: ranked.slice(0, BOARD_SIZE),
     me,
   };
@@ -148,6 +148,6 @@ module.exports = {
   getAchievements,
   getLeaderboard,
   LEADERBOARD_PERIODS,
-  startOfWeekUtc,
+  startOfWeek,
   displayName,
 };

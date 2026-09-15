@@ -66,13 +66,17 @@ test('resource upload flow (real storage)', async (t) => {
     assert.equal(res.status, 400);
   });
 
-  await t.test('an oversize file is rejected with a friendly 400, not a 500', async () => {
+  await t.test('an oversize file is rejected with a friendly 400, not a 500, and reports the 200 MB limit', async () => {
+    // multer's fileSize check runs during multipart parsing, before the
+    // storage layer is ever reached — an oversize upload is rejected
+    // pre-storage and never touches R2/disk (see uploadResourceFile.js).
     const fd = new FormData();
-    fd.append('file', new Blob([Buffer.alloc(16 * 1024 * 1024, 0x41)], { type: 'image/png' }), 'huge.png');
+    fd.append('file', new Blob([Buffer.alloc(201 * 1024 * 1024, 0x41)], { type: 'image/png' }), 'huge.png');
     const res = await fetch(`${BASE_URL}/resources/upload`, { method: 'POST', headers: { Authorization: `Bearer ${student.token}` }, body: fd });
     assert.equal(res.status, 400);
     const body = await res.json().catch(() => ({}));
     assert.match(body.message || '', /too large/i);
+    assert.match(body.message || '', /200 MB/);
   });
 
   await t.test('unauthenticated upload is rejected', async () => {

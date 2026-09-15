@@ -4,7 +4,7 @@ const multer = require('multer');
 const ApiError = require('../utils/ApiError');
 const { isR2Enabled, UPLOADS_DIR } = require('../services/storageService');
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
 
 const MIME_TO_TYPE = {
   'application/pdf': 'pdf',
@@ -59,4 +59,4 @@ function uploadResourceFile(req, res, next) {
   });
 }
 
-module.exports = { uploadResourceFile, resourceTypeForMimetype, UPLOADS_DIR };
+module.exports = { uploadResourceFile, resourceTypeForMimetype, UPLOADS_DIR, MAX_FILE_SIZE };

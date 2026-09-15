@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Menu } from 'lucide-react';
 import ChatInput from '../../../components/chatbot/ChatInput';
 import ChatSidebar from '../../../components/chatbot/ChatSidebar';
 import MessageBubble, { TypingBubble } from '../../../components/chatbot/MessageBubble';
@@ -61,6 +62,7 @@ export default function AssistantPage({ onNavigate }) {
   const [error, setError] = useState('');
   const [activeChat, setActiveChat] = useState(null);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   // Per-message "Save as Quiz" status, keyed by messageKey(message).
   const [saveQuizStates, setSaveQuizStates] = useState({});
   const toast = useToast();
@@ -177,6 +179,7 @@ export default function AssistantPage({ onNavigate }) {
     setMessages([]);
     setActiveChat(null);
     pendingResourceIdRef.current = null;
+    setChatSidebarOpen(false);
   };
 
   const handleRenameChat = async (id, title) => {
@@ -263,6 +266,7 @@ export default function AssistantPage({ onNavigate }) {
   };
 
   const handleSelectChat = async (id) => {
+    setChatSidebarOpen(false);
     if (id === activeChat) return;
 
     setError('');
@@ -287,11 +291,13 @@ export default function AssistantPage({ onNavigate }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-[calc(100dvh-4rem)]">
       <ChatSidebar
         activeChat={activeChat}
         conversations={data?.conversations ?? []}
         categories={data?.categories ?? []}
+        open={chatSidebarOpen}
+        onClose={() => setChatSidebarOpen(false)}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
         onRenameChat={handleRenameChat}
@@ -299,7 +305,16 @@ export default function AssistantPage({ onNavigate }) {
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-canvas">
-        <div className="flex items-center gap-2.5 px-5 py-3 border-b border-ink-100 bg-white">
+        <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 border-b border-ink-100 bg-white">
+          <button
+            onClick={() => setChatSidebarOpen(true)}
+            aria-label="Open conversation list"
+            aria-expanded={chatSidebarOpen}
+            aria-controls="chat-sidebar-nav"
+            className="md:hidden w-8 h-8 -ml-1 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 flex-shrink-0"
+          >
+            <Menu size={18} />
+          </button>
           <AilaOrb size={26} pulse />
           <span className="text-sm font-semibold text-ink-800">AILA</span>
           <span className="text-xs text-ink-400 font-medium">Online</span>

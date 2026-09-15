@@ -12,6 +12,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
 
   return (
     <aside
+      id="student-sidebar-nav"
       className={[
         'fixed lg:static top-0 left-0 bottom-0 z-[100] w-64 flex-shrink-0',
         'bg-white border-r border-ink-100 flex flex-col transition-transform duration-300',
@@ -26,7 +27,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
             <div className="text-[0.65rem] text-ink-400 font-medium">Learning Assistant</div>
           </div>
         </div>
-        <button onClick={onClose} className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50">
+        <button onClick={onClose} aria-label="Close menu" className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50">
           <X size={16} />
         </button>
       </div>

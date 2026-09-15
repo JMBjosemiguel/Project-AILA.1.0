@@ -324,3 +324,65 @@ describe('AssistantPage — chatbot mini-quiz state', () => {
     expect(toastSuccess).toHaveBeenCalled();
   });
 });
+
+describe('AssistantPage — mobile conversation-list drawer', () => {
+  // Earlier tests in this file permanently overwrite the shared `historyFor`
+  // fixture (e.g. line 261) without restoring it — reset Chat A/B back to
+  // known plain-text content here so these tests don't depend on file order.
+  beforeEach(() => {
+    historyFor[1] = { messages: [
+      { sender: 'user', text: 'hi from A', type: 'text', data: null },
+      { sender: 'bot', text: 'A history reply', type: 'text', data: null },
+    ] };
+    historyFor[2] = { messages: [
+      { sender: 'user', text: 'hi from B', type: 'text', data: null },
+      { sender: 'bot', text: 'B history reply', type: 'text', data: null },
+    ] };
+  });
+
+  it('opens via the header hamburger button and closes via the sidebar close button', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    const menuButton = screen.getByRole('button', { name: /open conversation list/i });
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(menuButton);
+    expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(screen.getByRole('button', { name: /close conversation list/i }));
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes when a conversation is selected', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /open conversation list/i }));
+    await openChat(user, 'Chat A');
+    await waitFor(() => screen.getByText('A history reply'));
+
+    expect(screen.getByRole('button', { name: /open conversation list/i })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes when "New chat" is pressed', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /open conversation list/i }));
+    await user.click(screen.getByRole('button', { name: /New chat/i }));
+
+    expect(screen.getByRole('button', { name: /open conversation list/i })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('locks background scroll while open and restores it on close', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    expect(document.body.style.overflow).not.toBe('hidden');
+    await user.click(screen.getByRole('button', { name: /open conversation list/i }));
+    expect(document.body.style.overflow).toBe('hidden');
+    await user.click(screen.getByRole('button', { name: /close conversation list/i }));
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+});

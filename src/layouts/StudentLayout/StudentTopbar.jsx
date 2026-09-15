@@ -3,7 +3,7 @@ import { STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoute
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationsData } from '../../hooks/useNotificationsData';
 
-export default function StudentTopbar({ active, onMenuClick, onNavigate }) {
+export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
   const route = STUDENT_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
@@ -12,7 +12,13 @@ export default function StudentTopbar({ active, onMenuClick, onNavigate }) {
 
   return (
     <header className="sticky top-0 z-40 h-16 flex items-center gap-4 px-4 lg:px-8 bg-white/80 backdrop-blur-md border-b border-ink-100">
-      <button onClick={onMenuClick} className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50">
+      <button
+        onClick={onMenuClick}
+        aria-label="Open navigation menu"
+        aria-expanded={sidebarOpen}
+        aria-controls="student-sidebar-nav"
+        className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50"
+      >
         <Menu size={18} />
       </button>
 

@@ -23,9 +23,9 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
   };
 
   return (
-    <div className="px-4 lg:px-6 pb-5 pt-2">
+    <div className="px-4 lg:px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2">
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <button
             type="button"
             onClick={() => useTemplate('Generate a 10-item multiple choice quiz about ')}

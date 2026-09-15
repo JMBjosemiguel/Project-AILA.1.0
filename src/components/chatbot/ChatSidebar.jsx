@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import EmptyState from '../common/EmptyState';
+import { useMobileDrawer } from '../../hooks/useMobileDrawer';
 
 export default function ChatSidebar({
   activeChat,
   conversations = [],
   categories = [],
+  open,
+  onClose,
   onSelectChat,
   onNewChat,
   onRenameChat,
   onDeleteChat,
 }) {
   const [search, setSearch] = useState('');
+  useMobileDrawer(open, onClose);
 
   const filteredConversations = search.trim()
     ? conversations.filter((conversation) =>
@@ -20,61 +24,81 @@ export default function ChatSidebar({
     : conversations;
 
   return (
-    <div className="hidden md:flex flex-col w-64 flex-shrink-0 border-r border-ink-100 bg-white p-3 gap-4 overflow-y-auto scrollbar-thin">
-      <button
-        onClick={onNewChat}
-        className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 hover:bg-primary-600 transition-colors"
-      >
-        <Plus size={16} /> New chat
-      </button>
-
-      {conversations.length > 0 && (
-        <div className="flex items-center gap-2 bg-canvas border border-ink-100 rounded-xl px-2.5 py-1.5">
-          <Search size={13} className="text-ink-400 flex-shrink-0" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search chats..."
-            className="flex-1 min-w-0 bg-transparent outline-none text-xs text-ink-800 placeholder:text-ink-400"
-          />
-        </div>
+    <>
+      {open && (
+        <div className="fixed inset-0 bg-ink-800/40 z-[90] md:hidden" onClick={onClose} aria-hidden="true" />
       )}
-
-      <div>
-        <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">Conversations</div>
-        <div className="flex flex-col gap-0.5">
-          {filteredConversations.length ? filteredConversations.map((conversation) => (
-            <ChatItem
-              key={conversation.id}
-              chat={conversation}
-              active={activeChat === conversation.id}
-              onClick={() => onSelectChat(conversation.id)}
-              onRename={onRenameChat}
-              onDelete={onDeleteChat}
-            />
-          )) : (
-            <EmptyState
-              title={search ? 'No matches' : 'No conversations'}
-              message={search ? 'Try a different search term.' : 'Start a new chat to begin talking with AILA.'}
-              className="py-6"
-            />
-          )}
+      <div
+        id="chat-sidebar-nav"
+        className={[
+          'fixed md:static top-0 left-0 bottom-0 z-[100] md:z-auto w-72 md:w-64 flex-shrink-0',
+          'flex flex-col md:flex border-r border-ink-100 bg-white p-3 gap-4 overflow-y-auto scrollbar-thin',
+          'transition-transform duration-300',
+          open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        ].join(' ')}
+      >
+        <div className="flex items-center justify-between md:hidden">
+          <span className="text-sm font-semibold text-ink-800">Conversations</span>
+          <button onClick={onClose} aria-label="Close conversation list" className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50">
+            <X size={16} />
+          </button>
         </div>
-      </div>
 
-      {categories.length > 0 && (
+        <button
+          onClick={onNewChat}
+          className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 hover:bg-primary-600 transition-colors"
+        >
+          <Plus size={16} /> New chat
+        </button>
+
+        {conversations.length > 0 && (
+          <div className="flex items-center gap-2 bg-canvas border border-ink-100 rounded-xl px-2.5 py-1.5">
+            <Search size={13} className="text-ink-400 flex-shrink-0" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search chats..."
+              className="flex-1 min-w-0 bg-transparent outline-none text-xs text-ink-800 placeholder:text-ink-400"
+            />
+          </div>
+        )}
+
         <div>
-          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">By category</div>
+          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">Conversations</div>
           <div className="flex flex-col gap-0.5">
-            {categories.map((category) => (
-              <div key={category.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-ink-600 hover:bg-ink-50 cursor-pointer transition-colors">
-                {category.name}
-              </div>
-            ))}
+            {filteredConversations.length ? filteredConversations.map((conversation) => (
+              <ChatItem
+                key={conversation.id}
+                chat={conversation}
+                active={activeChat === conversation.id}
+                onClick={() => onSelectChat(conversation.id)}
+                onRename={onRenameChat}
+                onDelete={onDeleteChat}
+              />
+            )) : (
+              <EmptyState
+                title={search ? 'No matches' : 'No conversations'}
+                message={search ? 'Try a different search term.' : 'Start a new chat to begin talking with AILA.'}
+                className="py-6"
+              />
+            )}
           </div>
         </div>
-      )}
-    </div>
+
+        {categories.length > 0 && (
+          <div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">By category</div>
+            <div className="flex flex-col gap-0.5">
+              {categories.map((category) => (
+                <div key={category.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-ink-600 hover:bg-ink-50 cursor-pointer transition-colors">
+                  {category.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -173,7 +197,8 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
         <MessageSquare size={14} className="flex-shrink-0" />
         <span className="truncate">{label}</span>
       </button>
-      <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+      {/* Always visible below md (no hover on touch devices); hover-revealed at md+ to match desktop. */}
+      <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 flex-shrink-0">
         <button
           onClick={startEdit}
           className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-primary hover:bg-white"

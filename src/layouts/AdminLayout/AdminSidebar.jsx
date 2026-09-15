@@ -10,6 +10,7 @@ export default function AdminSidebar({ active, onNavigate, open, onClose }) {
 
   return (
     <aside
+      id="admin-sidebar-nav"
       className={[
         'fixed lg:static top-0 left-0 bottom-0 z-[100] w-64 flex-shrink-0',
         'bg-ink-900 text-white flex flex-col transition-transform duration-300',
@@ -24,7 +25,7 @@ export default function AdminSidebar({ active, onNavigate, open, onClose }) {
             <div className="text-[0.65rem] text-white/45 font-medium">Control Portal</div>
           </div>
         </div>
-        <button onClick={onClose} className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:bg-white/10">
+        <button onClick={onClose} aria-label="Close menu" className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:bg-white/10">
           <X size={16} />
         </button>
       </div>

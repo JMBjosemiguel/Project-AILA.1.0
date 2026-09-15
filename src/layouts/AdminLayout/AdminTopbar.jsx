@@ -2,14 +2,20 @@ import { Command, LogOut, Menu, Search } from 'lucide-react';
 import { ADMIN_ROUTES } from '../../app/routes/adminRoutes';
 import { useAuth } from '../../contexts/AuthContext';
 
-export default function AdminTopbar({ active, onMenuClick, onNavigate }) {
+export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
   const route = ADMIN_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
 
   return (
     <header className="sticky top-0 z-40 h-16 flex items-center gap-4 px-4 lg:px-8 bg-white/90 backdrop-blur-md border-b border-ink-100">
-      <button onClick={onMenuClick} className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50">
+      <button
+        onClick={onMenuClick}
+        aria-label="Open navigation menu"
+        aria-expanded={sidebarOpen}
+        aria-controls="admin-sidebar-nav"
+        className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50"
+      >
         <Menu size={18} />
       </button>
 

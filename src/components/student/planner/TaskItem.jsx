@@ -54,7 +54,7 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit, onDuplicate
           </span>
         )}
         {task.difficulty && (
-          <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full capitalize bg-ink-50 text-ink-500">
+          <span className="hidden sm:inline-flex text-[0.65rem] font-bold px-2 py-0.5 rounded-full capitalize bg-ink-50 text-ink-500">
             {task.difficulty}
           </span>
         )}

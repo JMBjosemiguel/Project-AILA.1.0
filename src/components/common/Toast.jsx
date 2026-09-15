@@ -31,14 +31,14 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-5 right-5 z-[200] flex flex-col gap-2 items-end pointer-events-none">
+      <div className="fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5 right-5 sm:left-auto z-[200] flex flex-col gap-2 items-end pointer-events-none">
         {toasts.map((item) => {
           const meta = VARIANT_STYLE[item.variant] || VARIANT_STYLE.success;
           const Icon = meta.icon;
           return (
             <div
               key={item.id}
-              className="pointer-events-auto flex items-center gap-2.5 bg-white border border-ink-100 rounded-xl shadow-card px-4 py-3 max-w-sm animate-fadeUp"
+              className="pointer-events-auto flex items-center gap-2.5 bg-white border border-ink-100 rounded-xl shadow-card px-4 py-3 w-full sm:w-auto max-w-sm animate-fadeUp"
             >
               <Icon size={16} className={`flex-shrink-0 ${meta.iconColor}`} />
               <span className="text-sm text-ink-800 flex-1">{item.message}</span>

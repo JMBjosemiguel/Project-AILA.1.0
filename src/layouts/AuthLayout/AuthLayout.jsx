@@ -67,13 +67,13 @@ export default function AuthLayout({ title, subtitle, children }) {
             </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-10"> 
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-10">
         <div className="w-full max-w-[400px]">
           <div className="lg:hidden flex items-center gap-2.5 justify-center mb-8">
             <AilaOrb size={30} />
             <span className="font-display font-bold text-ink-800">AILA</span>
           </div>
-          <div className="bg-white border border-ink-100 rounded-2xl shadow-card p-8">
+          <div className="bg-white border border-ink-100 rounded-2xl shadow-card p-5 sm:p-8">
             <div className="mb-6">
               <h2 className="font-display text-xl font-bold text-ink-800">{title}</h2>
               {subtitle && <p className="text-sm text-ink-400 mt-1">{subtitle}</p>}

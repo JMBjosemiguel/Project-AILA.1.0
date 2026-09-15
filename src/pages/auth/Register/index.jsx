@@ -134,7 +134,7 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
   return (
     <AuthLayout title="Create your account" subtitle="Set up your student profile">
       <form className="flex flex-col gap-4" onSubmit={submit}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <AuthInput label="First name" icon={User} placeholder="First name" value={form.first_name} onChange={update('first_name')} />
           <AuthInput label="Last name" placeholder="Last name" value={form.last_name} onChange={update('last_name')} />
         </div>
@@ -143,7 +143,7 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
         <AuthInput label="Student number" icon={Hash} placeholder="Optional" value={form.student_number} onChange={update('student_number')} />
         <AuthInput label="Program" icon={GraduationCap} placeholder="Optional" value={form.program} onChange={update('program')} />
 
-        <div className="grid grid-cols-[1fr_96px] gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-3">
           <AuthInput
             label="Password"
             icon={Lock}

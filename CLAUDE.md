@@ -105,7 +105,7 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 | `JWT_EXPIRES_IN` | `1d` | Token lifetime. |
 | `BCRYPT_SALT_ROUNDS` | `10` | Password hashing cost. |
 | `GEMINI_API_KEY` | **`REPLACE_ME`** | Google Gemini key — **required for all AI features** (chat, course/quiz/study-tool generation). AI endpoints return 503 until set; the rest of the app runs fine without it. |
-| `GEMINI_MODEL` | `gemini-3.5-flash` | Model id. Use a **pinned** version, not a `-latest` alias — the shared aliases get capacity-throttled (503). |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Model id. Use a **pinned** version, not a `-latest` alias — the shared aliases get capacity-throttled (503). `geminiClient.js` detects a `gemini-3*` id and speaks the Gemini 3 `generationConfig` dialect (`thinkingConfig.thinkingLevel`, no `temperature` override); an older model id falls back to the pre-3 dialect (`thinkingBudget`, caller's `temperature` honored). |
 | `GEMINI_TIMEOUT_MS` | `30000` | Per-request budget (one transient-5xx retry fits inside it). |
 | `STORAGE_DRIVER` | `local` | `local` = files in `backend/uploads/`; `r2` = Cloudflare R2 (needs the `R2_*` vars). |
 | `R2_*` | *(blank)* | Only read when `STORAGE_DRIVER=r2`. |
@@ -207,7 +207,18 @@ R2. Stored paths look like `/resources/<file>` (local) or `r2://resources/...` (
 
 **AI.** `services/geminiClient.js` is the only thing that calls Gemini (REST, keyed by
 `GEMINI_API_KEY`). Higher-level `aiService`, `courseGenerationService`, `quizService`,
-`aiStudyToolsService` build prompts. All AI routes sit behind `aiRateLimiter` (20 req / 5 min).
+`aiStudyToolsService` build prompts. All AI routes sit behind `aiRateLimiter` (30 req / 5 min,
+per user).
+
+**Chat intent.** The chatbot does not trigger quiz/flashcard generation off the literal word
+"quiz" — `chatIntentService.classifyIntent()` decides REQUEST_QUIZ / REQUEST_FLASHCARDS /
+NORMAL_CHAT (plus a few chat-only categories) via a cheap `utils/chatIntent.js` pre-filter
+(skips the Gemini call entirely for messages that don't mention quiz/flashcards) backed by a
+low-reasoning structured Gemini classification for anything that does. A quiz is only ever
+generated when intent is explicit AND a topic is known with reasonable confidence; otherwise
+AILA asks a clarification question and the answer is tracked via
+`chat_conversations.pending_intent` (migration 009) — conversation-scoped, so it can never leak
+across conversations or students, same as every other chat table.
 
 **Pre-deploy checks.** `npm run validate:deployment` (both halves) enforces production env
 rules — HTTPS `VITE_API_URL`, `NODE_ENV=production`, secret length, R2 vars when `STORAGE_DRIVER=r2`.

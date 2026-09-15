@@ -19,11 +19,12 @@ state (a fresh install already includes every migration). These files are for an
 | 006 | `006_gamification.sql` | 6 | `user_profiles` | `achievements`, `user_achievements` |
 | 007 | `007_chat_quiz_provenance.sql` | 7 | `quizzes` | — |
 | 008 | `008_email_verification.sql` | 8 | `users` | `email_verification_tokens` |
+| 009 | `009_chat_pending_intent.sql` | 9 | `chat_conversations` | — |
 
 Rehearsed end-to-end against a fresh copy of the `v1.0.0` production schema:
-43 tables → 48 tables, every migration applies with no error, all expected
-columns / indexes / seeded rows present, `indexes.sql` + `constraints.sql` re-run
-clean afterwards.
+43 tables → 48 tables (009 adds a column, not a table), every migration applies
+with no error, all expected columns / indexes / seeded rows present,
+`indexes.sql` + `constraints.sql` re-run clean afterwards.
 
 ## Apply-once, not re-runnable — and that's intentional
 

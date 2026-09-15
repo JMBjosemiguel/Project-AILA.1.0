@@ -85,9 +85,8 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
     systemInstruction,
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     generationConfig: {
-      temperature: 0.6,
       maxOutputTokens: 3072,
-      thinkingConfig: { thinkingBudget: 0 },
+      reasoningLevel: 'medium',
       responseMimeType: 'application/json',
       responseSchema: ROADMAP_SCHEMA,
     },
@@ -198,9 +197,8 @@ async function runLessonGeneration(lesson, context) {
     systemInstruction,
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     generationConfig: {
-      temperature: 0.6,
       maxOutputTokens: 2048,
-      thinkingConfig: { thinkingBudget: 0 },
+      reasoningLevel: 'medium',
     },
   });
 

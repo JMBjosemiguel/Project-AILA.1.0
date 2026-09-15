@@ -105,13 +105,39 @@ async function deleteConversationForUser(conversationId, userId) {
   return result.affectedRows;
 }
 
+function parsePendingIntent(raw) {
+  if (!raw) return null;
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return null;
+  }
+}
+
 async function getConversationForUser(conversationId, userId) {
   const rows = await query(
-    'SELECT id, user_id, title, started_at, resource_id FROM chat_conversations WHERE id = ? AND user_id = ? LIMIT 1',
+    'SELECT id, user_id, title, started_at, resource_id, pending_intent FROM chat_conversations WHERE id = ? AND user_id = ? LIMIT 1',
     [conversationId, userId]
   );
 
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  return { ...rows[0], pending_intent: parsePendingIntent(rows[0].pending_intent) };
+}
+
+// Persists (or clears, with intent=null) the "waiting for a topic answer"
+// clarification state for one conversation. Scoped by conversation id alone
+// is safe here because every caller already reached this conversation
+// through getConversationForUser's user_id-scoped lookup first.
+async function setPendingIntent(conversationId, intent, connection = null) {
+  const sql = 'UPDATE chat_conversations SET pending_intent = ? WHERE id = ?';
+  const params = [intent ? JSON.stringify(intent) : null, conversationId];
+
+  if (connection) {
+    await connection.execute(sql, params);
+    return;
+  }
+
+  await query(sql, params);
 }
 
 async function getMessagesForConversation(conversationId) {
@@ -239,6 +265,7 @@ module.exports = {
   getConversationForUser,
   getMessagesForConversation,
   getQuizMessageForUser,
+  setPendingIntent,
   listConversationUsersAdmin,
   listConversationsForUserAdmin,
   getConversationAdmin,

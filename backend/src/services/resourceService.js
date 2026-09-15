@@ -73,9 +73,8 @@ async function analyzeText(extractedText) {
       }],
     }],
     generationConfig: {
-      temperature: 0.4,
       maxOutputTokens: 512,
-      thinkingConfig: { thinkingBudget: 0 },
+      reasoningLevel: 'low',
       responseMimeType: 'application/json',
       responseSchema: ANALYSIS_SCHEMA,
     },
@@ -100,9 +99,8 @@ async function analyzeImage(buffer, mimetype) {
       ],
     }],
     generationConfig: {
-      temperature: 0.4,
       maxOutputTokens: 768,
-      thinkingConfig: { thinkingBudget: 0 },
+      reasoningLevel: 'low',
       responseMimeType: 'application/json',
       responseSchema: IMAGE_ANALYSIS_SCHEMA,
     },

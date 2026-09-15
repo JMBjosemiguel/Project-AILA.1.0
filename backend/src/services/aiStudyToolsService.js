@@ -43,7 +43,7 @@ async function generateObjectivesPreview(topic, difficulty = 'medium') {
 
   const payload = await callGemini({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.5, maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } },
+    generationConfig: { maxOutputTokens: 400, reasoningLevel: 'low' },
   });
 
   return getResponseText(payload);

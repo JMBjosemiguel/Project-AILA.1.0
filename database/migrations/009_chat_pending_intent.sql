@@ -1,0 +1,46 @@
+-- Migration 009 — chatbot quiz-intent clarification state
+--
+-- Purpose:  AILA no longer generates a quiz just because a chat message
+--           contains the word "quiz" (see chatIntentService.js). When the
+--           student clearly wants a quiz/flashcards but no topic is known
+--           yet, AILA asks a clarification question instead of guessing —
+--           this column is where that "waiting for a topic answer" state
+--           lives, so the student's very next message can be understood as
+--           the answer.
+--
+-- Changes (additive — nothing renamed, nothing dropped):
+--
+--   chat_conversations
+--     + pending_intent JSON NULL DEFAULT NULL
+--         NULL = no clarification is pending (the normal state). Set right
+--         after AILA asks "what topic?" to
+--         {"type":"quiz"|"flashcards","quizType":...,"itemCount":...,
+--          "difficulty":...,"candidateTopics":[...]}; cleared back to NULL as
+--         soon as it is resolved (a quiz/flashcards is generated) or a fresh,
+--         unrelated message supersedes it.
+--
+-- Preserves: every conversation, every message, every existing chat. A
+--   conversation with no pending clarification (the common case, and every
+--   row that already exists) behaves exactly as before — pending_intent is
+--   simply NULL and ignored.
+--
+-- Compatibility: MariaDB 10.4+ and MySQL 8.4. Apply ONCE. Preflight:
+--   `chat_conversations.pending_intent` must NOT already exist.
+--
+-- Preflight (record; must match afterwards):
+--   SELECT COUNT(*) FROM information_schema.columns
+--     WHERE table_schema = DATABASE() AND table_name = 'chat_conversations'
+--       AND column_name = 'pending_intent';   -- expect 0 before, 1 after
+--
+-- Apply (local dev only — never against Aiven in this batch):
+--   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/009_chat_pending_intent.sql
+--
+-- Verify:
+--   SHOW COLUMNS FROM chat_conversations LIKE 'pending_intent';  -- 1 row, NULL default
+--   SELECT COUNT(*) FROM chat_conversations WHERE pending_intent IS NOT NULL;  -- expect 0 right after migration
+--
+-- Rollback:
+--   ALTER TABLE chat_conversations DROP COLUMN pending_intent;
+
+ALTER TABLE chat_conversations
+  ADD COLUMN pending_intent JSON NULL DEFAULT NULL AFTER resource_id;

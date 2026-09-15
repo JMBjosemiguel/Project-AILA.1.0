@@ -32,9 +32,67 @@ test('geminiClient', async (t) => {
     global.fetch = async (url) => { calledUrl = String(url); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
     const client = loadClient({ model: undefined });
     return client.callGemini(CHAT_ARGS).then(() => {
-      assert.match(calledUrl, /\/models\/gemini-3\.5-flash:generateContent/);
+      assert.match(calledUrl, /\/models\/gemini-3\.8-flash:generateContent/);
       assert.doesNotMatch(calledUrl, /-latest/);
     });
+  });
+
+  await t.test('GEMINI_MODEL stays configurable via env', () => {
+    let calledUrl = '';
+    global.fetch = async (url) => { calledUrl = String(url); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-2.5-pro' });
+    return client.callGemini(CHAT_ARGS).then(() => {
+      assert.match(calledUrl, /\/models\/gemini-2\.5-pro:generateContent/);
+    });
+  });
+
+  await t.test('reasoningLevel resolves to thinkingConfig.thinkingLevel for a gemini-3.x model', async () => {
+    let sentBody = null;
+    global.fetch = async (url, opts) => { sentBody = JSON.parse(opts.body); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-3.8-flash' });
+    await client.callGemini({ contents: CHAT_ARGS.contents, generationConfig: { reasoningLevel: 'low', maxOutputTokens: 100 } });
+    assert.deepEqual(sentBody.generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+    assert.equal('thinkingBudget' in (sentBody.generationConfig.thinkingConfig || {}), false);
+  });
+
+  await t.test('reasoningLevel resolves to thinkingConfig.thinkingBudget for a pre-3 model', async () => {
+    let sentBody = null;
+    global.fetch = async (url, opts) => { sentBody = JSON.parse(opts.body); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-2.5-flash' });
+    await client.callGemini({ contents: CHAT_ARGS.contents, generationConfig: { reasoningLevel: 'medium', maxOutputTokens: 100 } });
+    assert.deepEqual(sentBody.generationConfig.thinkingConfig, { thinkingBudget: 512 });
+  });
+
+  await t.test('never sends both thinkingLevel and thinkingBudget in the same request', async () => {
+    let sentBody = null;
+    global.fetch = async (url, opts) => { sentBody = JSON.parse(opts.body); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-3.8-flash' });
+    await client.callGemini({ contents: CHAT_ARGS.contents, generationConfig: { reasoningLevel: 'medium' } });
+    const keys = Object.keys(sentBody.generationConfig.thinkingConfig);
+    assert.deepEqual(keys, ['thinkingLevel']);
+  });
+
+  await t.test('a caller-supplied temperature is dropped for a gemini-3.x model (vendor "keep at default 1.0" guidance)', async () => {
+    let sentBody = null;
+    global.fetch = async (url, opts) => { sentBody = JSON.parse(opts.body); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-3.8-flash' });
+    await client.callGemini({ contents: CHAT_ARGS.contents, generationConfig: { temperature: 0.6, maxOutputTokens: 100 } });
+    assert.equal('temperature' in sentBody.generationConfig, false);
+  });
+
+  await t.test('a caller-supplied temperature IS forwarded for a pre-3 model', async () => {
+    let sentBody = null;
+    global.fetch = async (url, opts) => { sentBody = JSON.parse(opts.body); return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }); };
+    const client = loadClient({ model: 'gemini-2.5-flash' });
+    await client.callGemini({ contents: CHAT_ARGS.contents, generationConfig: { temperature: 0.6, maxOutputTokens: 100 } });
+    assert.equal(sentBody.generationConfig.temperature, 0.6);
+  });
+
+  await t.test('isGemini3Model correctly identifies gemini-3.x model ids', () => {
+    const client = loadClient({ model: 'gemini-3.8-flash' });
+    assert.equal(client.isGemini3Model(), true);
+    const older = loadClient({ model: 'gemini-2.5-flash' });
+    assert.equal(older.isGemini3Model(), false);
   });
 
   await t.test('retries once on a 503 then succeeds', async () => {

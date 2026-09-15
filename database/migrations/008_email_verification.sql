@@ -18,12 +18,26 @@
 --       id          BIGINT UNSIGNED PK
 --       user_id     BIGINT UNSIGNED, FK -> users(id) ON DELETE CASCADE
 --       token_hash  CHAR(64) NOT NULL    -- sha256 hex digest, UNIQUE
---       expires_at  TIMESTAMP NOT NULL   -- ~30 minutes after issue
---       used_at     TIMESTAMP NULL       -- set once consumed; NULL = still usable
---       created_at  TIMESTAMP
+--       expires_at  DATETIME NOT NULL    -- ~30 minutes after issue; app-supplied
+--                                        -- only, never touched again by MySQL
+--       used_at     DATETIME NULL        -- set once consumed; NULL = still usable
+--       created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP  -- insert-time only
 --     Issuing a new token for a user marks that user's other still-active
 --     tokens as used (application-layer, in emailVerificationModel) so only the
 --     newest link ever works — this is a supersede, not a second valid link.
+--
+--     expires_at / used_at are DATETIME, not TIMESTAMP: a bare
+--     `TIMESTAMP NOT NULL` column with no explicit DEFAULT/ON UPDATE is, on
+--     this server, silently upgraded by legacy MySQL/MariaDB timestamp
+--     auto-initialization to `DEFAULT CURRENT_TIMESTAMP ON UPDATE
+--     CURRENT_TIMESTAMP` — so any later UPDATE to the row (e.g. marking
+--     used_at) would have silently overwritten expires_at with "now". DATETIME
+--     has no such auto-init/auto-update behavior at the MySQL level, so these
+--     columns only ever change when application code sets them explicitly.
+--     created_at keeps TIMESTAMP + an *explicit* DEFAULT CURRENT_TIMESTAMP
+--     (no ON UPDATE clause given) — explicit defaults are exempted from the
+--     auto-init quirk, and this matches every other created_at column in the
+--     schema.
 --
 -- Existing-user policy (do not break current accounts):
 --   Every row that already exists at migration time is backfilled as already
@@ -49,7 +63,10 @@
 --
 -- Verify:
 --   SHOW COLUMNS FROM users LIKE 'email_verified_at';                 -- 1 row, NULL default
---   SHOW CREATE TABLE email_verification_tokens;                     -- table exists
+--   SHOW CREATE TABLE email_verification_tokens;                     -- table exists;
+--                                                                     -- expires_at / used_at show as
+--                                                                     -- `datetime`, NEITHER has an
+--                                                                     -- "ON UPDATE CURRENT_TIMESTAMP" clause
 --   SELECT COUNT(*) FROM users WHERE email_verified_at IS NULL;      -- expect 0 right after migration
 --                                                                     -- (every pre-existing row was backfilled)
 --
@@ -71,8 +88,8 @@ CREATE TABLE email_verification_tokens (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL,
-  expires_at TIMESTAMP NOT NULL,
-  used_at TIMESTAMP NULL DEFAULT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_email_verification_tokens_token_hash (token_hash),

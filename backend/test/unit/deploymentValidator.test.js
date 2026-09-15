@@ -84,4 +84,49 @@ test('validateDeploymentConfig', async (t) => {
     assert.equal(bad.code, 1);
     assert.match(bad.out, /APP_TIMEZONE must be a valid IANA/);
   });
+
+  await t.test('EMAIL_DRIVER unset defaults to console and passes (no SMTP vars required)', () => {
+    const r = run();
+    assert.equal(r.code, 0, r.out);
+  });
+
+  await t.test('rejects an unrecognised EMAIL_DRIVER', () => {
+    const r = run({ EMAIL_DRIVER: 'sendgrid' });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /EMAIL_DRIVER must be either console or smtp/);
+  });
+
+  await t.test('EMAIL_DRIVER=smtp requires SMTP_HOST / SMTP_USER / SMTP_PASSWORD / EMAIL_FROM', () => {
+    const r = run({ EMAIL_DRIVER: 'smtp' });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /SMTP_HOST is required when EMAIL_DRIVER=smtp/);
+    assert.match(r.out, /SMTP_USER is required when EMAIL_DRIVER=smtp/);
+    assert.match(r.out, /SMTP_PASSWORD is required when EMAIL_DRIVER=smtp/);
+    assert.match(r.out, /EMAIL_FROM is required when EMAIL_DRIVER=smtp/);
+  });
+
+  await t.test('passes with EMAIL_DRIVER=smtp and all SMTP vars present', () => {
+    const r = run({
+      EMAIL_DRIVER: 'smtp',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'apikey',
+      SMTP_PASSWORD: 'placeholder',
+      EMAIL_FROM: 'AILA <no-reply@example.com>',
+      SMTP_PORT: '587',
+    });
+    assert.equal(r.code, 0, r.out);
+  });
+
+  await t.test('rejects a non-numeric SMTP_PORT', () => {
+    const r = run({
+      EMAIL_DRIVER: 'smtp',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'apikey',
+      SMTP_PASSWORD: 'placeholder',
+      EMAIL_FROM: 'AILA <no-reply@example.com>',
+      SMTP_PORT: 'not-a-port',
+    });
+    assert.equal(r.code, 1);
+    assert.match(r.out, /SMTP_PORT must be a number/);
+  });
 });

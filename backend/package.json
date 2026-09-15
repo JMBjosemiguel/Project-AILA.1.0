@@ -33,6 +33,7 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "mysql2": "^3.22.6",
+    "nodemailer": "^10.0.10",
     "officeparser": "^6.0.7",
     "pdf-parse": "^1.1.1",
     "validator": "^13.15.35"

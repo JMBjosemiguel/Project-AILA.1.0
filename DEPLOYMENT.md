@@ -76,16 +76,22 @@ For migrating existing local data:
 
 `production_schema.sql` is the *destination* schema. A database already running
 v1.0.0 must instead apply the ordered, additive migrations in
-`database/migrations/` — `001` through `007` — **in order, once each**. Full
+`database/migrations/` — `001` through `008` — **in order, once each**. Full
 per-migration preflight → apply → verify → rollback checklist and STOP
 conditions are in `database/migrations/README.md`.
 
-- All seven migrations are additive (new tables + nullable columns + indexes).
+- All eight migrations are additive (new tables + nullable columns + indexes).
   v1.0.0 application code keeps working against the migrated schema, so the
   database can be migrated **before** the new backend is deployed.
 - After migration `006`, run the achievement reconciliation **once**
   (`node -e "require('./backend/src/services/achievementService').reconcileAllUsers()..."`)
   to grant already-earned historical achievements — no bonus XP, no notifications.
+- Migration `008` (email verification) backfills every existing user's
+  `email_verified_at` to their `created_at` as part of the migration itself —
+  no separate reconciliation step needed, and no existing account is locked
+  out of login. Set `EMAIL_DRIVER=smtp` (see Environment Variables below)
+  before deploying, or new registrations will be created but never receive an
+  actual verification email (the `console` default only logs it server-side).
 - Take an Aiven snapshot/backup immediately before starting.
 
 ## 5. Cloudflare R2 Setup
@@ -148,6 +154,14 @@ PORT=5000
 APP_URL=https://your-cloudflare-pages-site.pages.dev
 CORS_ORIGINS=https://your-cloudflare-pages-site.pages.dev
 APP_TIMEZONE=Asia/Manila
+
+EMAIL_DRIVER=smtp                      # 'console' (default, logs only) or 'smtp' — use smtp in production so verification email actually sends
+EMAIL_FROM=AILA <no-reply@your-domain.example>
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_SECURE=false                      # true if your provider needs implicit TLS (usually port 465)
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
 
 DB_HOST=your-aiven-host                # e.g. project-aila-xxx.a.aivencloud.com
 DB_PORT=your-aiven-port                # Aiven assigns a custom port, NOT 3306
@@ -228,22 +242,25 @@ Run these checks before sharing the public URL:
 2. Refresh works on `/student/dashboard`.
 3. Refresh works on `/admin`.
 4. Backend `/health` returns JSON status.
-5. Registration creates a student account.
-6. Login returns a JWT and restores session.
-7. Student cannot access `/api/admin/dashboard`.
-8. Student A cannot open Student B lessons by id.
-9. Student A cannot download Student B resources by id.
-10. QA can upload PDF/DOC/DOCX/PPT/PPTX/image resources.
-11. QA can open/download uploaded files.
-12. File object is stored in R2, not Render local disk.
-13. Resource delete removes or hides the database row and deletes the storage object.
-14. Gemini chat works from the deployed backend.
-15. Course generation works.
-16. Planner create/update/delete works.
-17. Quiz generation and submission works.
-18. Admin account can list users/resources/courses.
-19. Admin can open/download a student resource.
-20. No secrets appear in browser devtools bundled JavaScript.
+5. Registration creates a student account (unverified) and shows the "Check your email" screen.
+6. The verification email actually arrives (confirms `EMAIL_DRIVER=smtp` + SMTP vars are correct, not just `console`-logged).
+7. Clicking the emailed link (`APP_URL/verify-email?token=...`) shows "Email verified successfully." and login now succeeds.
+8. Logging in before clicking the link is blocked with the "please verify your email" message, and "Resend verification email" works from both the login and registration screens.
+9. Login returns a JWT and restores session.
+10. Student cannot access `/api/admin/dashboard`.
+11. Student A cannot open Student B lessons by id.
+12. Student A cannot download Student B resources by id.
+13. QA can upload PDF/DOC/DOCX/PPT/PPTX/image resources.
+14. QA can open/download uploaded files.
+15. File object is stored in R2, not Render local disk.
+16. Resource delete removes or hides the database row and deletes the storage object.
+17. Gemini chat works from the deployed backend.
+18. Course generation works.
+19. Planner create/update/delete works.
+20. Quiz generation and submission works.
+21. Admin account can list users/resources/courses.
+22. Admin can open/download a student resource.
+23. No secrets appear in browser devtools bundled JavaScript.
 
 ## 14. Troubleshooting
 

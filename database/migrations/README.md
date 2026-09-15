@@ -18,9 +18,10 @@ state (a fresh install already includes every migration). These files are for an
 | 005 | `005_material_sharing.sql` | 5 | `subjects`, `quizzes` | `material_shares` |
 | 006 | `006_gamification.sql` | 6 | `user_profiles` | `achievements`, `user_achievements` |
 | 007 | `007_chat_quiz_provenance.sql` | 7 | `quizzes` | — |
+| 008 | `008_email_verification.sql` | 8 | `users` | `email_verification_tokens` |
 
 Rehearsed end-to-end against a fresh copy of the `v1.0.0` production schema:
-43 tables → 47 tables, every migration applies with no error, all expected
+43 tables → 48 tables, every migration applies with no error, all expected
 columns / indexes / seeded rows present, `indexes.sql` + `constraints.sql` re-run
 clean afterwards.
 
@@ -45,13 +46,18 @@ For every migration, in order:
    (`mysql <conn> <dbname> < database/migrations/NNN_*.sql`). Local dev only in
    this batch; never against Aiven here.
 4. **Verify** — run the `Verify` query from the header.
-5. **Post-steps** (only 001 and 006 have any):
+5. **Post-steps** (001, 006, 008 have one; the rest don't):
    - **001** — none; `xp_events` seeds each user's existing balance as one
      `legacy_balance` row via `INSERT IGNORE ... SELECT`.
    - **006** — `user_achievements` starts empty. Run the reconciliation utility
      once to grant already-earned historical achievements
      (`node -e "require('./backend/src/services/achievementService').reconcileAllUsers()..."`).
      No bonus XP, no notifications; `source='backfill'`.
+   - **008** — runs its own backfill inline (every existing user is marked
+     verified as of their `created_at`); no separate script to run. Confirm
+     `SELECT COUNT(*) FROM users WHERE email_verified_at IS NULL` is `0`
+     immediately after applying it — any non-zero count is a brand-new
+     registration that landed mid-migration, not a backfill failure.
 6. If a step fails, **stop** and use the `Rollback` block in that file's header.
 
 ## STOP conditions

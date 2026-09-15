@@ -23,6 +23,7 @@ import AdminSettingsPage from '../pages/admin/Settings';
 import AdminUsersPage from '../pages/admin/Users';
 import LoginPage from '../pages/auth/Login';
 import RegisterPage from '../pages/auth/Register';
+import VerifyEmailPage from '../pages/auth/VerifyEmail';
 import SharedMaterialPage from '../pages/SharedMaterial';
 
 const SHARE_PREFIX = '/share/';
@@ -109,6 +110,10 @@ export default function AppRouter() {
     // Public unlisted share links render for anyone, logged in or not — no redirects.
     if (pathname.startsWith(SHARE_PREFIX)) return;
 
+    // Email verification links work whether or not the student is signed in
+    // (they usually aren't yet) — never redirect away from this page.
+    if (pathname === AUTH_PATHS.VERIFY_EMAIL) return;
+
     const isAuthPath = pathname === AUTH_PATHS.LOGIN || pathname === AUTH_PATHS.REGISTER;
 
     if (!isAuthenticated && !isAuthPath) {
@@ -150,9 +155,18 @@ export default function AppRouter() {
     );
   }
 
+  // Verify-email works for a signed-in or signed-out student — render before
+  // the sign-in gate below.
+  if (pathname === AUTH_PATHS.VERIFY_EMAIL) {
+    return <VerifyEmailPage onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)} />;
+  }
+
   if (!isAuthenticated) {
     if (pathname === AUTH_PATHS.REGISTER) {
-      return <RegisterPage onRegistered={() => navigate(AUTH_PATHS.LOGIN)} onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)} />;
+      // Registration no longer auto-redirects to login — RegisterPage shows
+      // its own "check your email" panel and the student navigates away via
+      // its "Back to sign in" action once they're done.
+      return <RegisterPage onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)} />;
     }
 
     return (

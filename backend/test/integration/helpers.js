@@ -60,7 +60,12 @@ async function createStudent(tag, suffix) {
     body: { first_name: 'ITest', last_name: suffix, email, password, student_number: studentNumber },
   });
   if (reg.status !== 201) throw new Error(`register ${suffix} failed: ${reg.status} ${JSON.stringify(reg.json)}`);
+  // Registration now leaves the account unverified until the emailed link is
+  // clicked. Test fixtures have no inbox to check, so mark them verified
+  // directly in the DB — mirrors the "existing user" migration backfill.
+  await db.query('UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE id = ?', [reg.json.data.user.id]);
   const login = await api('POST', '/auth/login', { body: { email, password } });
+  if (login.status !== 200) throw new Error(`login ${suffix} failed: ${login.status} ${JSON.stringify(login.json)}`);
   return { id: reg.json.data.user.id, email, token: login.json.data.token };
 }
 

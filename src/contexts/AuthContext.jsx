@@ -14,6 +14,8 @@ const AuthContext = createContext({
   logout: async () => {},
   getCurrentUser: async () => {},
   refreshSession: async () => {},
+  verifyEmail: async () => {},
+  resendVerification: async () => {},
 });
 
 export function AuthProvider({ children }) {
@@ -75,6 +77,14 @@ export function AuthProvider({ children }) {
       async logout() {
         await authService.logout();
         setSession(null);
+      },
+      // Neither of these touches the session — verification happens while
+      // signed out, and resend never authenticates anyone.
+      async verifyEmail(token) {
+        return authService.verifyEmail(token);
+      },
+      async resendVerification(email) {
+        return authService.resendVerification(email);
       },
       async getCurrentUser() {
         try {

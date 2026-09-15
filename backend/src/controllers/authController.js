@@ -28,9 +28,33 @@ const me = asyncHandler(async (req, res) => {
   sendSuccess(res, { user: req.auth.user }, 200, 'Authenticated user loaded.');
 });
 
+const verifyEmail = asyncHandler(async (req, res) => {
+  const result = await authService.verifyEmail(req.body.token);
+  sendSuccess(
+    res,
+    result,
+    200,
+    result.alreadyVerified ? 'Your email is already verified.' : 'Email verified successfully.'
+  );
+});
+
+const resendVerification = asyncHandler(async (req, res) => {
+  const result = await authService.resendVerification(req.body.email);
+  sendSuccess(
+    res,
+    result,
+    200,
+    result.alreadyVerified
+      ? 'This email is already verified. You can sign in now.'
+      : "If an account exists for that email and needs verification, we've sent a new link."
+  );
+});
+
 module.exports = {
   register,
   login,
   logout,
   me,
+  verifyEmail,
+  resendVerification,
 };

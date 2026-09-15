@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Eye, EyeOff, GraduationCap, Hash, Lock, Mail, User } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Eye, EyeOff, GraduationCap, Hash, Lock, Mail, MailCheck, User } from 'lucide-react';
 import AuthInput from '../../../components/auth/AuthInput';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../contexts/AuthContext';
 import AuthLayout from '../../../layouts/AuthLayout/AuthLayout';
+import { maskEmail } from '../../../utils/maskEmail';
 
 const INITIAL_FORM = {
   first_name: '',
@@ -16,13 +17,21 @@ const INITIAL_FORM = {
   confirm_password: '',
 };
 
+const RESEND_COOLDOWN_SECONDS = 30;
+
 export default function RegisterPage({ onRegistered, onGoToLogin }) {
-  const { register } = useAuth();
+  const { register, resendVerification } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
+  const [resendMessage, setResendMessage] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef(null);
+
+  useEffect(() => () => window.clearInterval(cooldownRef.current), []);
 
   const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -48,15 +57,79 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
       setIsSubmitting(true);
       await register(form);
       setError('');
-      setSuccess('Account created. Redirecting to login...');
-      window.setTimeout(onRegistered, 700);
+      setRegisteredEmail(form.email.trim());
+      onRegistered?.();
     } catch (authError) {
-      setSuccess('');
       setError(authError.message);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const startCooldown = () => {
+    setCooldown(RESEND_COOLDOWN_SECONDS);
+    window.clearInterval(cooldownRef.current);
+    cooldownRef.current = window.setInterval(() => {
+      setCooldown((current) => {
+        if (current <= 1) {
+          window.clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+  };
+
+  const handleResend = async () => {
+    setResendState('sending');
+    setResendMessage('');
+    try {
+      const result = await resendVerification(registeredEmail);
+      setResendState('sent');
+      setResendMessage(
+        result?.alreadyVerified ? 'This email is already verified. You can sign in now.' : 'Verification email sent again.'
+      );
+      startCooldown();
+    } catch (resendError) {
+      setResendState('error');
+      setResendMessage(resendError.message || 'Could not resend the verification email. Please try again.');
+    }
+  };
+
+  if (registeredEmail) {
+    return (
+      <AuthLayout title="Check your email" subtitle="One more step to activate your account">
+        <div className="flex flex-col items-center gap-4 py-2 text-center">
+          <MailCheck size={40} className="text-primary" />
+          <div>
+            <h3 className="text-base font-semibold text-ink-800">Check your email</h3>
+            <p className="mt-1.5 text-sm text-ink-400">
+              We sent a verification link to <span className="font-semibold text-ink-700">{maskEmail(registeredEmail)}</span>.
+              Click the link to activate your account, then sign in.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            full
+            disabled={resendState === 'sending' || cooldown > 0}
+            onClick={handleResend}
+          >
+            {resendState === 'sending' ? 'Sending...' : cooldown > 0 ? `Resend available in ${cooldown}s` : 'Resend verification email'}
+          </Button>
+
+          {resendMessage && (
+            <p className={`text-xs ${resendState === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>{resendMessage}</p>
+          )}
+
+          <button type="button" onClick={onGoToLogin} className="text-xs font-semibold text-primary hover:underline">
+            Back to sign in
+          </button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout title="Create your account" subtitle="Set up your student profile">
@@ -97,7 +170,6 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
         />
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
-        {success && <p className="text-xs text-emerald-600">{success}</p>}
 
         <Button type="submit" full disabled={isSubmitting}>{isSubmitting ? 'Creating account...' : 'Create account'}</Button>
 

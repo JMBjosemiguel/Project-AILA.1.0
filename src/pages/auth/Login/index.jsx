@@ -6,12 +6,15 @@ import { useAuth } from '../../../contexts/AuthContext';
 import AuthLayout from '../../../layouts/AuthLayout/AuthLayout';
 
 export default function LoginPage({ onAuthenticated, onGoToRegister }) {
-  const { login } = useAuth();
+  const { login, resendVerification } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
+  const [resendMessage, setResendMessage] = useState('');
 
   const submit = async (event) => {
     event.preventDefault();
@@ -21,6 +24,10 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
       return;
     }
 
+    setNeedsVerification(false);
+    setResendState('idle');
+    setResendMessage('');
+
     try {
       setIsSubmitting(true);
       const session = await login({ email, password });
@@ -28,8 +35,24 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
       onAuthenticated(session.user.role);
     } catch (authError) {
       setError(authError.message);
+      setNeedsVerification(authError.details?.code === 'EMAIL_NOT_VERIFIED');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendState('sending');
+    setResendMessage('');
+    try {
+      const result = await resendVerification(email.trim());
+      setResendState('sent');
+      setResendMessage(
+        result?.alreadyVerified ? 'This email is already verified — try signing in again.' : 'Verification email sent. Please check your inbox.'
+      );
+    } catch (resendError) {
+      setResendState('error');
+      setResendMessage(resendError.message || 'Could not resend the verification email. Please try again.');
     }
   };
 
@@ -58,6 +81,22 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
         />
 
         {error && <p className="text-xs text-rose-600 -mt-1">{error}</p>}
+
+        {needsVerification && (
+          <div className="-mt-1 flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendState === 'sending'}
+              className="text-xs font-semibold text-primary hover:underline disabled:opacity-60"
+            >
+              {resendState === 'sending' ? 'Sending...' : 'Resend verification email'}
+            </button>
+            {resendMessage && (
+              <p className={`text-xs ${resendState === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>{resendMessage}</p>
+            )}
+          </div>
+        )}
 
         <Button type="submit" full disabled={isSubmitting}>{isSubmitting ? 'Signing in...' : 'Sign in'}</Button>
 

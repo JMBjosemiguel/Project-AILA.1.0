@@ -93,6 +93,9 @@ Root `.env` (frontend, Vite — only `VITE_*` is exposed to the browser):
 | `APP_URL` | `http://localhost:5173` | Primary allowed CORS origin. |
 | `CORS_ORIGINS` | `http://localhost:5173` | Extra allowed origins, comma-separated. |
 | `APP_TIMEZONE` | `Asia/Manila` | IANA zone for streak "days" + the weekly leaderboard week boundary (no per-user timezone). Unset / invalid → `UTC`. `utils/appTime.js`. |
+| `EMAIL_DRIVER` | `console` | `console` (default, dev-safe — logs the email instead of sending) or `smtp`. `services/emailService.js`. |
+| `EMAIL_FROM` | `AILA-noreply@aila.local` | From-address used for outgoing email (registration verification links). |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | *(unset locally)* | Only read when `EMAIL_DRIVER=smtp`. Any SMTP-compatible provider works — `nodemailer` is provider-agnostic. |
 | `DB_HOST` / `DB_PORT` | `localhost` / `3306` | MySQL connection. |
 | `DB_USER` / `DB_PASSWORD` | `root` / *(empty)* | XAMPP default credentials. |
 | `DB_NAME` | `aila_db` | Database name. |
@@ -129,12 +132,13 @@ DB on the connection). Full steps in `database/AIVEN_MIGRATION.md`. Never run `s
 or `seed.sql` against a cloud DB.
 
 **Upgrading an existing v1.0.0 database:** do NOT re-import `production_schema.sql`. Apply
-the ordered additive migrations `database/migrations/001`–`007` (one each, gated by each
+the ordered additive migrations `database/migrations/001`–`008` (one each, gated by each
 file's preflight) — see `database/migrations/README.md`. After `006`, run the achievement
-reconciliation utility once.
+reconciliation utility once. `008` backfills existing users' `email_verified_at` inline —
+no separate reconciliation step.
 
 `database/database_documentation.md` documents every table as of v1.0.0;
-`database/migrations/README.md` lists the v1.1 delta (migrations 001–007);
+`database/migrations/README.md` lists the v1.1 delta (migrations 001–008);
 `database/migration_notes.md` covers validation and phpMyAdmin steps.
 
 ### Dev login accounts (from `seed.sql`, local only)
@@ -144,7 +148,9 @@ reconciliation utility once.
 | Admin | `admin@aila.local` | `admin123` |
 | Student | `student@aila.local` | `student123` |
 
-Registration (`POST /api/auth/register`) only ever creates **student** accounts.
+Registration (`POST /api/auth/register`) only ever creates **student** accounts, and the
+account starts **unverified** — see Auth flow below. The two seeded demo accounts above are
+pre-verified by `seed.sql`.
 
 ## Conventions
 
@@ -152,6 +158,20 @@ Registration (`POST /api/auth/register`) only ever creates **student** accounts.
 `Authorization: Bearer <token>`. Backend `authenticate` verifies the token, checks the
 `user_sessions` row is still active, and loads the user onto `req.auth`. `authorize('admin')`
 gates admin routes. Login/logout also create/delete a `user_sessions` row.
+
+**Email verification.** `POST /auth/register` creates the account with `users.email_verified_at
+= NULL` and emails a verification link (`services/emailService.js`, provider selected by
+`EMAIL_DRIVER`) pointing at `${APP_URL}/verify-email?token=<raw-token>`. The frontend page at
+that route POSTs the token to `POST /auth/verify-email` to consume it (POST, not GET — an
+emailed GET link risks being pre-fetched and burned by mail-scanner bots). Only the SHA-256
+hash of the token is ever stored (`email_verification_tokens.token_hash`, `utils/
+verificationToken.js`); tokens expire after ~30 minutes and issuing a new one (via register or
+`POST /auth/resend-verification`, rate-limited per email) invalidates any still-active one for
+that user. `authService.login()` rejects an unverified account with `403 EMAIL_NOT_VERIFIED`
+— checked only *after* the password is confirmed correct, so it never leaks verification status
+to a wrong-password guess. Migration `008` backfilled every pre-existing user's
+`email_verified_at` to their `created_at`, so no account created before this feature was added
+is ever blocked from logging in.
 
 **Backend request pipeline.** `route -> validator chain -> validateRequest -> [authenticate] ->
 [authorize] -> [aiRateLimiter] -> controller -> service -> model`.

@@ -20,6 +20,13 @@ const REQUIRED_R2 = [
   'R2_BUCKET',
 ];
 
+const REQUIRED_SMTP = [
+  'SMTP_HOST',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'EMAIL_FROM',
+];
+
 function isMissing(key) {
   return !process.env[key] || process.env[key].trim() === '';
 }
@@ -82,6 +89,23 @@ if (process.env.STORAGE_DRIVER === 'r2') {
 
 if (process.env.STORAGE_DRIVER === 'r2' && process.env.DB_SSL !== 'true') {
   fail('DB_SSL=true is recommended for the Render + Aiven production deployment.');
+}
+
+// EMAIL_DRIVER is optional (defaults to 'console', the dev-safe no-op driver).
+// A production deployment left on 'console' never actually sends verification
+// email, so it's allowed but not required to be 'smtp' — only validate that
+// whichever value is set is one we recognise, and that 'smtp' carries the vars
+// it needs.
+const emailDriver = (process.env.EMAIL_DRIVER || 'console').toLowerCase();
+if (!['console', 'smtp'].includes(emailDriver)) {
+  fail('EMAIL_DRIVER must be either console or smtp.');
+} else if (emailDriver === 'smtp') {
+  for (const key of REQUIRED_SMTP) {
+    if (isMissing(key)) fail(`${key} is required when EMAIL_DRIVER=smtp.`);
+  }
+  if (!isMissing('SMTP_PORT') && !Number.isInteger(Number(process.env.SMTP_PORT))) {
+    fail('SMTP_PORT must be a number.');
+  }
 }
 
 if (!process.exitCode) {

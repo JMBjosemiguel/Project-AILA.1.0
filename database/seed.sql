@@ -11,17 +11,18 @@ ON DUPLICATE KEY UPDATE
   description = VALUES(description);
 
 INSERT INTO users (
-  id, role_id, student_number, email, password_hash, first_name, last_name, is_active
+  id, role_id, student_number, email, password_hash, first_name, last_name, is_active, email_verified_at
 ) VALUES
-  (1, 2, NULL, 'admin@aila.local', '$2b$10$Y9leQVKNrQFeWEO74xLqvuNP3UZV1Vl0qOvVCYmc17dRvsR2b2Ony', 'AILA', 'Administrator', 1),
-  (2, 1, '2026-0001', 'student@aila.local', '$2b$10$EtNQ6N/u8g0sEeh7lg0vuezqmd.8TCI.edhAsTbTfxFjtieHJH1rW', 'Sample', 'Student', 1)
+  (1, 2, NULL, 'admin@aila.local', '$2b$10$Y9leQVKNrQFeWEO74xLqvuNP3UZV1Vl0qOvVCYmc17dRvsR2b2Ony', 'AILA', 'Administrator', 1, CURRENT_TIMESTAMP),
+  (2, 1, '2026-0001', 'student@aila.local', '$2b$10$EtNQ6N/u8g0sEeh7lg0vuezqmd.8TCI.edhAsTbTfxFjtieHJH1rW', 'Sample', 'Student', 1, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE
   role_id = VALUES(role_id),
   student_number = VALUES(student_number),
   password_hash = VALUES(password_hash),
   first_name = VALUES(first_name),
   last_name = VALUES(last_name),
-  is_active = VALUES(is_active);
+  is_active = VALUES(is_active),
+  email_verified_at = COALESCE(users.email_verified_at, VALUES(email_verified_at));
 
 INSERT INTO user_profiles (user_id, program, year_level, avatar_url, bio, xp_points, level) VALUES
   (1, 'System Administration', NULL, NULL, 'Manages AILA content and learning records.', 0, 1),

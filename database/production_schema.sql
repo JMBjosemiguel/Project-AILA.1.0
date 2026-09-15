@@ -34,6 +34,7 @@ CREATE TABLE users (
   first_name VARCHAR(100) NOT NULL,
   last_name VARCHAR(100) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  email_verified_at TIMESTAMP NULL DEFAULT NULL,  -- migration 008: NULL blocks login until verified
   last_login_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -45,6 +46,23 @@ CREATE TABLE users (
   KEY idx_users_deleted_at (deleted_at),
   CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(id)
     ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- migration 008: one-time email verification links. token_hash only — the raw
+-- token is never stored (see backend/src/utils/verificationToken.js).
+CREATE TABLE email_verification_tokens (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_email_verification_tokens_token_hash (token_hash),
+  KEY idx_email_verification_tokens_user (user_id, used_at),
+  KEY idx_email_verification_tokens_expires_at (expires_at),
+  CONSTRAINT fk_email_verification_tokens_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_profiles (

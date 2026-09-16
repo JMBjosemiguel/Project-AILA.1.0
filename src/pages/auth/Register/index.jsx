@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GraduationCap, Hash, Lock, Mail, MailCheck, User } from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, GraduationCap, Hash, Lock, Mail, MailCheck, User } from 'lucide-react';
 import AuthInput from '../../../components/auth/AuthInput';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -26,6 +26,7 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
+  const [emailSent, setEmailSent] = useState(true);
   const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
   const [resendMessage, setResendMessage] = useState('');
   const [cooldown, setCooldown] = useState(0);
@@ -55,9 +56,14 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
 
     try {
       setIsSubmitting(true);
-      await register(form);
+      const result = await register(form);
+      // accountCreated is always true on a 2xx response — the account is
+      // durable regardless of emailSent (see authService.js on the backend).
+      // Never treat a slow/failed email send as "registration failed": the
+      // student still lands on Check your email, just with an honest state.
       setError('');
       setRegisteredEmail(form.email.trim());
+      setEmailSent(result?.emailSent !== false);
       onRegistered?.();
     } catch (authError) {
       setError(authError.message);
@@ -100,14 +106,29 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
     return (
       <AuthLayout title="Check your email" subtitle="One more step to activate your account">
         <div className="flex flex-col items-center gap-4 py-2 text-center">
-          <MailCheck size={40} className="text-primary" />
-          <div>
-            <h3 className="text-base font-semibold text-ink-800">Check your email</h3>
-            <p className="mt-1.5 text-sm text-ink-400">
-              We sent a verification link to <span className="font-semibold text-ink-700">{maskEmail(registeredEmail)}</span>.
-              Click the link to activate your account, then sign in.
-            </p>
-          </div>
+          {emailSent ? (
+            <>
+              <MailCheck size={40} className="text-primary" />
+              <div>
+                <h3 className="text-base font-semibold text-ink-800">Check your email</h3>
+                <p className="mt-1.5 text-sm text-ink-400">
+                  We sent a verification link to <span className="font-semibold text-ink-700">{maskEmail(registeredEmail)}</span>.
+                  Click the link to activate your account, then sign in.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={40} className="text-amber-500" />
+              <div>
+                <h3 className="text-base font-semibold text-ink-800">Your account was created</h3>
+                <p className="mt-1.5 text-sm text-ink-400">
+                  We couldn't send the verification email to <span className="font-semibold text-ink-700">{maskEmail(registeredEmail)}</span>.
+                  Tap <span className="font-semibold text-ink-700">Resend verification email</span> below to try again.
+                </p>
+              </div>
+            </>
+          )}
 
           <Button
             type="button"

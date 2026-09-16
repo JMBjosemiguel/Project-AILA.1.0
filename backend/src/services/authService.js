@@ -9,6 +9,8 @@ const {
   findUserByStudentNumber,
   getRoleIdByName,
   updateLastLogin,
+  findDeletedIdentityConflicts,
+  releaseDeletedIdentity,
 } = require('../models/userModel');
 const { createSession, deleteSession } = require('../models/sessionModel');
 const emailVerificationModel = require('../models/emailVerificationModel');
@@ -77,12 +79,57 @@ async function issueVerificationToken(userId, connection = null) {
   return raw;
 }
 
+// Best-effort send — never throws on a mail-provider failure. The account
+// row is already durable by the time this runs (either committed moments
+// ago, in register()'s own transaction, or long since existing), so a slow
+// or unreachable SMTP relay must degrade to `emailSent: false`, never an
+// error that makes an already-successful signup look like it failed.
+async function sendVerificationBestEffort(user, rawToken) {
+  try {
+    await emailService.sendVerificationEmail(user, buildVerifyUrl(rawToken));
+    return { emailSent: true };
+  } catch (emailError) {
+    console.error(`[authService] verification email failed to send for user ${user.id}: ${emailError.message}`);
+    return { emailSent: false };
+  }
+}
+
+// For an ALREADY-COMMITTED existing user (resendVerification, or a
+// register() retry against a still-unverified account): issues a fresh
+// token in its own transaction, then best-effort emails it. Fresh
+// registration does NOT use this — its token is issued inside the same
+// transaction as the INSERT itself (see register()) so token creation still
+// happens before that transaction's COMMIT, per the required ordering.
+async function issueAndSendVerification(user) {
+  const rawToken = await transaction((connection) => issueVerificationToken(user.id, connection));
+  return sendVerificationBestEffort(user, rawToken);
+}
+
 async function register(payload) {
   const data = normalizeRegisterPayload(payload);
 
   const existingEmail = await findUserByEmail(data.email);
   if (existingEmail) {
-    throw new ApiError(409, 'An account with this email already exists.');
+    if (existingEmail.email_verified) {
+      throw new ApiError(409, 'An account with this email already exists.');
+    }
+
+    // Unverified duplicate: this is very likely the SAME student retrying
+    // after the first attempt looked like it failed (the classic case being
+    // exactly the bug this function now avoids — a slow/unreachable SMTP
+    // relay stalling the first response). The account already exists and
+    // must not be duplicated; the newly-submitted name/password/program are
+    // deliberately NOT written to the existing row — only the account's own
+    // verified inbox can ever receive the link, so re-sending to it is safe
+    // regardless of who actually submitted this retry.
+    const { emailSent } = await issueAndSendVerification(existingEmail);
+    return {
+      user: existingEmail,
+      accountCreated: true,
+      verificationRequired: true,
+      emailSent,
+      alreadyPending: true,
+    };
   }
 
   if (data.student_number) {
@@ -106,6 +153,22 @@ async function register(payload) {
   let rawToken;
   try {
     userId = await transaction(async (connection) => {
+      // A soft-deleted account (Admin > delete) still occupies its old
+      // email/student_number under the DB's UNIQUE constraints even though
+      // findUserByEmail/findUserByStudentNumber above correctly ignore it —
+      // release just the colliding field(s) on that dead row (tombstoned,
+      // never reactivated) so this INSERT doesn't hit ER_DUP_ENTRY for an
+      // identity nothing active is using anymore. Covers rows deleted before
+      // this fix existed too, not just ones deleted going forward.
+      const deletedConflicts = await findDeletedIdentityConflicts(
+        { email: data.email, studentNumber: data.student_number },
+        connection
+      );
+      for (const conflictRow of deletedConflicts) {
+        // eslint-disable-next-line no-await-in-loop
+        await releaseDeletedIdentity(conflictRow, { email: data.email, studentNumber: data.student_number }, connection);
+      }
+
       const [userResult] = await connection.execute(
         `
           INSERT INTO users (
@@ -148,16 +211,17 @@ async function register(payload) {
 
   const user = await findUserById(userId);
 
-  // Best-effort: account creation must succeed even if the mail provider is
-  // briefly down. The student can always request another link via resend.
-  try {
-    await emailService.sendVerificationEmail(user, buildVerifyUrl(rawToken));
-  } catch (emailError) {
-    console.error(`[authService] verification email failed to send for user ${userId}: ${emailError.message}`);
-  }
+  // Steps 1-4 (validate, create user, create token, COMMIT) are already
+  // durable at this point — the account exists no matter what happens next.
+  // The email send is best-effort and must never turn an already-successful
+  // signup into a reported failure (see sendVerificationBestEffort).
+  const { emailSent } = await sendVerificationBestEffort(user, rawToken);
 
   return {
     user,
+    accountCreated: true,
+    verificationRequired: true,
+    emailSent,
   };
 }
 
@@ -255,12 +319,20 @@ async function resendVerification(rawEmail) {
   }
 
   if (user.email_verified) {
-    return { alreadyVerified: true };
+    return { sent: true, alreadyVerified: true };
   }
 
-  const rawToken = await transaction(async (connection) => issueVerificationToken(user.id, connection));
-  await emailService.sendVerificationEmail(user, buildVerifyUrl(rawToken));
-
+  // Deliberately NOT reporting the real emailSent outcome here (unlike
+  // register(), which may): a known-unverified account is the ONLY case
+  // that ever attempts a real send, so surfacing a true/false split in this
+  // response would let an SMTP outage turn this endpoint into a perfect,
+  // deterministic account-existence oracle (every unknown email stays
+  // "sent", every known-but-currently-failing one would flip to "not
+  // sent"). issueAndSendVerification() already logs the real outcome
+  // server-side for diagnostics; the response shape here stays exactly what
+  // it was before this fix — only the try/catch (no more 502 on a genuine
+  // SMTP failure) is new.
+  await issueAndSendVerification(user);
   return { sent: true };
 }
 

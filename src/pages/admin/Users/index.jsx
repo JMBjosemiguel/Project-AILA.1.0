@@ -23,6 +23,14 @@ const STATUS_FILTERS = [
   { id: 'inactive', label: 'Inactive' },
 ];
 
+// Email verification is a SEPARATE signal from account active/inactive status
+// (a student can be active-but-unverified while their link is still pending).
+const VERIFICATION_FILTERS = [
+  { id: 'all', label: 'All verification' },
+  { id: 'verified', label: 'Verified' },
+  { id: 'pending', label: 'Pending verification' },
+];
+
 const SORT_OPTIONS = [
   { id: 'newest', label: 'Newest' },
   { id: 'oldest', label: 'Oldest' },
@@ -38,6 +46,7 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('all');
   const [status, setStatus] = useState('all');
+  const [verification, setVerification] = useState('all');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState(null);
@@ -47,7 +56,7 @@ export default function AdminUsersPage() {
   const load = () => {
     setLoading(true);
     setError(null);
-    listAdminUsers({ search, role, status, sort, page, pageSize: 10 })
+    listAdminUsers({ search, role, status, verification, sort, page, pageSize: 10 })
       .then((result) => {
         setUsers(result.users ?? []);
         setPagination(result.pagination);
@@ -56,9 +65,9 @@ export default function AdminUsersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [search, role, status, sort, page]);
+  useEffect(load, [search, role, status, verification, sort, page]);
 
-  useEffect(() => { setPage(1); }, [search, role, status, sort]);
+  useEffect(() => { setPage(1); }, [search, role, status, verification, sort]);
 
   const toggleActive = async (user) => {
     try {
@@ -117,6 +126,17 @@ export default function AdminUsersPage() {
       ),
     },
     {
+      // Separate from account Status (active/inactive) — a student can be
+      // active but still not have clicked their verification link yet.
+      key: 'verification',
+      label: 'Verification',
+      render: (u) => (
+        <span className={`text-[0.65rem] font-bold px-2 py-0.5 rounded-full ${u.email_verified_at ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}`}>
+          {u.email_verified_at ? 'Verified' : 'Pending verification'}
+        </span>
+      ),
+    },
+    {
       key: 'actions',
       label: '',
       align: 'right',
@@ -148,6 +168,11 @@ export default function AdminUsersPage() {
           ))}
           {STATUS_FILTERS.map((f) => (
             <button key={f.id} onClick={() => setStatus(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+              {f.label}
+            </button>
+          ))}
+          {VERIFICATION_FILTERS.map((f) => (
+            <button key={f.id} onClick={() => setVerification(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${verification === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
               {f.label}
             </button>
           ))}

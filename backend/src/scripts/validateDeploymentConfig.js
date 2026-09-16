@@ -106,6 +106,9 @@ if (!['console', 'smtp'].includes(emailDriver)) {
   if (!isMissing('SMTP_PORT') && !Number.isInteger(Number(process.env.SMTP_PORT))) {
     fail('SMTP_PORT must be a number.');
   }
+  if (!isMissing('SMTP_TIMEOUT_MS') && !Number.isInteger(Number(process.env.SMTP_TIMEOUT_MS))) {
+    fail('SMTP_TIMEOUT_MS must be a number.');
+  }
 }
 
 if (!process.exitCode) {

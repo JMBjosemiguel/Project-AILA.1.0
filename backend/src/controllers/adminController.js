@@ -15,8 +15,8 @@ const createAnnouncement = asyncHandler(async (req, res) => {
 });
 
 const listUsers = asyncHandler(async (req, res) => {
-  const { search = '', role = 'all', status = 'all', sort = 'newest' } = req.query;
-  const result = await adminService.listUsers(req.auth.user.id, { search, role, status, sort, page: req.query.page, pageSize: req.query.pageSize });
+  const { search = '', role = 'all', status = 'all', verification = 'all', sort = 'newest' } = req.query;
+  const result = await adminService.listUsers(req.auth.user.id, { search, role, status, verification, sort, page: req.query.page, pageSize: req.query.pageSize });
   sendSuccess(res, result, 200, 'Users retrieved.');
 });
 

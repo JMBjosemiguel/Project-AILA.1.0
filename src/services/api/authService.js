@@ -58,9 +58,13 @@ export const authService = {
     return session;
   },
 
+  // Backend response (see authController.registerStatusAndMessage): the
+  // account is ALWAYS durable once this resolves (a 2xx) — accountCreated is
+  // always true. emailSent distinguishes "check your inbox" from "account
+  // exists, but we couldn't send the link — use resend" so the caller can
+  // show a truthful, recoverable state instead of a generic failure.
   async register(payload) {
-    const data = await apiClient.post(API_ENDPOINTS.auth.register, buildRegisterPayload(payload));
-    return data.user;
+    return apiClient.post(API_ENDPOINTS.auth.register, buildRegisterPayload(payload));
   },
 
   // Backend response: { alreadyVerified: boolean }. Never throws for a

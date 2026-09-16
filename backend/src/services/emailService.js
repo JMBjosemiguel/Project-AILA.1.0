@@ -32,6 +32,15 @@ function maskEmail(email) {
   return `${visible}${'*'.repeat(Math.max(local.length - 1, 3))}@${domain}`;
 }
 
+// A registration/resend request awaits this call synchronously (by design —
+// see authService.js), so a slow or firewalled SMTP relay must fail FAST
+// rather than hang: without an explicit timeout, nodemailer's own default
+// (up to ~2 minutes for connectionTimeout) can stall the whole HTTP request
+// long enough for an intermediate proxy or the browser to give up first —
+// the exact "DB says created, UI says failed" bug this fixes. Configurable
+// via SMTP_TIMEOUT_MS for environments with a known-slower relay.
+const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS || 10000);
+
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT || 587);
@@ -47,6 +56,9 @@ function getSmtpConfig() {
     port,
     secure: process.env.SMTP_SECURE === 'true' || port === 465,
     auth: { user, pass },
+    connectionTimeout: SMTP_TIMEOUT_MS,
+    greetingTimeout: SMTP_TIMEOUT_MS,
+    socketTimeout: SMTP_TIMEOUT_MS,
   };
 }
 
@@ -127,8 +139,31 @@ async function sendVerificationEmail(user, verifyUrl) {
   return sendEmail({ to: user.email, subject, html, text });
 }
 
+// Safe, presence-only startup diagnostic — never logs a credential VALUE,
+// only whether each var is set. Intended to be called once at boot so a
+// misconfiguration (missing SMTP var, or the console driver left on in
+// production) shows up immediately in the server logs instead of only
+// surfacing later as a silent delivery failure.
+function logEmailConfigStatus() {
+  const driver = getEmailDriver();
+  console.log(`[emailService] Email driver: ${driver}`);
+
+  if (driver !== 'smtp') {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[emailService] WARNING: EMAIL_DRIVER is not "smtp" in production — verification email will never actually be sent.');
+    }
+    return;
+  }
+
+  console.log(`[emailService] SMTP host configured: ${process.env.SMTP_HOST ? 'yes' : 'no'}`);
+  console.log(`[emailService] SMTP user configured: ${process.env.SMTP_USER ? 'yes' : 'no'}`);
+  console.log(`[emailService] SMTP password configured: ${process.env.SMTP_PASSWORD ? 'yes' : 'no'}`);
+  console.log(`[emailService] Email sender configured: ${process.env.EMAIL_FROM ? 'yes' : 'no'}`);
+}
+
 module.exports = {
   getEmailDriver,
+  logEmailConfigStatus,
   maskEmail,
   sendEmail,
   sendVerificationEmail,

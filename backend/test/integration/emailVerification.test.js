@@ -244,12 +244,28 @@ test('email verification', async (t) => {
     assert.ok(statuses.includes(429), `expected a 429 among ${JSON.stringify(statuses)}`);
   });
 
-  await t.test('duplicate email on register returns 409, not 500', async () => {
+  await t.test('duplicate email on register: VERIFIED account returns 409, not 500', async () => {
     const email = nextEmail();
-    await registerRaw(email);
+    const first = await registerRaw(email);
+    await db.query('UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE id = ?', [first.json.data.user.id]);
+
     const dupe = await registerRaw(email);
     assert.equal(dupe.status, 409);
     assert.match(dupe.json.message, /already exists/i);
+  });
+
+  await t.test('duplicate email on register: UNVERIFIED account is a recoverable retry, not a 409 (see registrationEmailRecovery.test.js for full coverage)', async () => {
+    const email = nextEmail();
+    const first = await registerRaw(email);
+    const retry = await registerRaw(email);
+
+    assert.notEqual(retry.status, 409);
+    assert.equal(retry.json.data.accountCreated, true);
+    assert.equal(retry.json.data.alreadyPending, true);
+    assert.equal(retry.json.data.user.id, first.json.data.user.id);
+
+    const rows = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    assert.equal(rows.length, 1, 'no duplicate row created');
   });
 
   await t.test('duplicate student number on register returns 409, not 500', async () => {

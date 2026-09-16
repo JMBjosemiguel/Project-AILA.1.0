@@ -11,6 +11,7 @@ const { testConnection } = require('./config/database');
 const routes = require('./routes');
 const { errorHandler } = require('./middlewares/errorHandler');
 const { notFoundHandler } = require('./middlewares/notFoundHandler');
+const { logEmailConfigStatus } = require('./services/emailService');
 
 const app = express();
 const port = Number(process.env.PORT || 5000);
@@ -65,6 +66,13 @@ app.use(errorHandler);
 async function start() {
   try {
     await testConnection();
+    // Non-fatal by design — a misconfigured or unreachable email provider
+    // must never prevent the server from starting.
+    try {
+      logEmailConfigStatus();
+    } catch (emailConfigError) {
+      console.error('[emailService] startup diagnostic failed:', emailConfigError.message);
+    }
     app.listen(port, '0.0.0.0', () => {
       console.log(`AILA backend running on port ${port}`);
     });

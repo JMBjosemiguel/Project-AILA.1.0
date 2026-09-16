@@ -9,9 +9,35 @@ function getRequestMeta(req) {
   };
 }
 
+// Status/message reflect the TRUTH of what happened, not just "did the
+// request succeed": the account (steps 1-4) is already durable by the time
+// authService.register() returns, regardless of emailSent — so this never
+// reports failure once accountCreated is true. 201 = a new account, email
+// sent. 200 = re-issued a link for an already-pending unverified account,
+// email sent. 202 = accepted/created but the email itself did not go out —
+// recoverable via the resend endpoint the frontend routes to either way.
+function registerStatusAndMessage(result) {
+  if (!result.emailSent) {
+    return {
+      statusCode: 202,
+      message: result.alreadyPending
+        ? "We found an existing unverified registration for this email, but we couldn't send the verification email. Please resend it."
+        : "Your account was created, but we couldn't send the verification email. Please resend it.",
+    };
+  }
+
+  return {
+    statusCode: result.alreadyPending ? 200 : 201,
+    message: result.alreadyPending
+      ? "We found an existing unverified registration for this email. We've sent a new verification link — check your email to verify your account."
+      : 'Account created. Check your email to verify your account.',
+  };
+}
+
 const register = asyncHandler(async (req, res) => {
   const result = await authService.register(req.body);
-  sendSuccess(res, result, 201, 'Account created successfully.');
+  const { statusCode, message } = registerStatusAndMessage(result);
+  sendSuccess(res, result, statusCode, message);
 });
 
 const login = asyncHandler(async (req, res) => {

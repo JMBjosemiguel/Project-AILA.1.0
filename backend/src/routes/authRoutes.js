@@ -12,7 +12,11 @@ const {
 
 const router = express.Router();
 
-router.post('/register', registerValidator, validateRequest, authController.register);
+// Rate-limited the same as resend: register() can now re-issue a
+// verification email for an existing-but-unverified account (see
+// authService.register), so without this a script could bypass the resend
+// limiter entirely just by calling /register repeatedly for the same email.
+router.post('/register', emailVerificationRateLimiter, registerValidator, validateRequest, authController.register);
 router.post('/login', loginValidator, validateRequest, authController.login);
 router.post('/logout', authenticate, authController.logout);
 router.get('/me', authenticate, authController.me);

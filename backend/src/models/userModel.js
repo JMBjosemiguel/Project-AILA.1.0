@@ -1,4 +1,22 @@
-const { query } = require('../config/database');
+const crypto = require('crypto');
+const { query, execute } = require('../config/database');
+
+// Soft-deleted users keep their row (and every historical child-table
+// relationship keyed by user_id) but must stop occupying the unique
+// email/student_number identity a brand-new student needs to register with.
+// `.invalid` is the RFC 2606-reserved TLD for exactly this "never a real,
+// deliverable address" case. Irreversible by design — nothing reads a
+// tombstoned value back into a usable email/number.
+function buildTombstoneEmail(userId) {
+  return `deleted+${userId}+${crypto.randomBytes(6).toString('hex')}@deleted.aila.invalid`;
+}
+
+function buildTombstoneStudentNumber(userId) {
+  // VARCHAR(30) — keep this comfortably short regardless of how large userId
+  // ever gets; the UNIQUE constraint is still the ultimate backstop against
+  // the astronomically unlikely random-suffix collision.
+  return `del${userId}_${crypto.randomBytes(3).toString('hex')}`.slice(0, 30);
+}
 
 const publicUserSelect = `
   SELECT
@@ -147,6 +165,48 @@ async function updatePasswordHash(userId, passwordHash) {
   await query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
 }
 
+// Soft-deleted rows still hold whatever email/student_number they had while
+// active, so they can otherwise collide with the DB's UNIQUE constraints for
+// a brand-new registration even though findUserByEmail/findUserByStudentNumber
+// (both deleted_at IS NULL) correctly report "no active duplicate". FOR
+// UPDATE — this is only ever called inside register()'s transaction, so it
+// serializes against a concurrent registration racing for the same identity.
+async function findDeletedIdentityConflicts({ email, studentNumber }, connection) {
+  return execute(
+    connection,
+    `
+      SELECT id, email, student_number
+      FROM users
+      WHERE deleted_at IS NOT NULL
+        AND (email = ? OR (? IS NOT NULL AND student_number = ?))
+      FOR UPDATE
+    `,
+    [email, studentNumber, studentNumber]
+  );
+}
+
+// Overwrites ONLY the field(s) on a soft-deleted row that actually collide
+// with the incoming registration — the row stays deleted, keeps its id, and
+// every historical relationship keyed by that id (chats, quizzes, XP,
+// resources, ...) stays exactly where it is. Never reactivates the row.
+async function releaseDeletedIdentity(row, { email, studentNumber }, connection) {
+  const sets = [];
+  const params = [];
+
+  if (row.email === email) {
+    sets.push('email = ?');
+    params.push(buildTombstoneEmail(row.id));
+  }
+  if (studentNumber && row.student_number === studentNumber) {
+    sets.push('student_number = ?');
+    params.push(buildTombstoneStudentNumber(row.id));
+  }
+  if (!sets.length) return;
+
+  params.push(row.id);
+  await execute(connection, `UPDATE users SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NOT NULL`, params);
+}
+
 async function getRecentActivity(userId, limit = 15) {
   return query(
     'SELECT id, activity_type, reference_id, description, created_at FROM dashboard_activity_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
@@ -166,4 +226,8 @@ module.exports = {
   updatePasswordHash,
   getRecentActivity,
   mapUser,
+  findDeletedIdentityConflicts,
+  releaseDeletedIdentity,
+  buildTombstoneEmail,
+  buildTombstoneStudentNumber,
 };

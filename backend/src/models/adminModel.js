@@ -1,4 +1,5 @@
 const { query, execute } = require('../config/database');
+const { buildTombstoneEmail, buildTombstoneStudentNumber } = require('./userModel');
 
 async function getDashboardStats() {
   const [users, courses, resources, conversations, lessons, quizzes, attempts, feedback, activeToday] = await Promise.all([
@@ -104,7 +105,7 @@ const USER_SORT_MAP = {
   last_login: 'u.last_login_at DESC',
 };
 
-async function listUsers({ search = '', role = 'all', status = 'all', sort = 'newest', limit = 20, offset = 0 }) {
+async function listUsers({ search = '', role = 'all', status = 'all', verification = 'all', sort = 'newest', limit = 20, offset = 0 }) {
   const orderBy = USER_SORT_MAP[sort] || USER_SORT_MAP.newest;
   const searchTerm = `%${search}%`;
 
@@ -112,7 +113,7 @@ async function listUsers({ search = '', role = 'all', status = 'all', sort = 'ne
     query(
       `
         SELECT
-          u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.created_at, u.last_login_at,
+          u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.email_verified_at, u.created_at, u.last_login_at,
           r.name AS role, up.program, up.year_level, up.xp_points, up.level
         FROM users u
         INNER JOIN roles r ON r.id = u.role_id
@@ -121,10 +122,11 @@ async function listUsers({ search = '', role = 'all', status = 'all', sort = 'ne
           AND (? = '' OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.student_number LIKE ?)
           AND (? = 'all' OR r.name = ?)
           AND (? = 'all' OR (? = 'active' AND u.is_active = 1) OR (? = 'inactive' AND u.is_active = 0))
+          AND (? = 'all' OR (? = 'verified' AND u.email_verified_at IS NOT NULL) OR (? = 'pending' AND u.email_verified_at IS NULL))
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?
       `,
-      [search, searchTerm, searchTerm, searchTerm, searchTerm, role, role, status, status, status, limit, offset]
+      [search, searchTerm, searchTerm, searchTerm, searchTerm, role, role, status, status, status, verification, verification, verification, limit, offset]
     ),
     query(
       `
@@ -135,8 +137,9 @@ async function listUsers({ search = '', role = 'all', status = 'all', sort = 'ne
           AND (? = '' OR u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ? OR u.student_number LIKE ?)
           AND (? = 'all' OR r.name = ?)
           AND (? = 'all' OR (? = 'active' AND u.is_active = 1) OR (? = 'inactive' AND u.is_active = 0))
+          AND (? = 'all' OR (? = 'verified' AND u.email_verified_at IS NOT NULL) OR (? = 'pending' AND u.email_verified_at IS NULL))
       `,
-      [search, searchTerm, searchTerm, searchTerm, searchTerm, role, role, status, status, status]
+      [search, searchTerm, searchTerm, searchTerm, searchTerm, role, role, status, status, status, verification, verification, verification]
     ),
   ]);
 
@@ -147,7 +150,7 @@ async function getUserDetail(userId) {
   const rows = await query(
     `
       SELECT
-        u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.created_at, u.last_login_at,
+        u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.email_verified_at, u.created_at, u.last_login_at,
         r.name AS role, up.program, up.year_level, up.bio, up.xp_points, up.level
       FROM users u
       INNER JOIN roles r ON r.id = u.role_id
@@ -192,8 +195,25 @@ async function getUserDetail(userId) {
   };
 }
 
+// Soft delete: marks the row deleted/inactive AND releases its unique
+// email/student_number (tombstoned to an unreachable, irreversible value) in
+// the same atomic UPDATE, so a genuinely new student can register with that
+// same identity afterward without an admin having to touch the database.
+// The row itself, its id, and every historical child-table relationship
+// (chats, quizzes, XP, resources, ...) are untouched — nothing is deleted
+// except the identity fields, and the account is never reactivated.
 async function deleteUser(userId) {
-  const result = await query('UPDATE users SET deleted_at = CURRENT_TIMESTAMP, is_active = 0 WHERE id = ? AND deleted_at IS NULL', [userId]);
+  const result = await query(
+    `
+      UPDATE users
+      SET deleted_at = CURRENT_TIMESTAMP,
+          is_active = 0,
+          email = ?,
+          student_number = CASE WHEN student_number IS NOT NULL THEN ? ELSE NULL END
+      WHERE id = ? AND deleted_at IS NULL
+    `,
+    [buildTombstoneEmail(userId), buildTombstoneStudentNumber(userId), userId]
+  );
   return result.affectedRows;
 }
 

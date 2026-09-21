@@ -308,8 +308,7 @@ async function regenerateLastResponse(userId, conversationId) {
 
   // Regenerate always classifies fresh, without carrying forward whatever
   // clarification state existed before this exchange (that state reflects
-  // the OUTCOME of the reply being regenerated, not the turn before it) — see
-  // the "known limitations" note in the update 33 report.
+  // the OUTCOME of the reply being regenerated, not the turn before it).
   const { messageType, data, responseText, nextPendingIntent } = await generateReply(
     prompt, priorMessages, userId, conversation.resource_id, null
   );

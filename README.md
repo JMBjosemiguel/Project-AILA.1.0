@@ -111,12 +111,6 @@ src/
   types/
 ```
 
-## Admin Package Integration
-
-The generated admin package was used as a structural reference only. Its raw files were removed because they contained mock users, fake statistics, question banks, chat sessions, feedback, notifications, and demo profile data.
-
-The active Admin Portal is database-ready and only references tables from the finalized database architecture.
-
 ## Backend Integration Notes
 
 All network code lives in `src/services/api` (one `<feature>Service.js` per domain,

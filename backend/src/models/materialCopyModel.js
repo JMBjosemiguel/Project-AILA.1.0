@@ -6,7 +6,7 @@ const { execute } = require('../config/database');
  *   subjects -> modules -> topics -> lessons  (+ per-topic definitions, examples)
  * Never copies: the source owner's learning_progress / lesson_progress /
  * quiz_attempts, any generated assessment quiz rows (the recipient generates
- * their own personalized checkpoints/final on demand — Batch 4), resource links,
+ * their own personalized checkpoints/final on demand), resource links,
  * `code` (UNIQUE), or `personalization_context` (that snapshot described why the
  * ORIGINAL was generated — cleared to NULL on the copy).
  *

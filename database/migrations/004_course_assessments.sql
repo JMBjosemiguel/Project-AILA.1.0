@@ -6,9 +6,10 @@
 --             …
 --             COURSE FINAL / LONG TEST
 --           without a separate test engine: a checkpoint / final IS a `quizzes`
---           row, so it reuses Batch 1 answer-key protection + XP ledger, Batch 2
---           resumable attempts / autosave / server-side grading / immutable
---           submissions, and Batch 3 personalized generation + snapshots.
+--           row, so it reuses the existing answer-key protection and XP ledger,
+--           the resumable-attempt lifecycle (autosave / server-side grading /
+--           immutable submissions, migration 002), and personalized generation
+--           with context snapshots (migration 003).
 --
 -- Changes (all additive — nothing renamed, nothing dropped):
 --
@@ -19,7 +20,7 @@
 --         Every existing quiz becomes 'practice' automatically.
 --     + passing_score   TINYINT UNSIGNED NULL   -> 0-100, set when a formal assessment is created (default 70)
 --     + assessment_slot INT UNSIGNED NULL
---         Uniqueness discriminator, same idea as Batch 2's quiz_attempts.active_slot:
+--         Uniqueness discriminator, same idea as quiz_attempts.active_slot (migration 002):
 --           practice           -> NULL
 --           module_checkpoint  -> module_id
 --           course_final       -> 0
@@ -53,7 +54,7 @@
 --          (SELECT COUNT(*) FROM quizzes) quizzes, (SELECT COUNT(*) FROM quiz_attempts) quiz_attempts;
 --   SELECT source_type, COUNT(*) FROM quizzes GROUP BY source_type;   -- context only
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/004_course_assessments.sql
 --
 -- Verify after apply:

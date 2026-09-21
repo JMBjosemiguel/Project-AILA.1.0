@@ -9,7 +9,7 @@
 --             rows. Idempotent (CREATE TABLE IF NOT EXISTS + INSERT IGNORE).
 --             Compatible with MariaDB 10.4+ and MySQL 8.4.
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/001_xp_events.sql
 --
 -- Rollback:

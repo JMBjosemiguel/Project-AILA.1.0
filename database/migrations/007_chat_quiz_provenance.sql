@@ -31,7 +31,7 @@
 --       AND column_name = 'source_chat_message_id';   -- expect 0 before, 1 after
 --   SELECT COUNT(*) FROM quizzes;                     -- unchanged by this migration
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/007_chat_quiz_provenance.sql
 --
 -- Verify:

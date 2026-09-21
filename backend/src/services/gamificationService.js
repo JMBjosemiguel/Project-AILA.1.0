@@ -9,7 +9,7 @@ const BOARD_SIZE = 10;
 
 // Leaderboard display name: first name + last initial, e.g. "Jose B.". Never the
 // full surname, never the email, never the user id — see the privacy note in
-// migration 006 and the batch spec.
+// migration 006.
 function displayName(firstName, lastName) {
   const first = (firstName || '').trim() || 'Student';
   const initial = (lastName || '').trim().charAt(0).toUpperCase();

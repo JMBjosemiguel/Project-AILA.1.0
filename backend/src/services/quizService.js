@@ -704,7 +704,7 @@ async function saveAttemptAnswer(userId, attemptId, { questionId, selectedAnswer
 
 /**
  * Resume/read an attempt. IN_PROGRESS -> take-safe payload + saved answers.
- * SUBMITTED/EXPIRED -> full graded review (Batch 1 review serializer).
+ * SUBMITTED/EXPIRED -> full graded review via formatAttemptReview.
  */
 async function getAttempt(userId, attemptId) {
   const attempt = await quizModel.getAttemptById(Number(attemptId), userId);

@@ -43,7 +43,7 @@
 --   SELECT COUNT(*) FROM user_profiles up
 --     WHERE up.xp_points <> COALESCE((SELECT SUM(points) FROM xp_events e WHERE e.user_id=up.user_id),0);  -- expect 0
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/006_gamification.sql
 --
 -- Verify:

@@ -2,16 +2,14 @@
 
 ## Validation Summary
 
-Schema validation found one document inconsistency and otherwise passed.
-
-- The document states "Total tables: 34," but the module breakdown, ERD, table definitions, and current frontend `DATABASE_TABLES` constant enumerate 38 tables. Because the instruction also says not to skip any tables, all 38 enumerated tables are included.
-- No duplicate table names were found.
-- No duplicate columns were introduced inside a table.
-- All explicit relationships from the ERD and table definitions are represented as foreign keys, except `feedback.context_type/context_id`, which the document intentionally defines as a lightweight polymorphic reference rather than a strict FK.
-- No circular foreign-key dependencies were found.
+- The schema has 38 tables, matching the ERD, table definitions, and the frontend `DATABASE_TABLES` constant.
+- No duplicate table names.
+- No duplicate columns within a table.
+- Every relationship in the ERD is represented as a foreign key, except `feedback.context_type/context_id`, which is a lightweight polymorphic reference rather than a strict FK.
+- No circular foreign-key dependencies.
 - Junction tables use composite primary keys where specified.
 - Recommended indexes are included for login lookups, chatbot keyword matching, ordered chat history, task dashboards, unread notification counts, learning progress uniqueness, and foreign-key lookup columns.
-- Normalization is consistent with the document's 3NF target. The only intentional denormalization/flexibility point is the feedback polymorphic reference described above.
+- Normalization targets 3NF. The only intentional denormalization/flexibility point is the feedback polymorphic reference described above.
 
 ## Import Order
 
@@ -50,7 +48,7 @@ For production, do not import `seed.sql` as-is. Use `production_baseline.sql`, t
 
 ## Assumptions
 
-- The architecture document intentionally treats `user_sessions`, `task_status_log`, `resource_views_log`, `admin_audit_log`, and `dashboard_activity_log` as optional/recommended tables. They are still included because they appear in the table inventory and definitions.
-- `feedback.context_type/context_id` is not constrained by a foreign key because the document explicitly defines it as a polymorphic-style reference.
+- `user_sessions`, `task_status_log`, `resource_views_log`, `admin_audit_log`, and `dashboard_activity_log` are optional/recommended tables, included for completeness.
+- `feedback.context_type/context_id` is not constrained by a foreign key because it is a polymorphic-style reference (it can point at different tables depending on `context_type`).
 - `schema.sql` uses a fresh-build approach and drops existing AILA tables before recreating them. Back up existing data before running it on a non-development database.
 - `production_baseline.sql` intentionally avoids demo users, QA users, admin passwords, and uploaded-resource sample data.

@@ -3,7 +3,7 @@
 -- Purpose:  let a student share a generated COURSE or generated QUIZ read-only
 --           via an unlisted, revocable link, and let a recipient COPY it into
 --           their own materials. Private by default. No public library, no
---           resource-file or chat sharing (later batches).
+--           resource-file or chat sharing (not yet implemented).
 --
 -- Changes (all additive — nothing renamed, nothing dropped):
 --
@@ -39,7 +39,7 @@
 --   the xp_events ledger. Nothing is exposed by the migration itself.
 --
 -- Study guides: `study_guides` is still not wired into any generation flow, so
---   study-guide sharing is deliberately out of scope here (see the report).
+--   study-guide sharing is deliberately out of scope here.
 --
 -- Compatibility: MariaDB 10.4+ and MySQL 8.4. Applied ONCE (no
 --   ADD COLUMN IF NOT EXISTS — MySQL 8.4 lacks it). Self-referencing FKs with
@@ -48,7 +48,7 @@
 -- Preflight (record; must match afterwards):
 --   SELECT (SELECT COUNT(*) FROM subjects) subjects, (SELECT COUNT(*) FROM quizzes) quizzes;
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/005_material_sharing.sql
 --
 -- Verify:

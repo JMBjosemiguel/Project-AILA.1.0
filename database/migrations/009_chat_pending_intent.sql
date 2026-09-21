@@ -32,7 +32,7 @@
 --     WHERE table_schema = DATABASE() AND table_name = 'chat_conversations'
 --       AND column_name = 'pending_intent';   -- expect 0 before, 1 after
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/009_chat_pending_intent.sql
 --
 -- Verify:

@@ -10,7 +10,7 @@ const COURSE_DIFFICULTY_TO_QUIZ = { beginner: 'easy', intermediate: 'medium', ad
 // assessment share one generation instead of each calling Gemini and then
 // discarding on the UNIQUE constraint. Process-local — on a multi-instance
 // deployment the UNIQUE index still keeps the data single, at the cost of a
-// wasted Gemini call (same tradeoff as Batch 1 lesson generation).
+// wasted Gemini call (same tradeoff as lesson generation in courseGenerationService.js).
 const assessmentGenerationInFlight = new Map();
 
 async function withGenerationGuard(key, task) {
@@ -33,7 +33,7 @@ function scorePercent(attempt) {
 /**
  * Turn one assessment's attempt history + its unlock state into a single
  * status the UI can render. Pass-history wins: once passed, always passed —
- * a later worse retake never downgrades it (spec §16).
+ * a later worse retake never downgrades it.
  */
 function deriveStatus({ unlocked, quiz, attempts }) {
   const inProgress = attempts.find((a) => a.status === 'in_progress') || null;

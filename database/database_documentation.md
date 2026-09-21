@@ -6,7 +6,7 @@
 > The current `schema.sql` / `production_schema.sql` (47 tables) already include
 > all of them. See `database/migrations/README.md` for the exact delta.
 
-The schema contains all 38 tables enumerated in the finalized AILA architecture document. The document's summary says "Total tables: 34," but the actual inventory, ERD, and table definitions list 38 tables; no listed table was skipped. All tables use InnoDB, `utf8mb4`, and `utf8mb4_unicode_ci`.
+The schema contains 38 tables. All tables use InnoDB, `utf8mb4`, and `utf8mb4_unicode_ci`.
 
 ## roles
 

@@ -4,7 +4,6 @@
 --           lesson, or formal quiz is generated, a concise snapshot of the
 --           student-learning context that shaped the prompt is stored on the
 --           row, so the team can answer "why did AILA generate this this way?"
---           during the capstone defense.
 --
 -- Changes (all additive — nothing renamed, nothing dropped):
 --   subjects + personalization_context JSON NULL
@@ -25,7 +24,7 @@
 -- IDs used as prompt content, or another student's data.
 --
 -- Existing materials: personalization_context stays NULL. No backfill — only
--- material generated after this migration carries a snapshot (§12 of the spec).
+-- material generated after this migration carries a snapshot.
 --
 -- Compatibility: MariaDB 10.4+ and MySQL 8.4. Applied ONCE (no
 -- `ADD COLUMN IF NOT EXISTS` — MySQL 8.4 lacks it).
@@ -35,7 +34,7 @@
 --          (SELECT COUNT(*) FROM lessons)  lessons,
 --          (SELECT COUNT(*) FROM quizzes)  quizzes;
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/003_personalization_context.sql
 --
 -- Verify after apply:

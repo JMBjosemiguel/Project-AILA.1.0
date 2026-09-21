@@ -58,7 +58,7 @@
 --       AND column_name = 'email_verified_at';   -- expect 0 before, 1 after
 --   SELECT COUNT(*) FROM users WHERE deleted_at IS NULL;  -- unchanged by this migration
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/008_email_verification.sql
 --
 -- Verify:

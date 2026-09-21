@@ -9,17 +9,17 @@ state (a fresh install already includes every migration). These files are for an
 
 ## Order
 
-| # | File | Batch | Touches | New tables |
-|---|------|-------|---------|-----------|
-| 001 | `001_xp_events.sql` | 1 | — | `xp_events` |
-| 002 | `002_resumable_quiz_attempts.sql` | 2 | `quiz_attempts`, `quiz_attempt_answers` | — |
-| 003 | `003_personalization_context.sql` | 3 | `subjects`, `lessons`, `quizzes` | — |
-| 004 | `004_course_assessments.sql` | 4 | `quizzes`, `quiz_attempts` | — |
-| 005 | `005_material_sharing.sql` | 5 | `subjects`, `quizzes` | `material_shares` |
-| 006 | `006_gamification.sql` | 6 | `user_profiles` | `achievements`, `user_achievements` |
-| 007 | `007_chat_quiz_provenance.sql` | 7 | `quizzes` | — |
-| 008 | `008_email_verification.sql` | 8 | `users` | `email_verification_tokens` |
-| 009 | `009_chat_pending_intent.sql` | 9 | `chat_conversations` | — |
+| # | File | Touches | New tables |
+|---|------|---------|-----------|
+| 001 | `001_xp_events.sql` | — | `xp_events` |
+| 002 | `002_resumable_quiz_attempts.sql` | `quiz_attempts`, `quiz_attempt_answers` | — |
+| 003 | `003_personalization_context.sql` | `subjects`, `lessons`, `quizzes` | — |
+| 004 | `004_course_assessments.sql` | `quizzes`, `quiz_attempts` | — |
+| 005 | `005_material_sharing.sql` | `subjects`, `quizzes` | `material_shares` |
+| 006 | `006_gamification.sql` | `user_profiles` | `achievements`, `user_achievements` |
+| 007 | `007_chat_quiz_provenance.sql` | `quizzes` | — |
+| 008 | `008_email_verification.sql` | `users` | `email_verification_tokens` |
+| 009 | `009_chat_pending_intent.sql` | `chat_conversations` | — |
 
 Rehearsed end-to-end against a fresh copy of the `v1.0.0` production schema:
 43 tables → 48 tables (009 adds a column, not a table), every migration applies
@@ -44,8 +44,8 @@ For every migration, in order:
    already reconcile. If the change is already present, that migration was
    already applied — skip it.
 3. **Apply** — pipe the file into the DB on the correct connection
-   (`mysql <conn> <dbname> < database/migrations/NNN_*.sql`). Local dev only in
-   this batch; never against Aiven here.
+   (`mysql <conn> <dbname> < database/migrations/NNN_*.sql`). Local dev only;
+   never against Aiven here.
 4. **Verify** — run the `Verify` query from the header.
 5. **Post-steps** (001, 006, 008 have one; the rest don't):
    - **001** — none; `xp_events` seeds each user's existing balance as one

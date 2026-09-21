@@ -1,6 +1,6 @@
 # AILA Database Package
 
-This folder contains the production-ready MySQL/MariaDB database package for AILA, generated from the finalized database architecture document.
+This folder contains the production-ready MySQL/MariaDB database package for AILA.
 
 ## Files
 
@@ -48,8 +48,4 @@ The passwords are stored as Node bcrypt-compatible hashes in `seed.sql`. These a
 
 ## Scope
 
-This package only creates the database layer. It does not add Express.js, APIs, React code, or frontend changes.
-
-## Validation Note
-
-The architecture document says "Total tables: 34," but its table inventory and definitions enumerate 38 tables. This package includes all 38 listed tables so that no documented table is skipped.
+This package only creates the database layer. It does not add Express.js, APIs, React code, or frontend changes. The schema has 38 tables; see `database_documentation.md` for the full table inventory.

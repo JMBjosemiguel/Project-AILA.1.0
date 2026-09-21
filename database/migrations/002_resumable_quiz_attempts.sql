@@ -15,7 +15,7 @@
 --         completed submissions). New in-progress attempts set it explicitly.
 --     + current_index SMALLINT UNSIGNED NOT NULL DEFAULT 0    -- resume position
 --     + active_slot   TINYINT  UNSIGNED NULL DEFAULT NULL     -- 1 while in progress, NULL otherwise
---     + expires_at    TIMESTAMP NULL DEFAULT NULL             -- reserved for future timed exams; unused this batch
+--     + expires_at    TIMESTAMP NULL DEFAULT NULL             -- reserved for future timed exams; not yet used
 --     + updated_at    TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
 --     + UNIQUE KEY (user_id, quiz_id, active_slot)
 --         At most ONE active attempt per (user, quiz). Because MariaDB/MySQL
@@ -51,7 +51,7 @@
 --     FROM quiz_attempt_answers
 --     GROUP BY attempt_id, question_id HAVING c > 1;
 --
--- Apply (local dev only — never against Aiven in this batch):
+-- Apply (local dev only — never against Aiven):
 --   "C:/xampp/mysql/bin/mysql.exe" -h 127.0.0.1 -u root aila_db < database/migrations/002_resumable_quiz_attempts.sql
 --
 -- Verify after apply:

@@ -16,6 +16,34 @@ import { setPrefillPrompt } from '../../../utils/aiPrefill';
 import { consumeResumeLesson } from '../../../utils/learningHubTarget';
 import { consumeResumeQuiz } from '../../../utils/quizResumeTarget';
 
+function matchesSearch(value, query) {
+  return String(value ?? '').toLowerCase().includes(query);
+}
+
+function subjectMatchesSearch(subject, query) {
+  if (!query) return true;
+
+  const subjectFields = [
+    subject.name,
+    subject.code,
+    subject.description,
+    subject.difficulty,
+    subject.goal,
+  ];
+
+  if (subjectFields.some((value) => matchesSearch(value, query))) {
+    return true;
+  }
+
+  return (subject.modules ?? []).some((module) => (
+    matchesSearch(module.title, query) ||
+    (module.topics ?? []).some((topic) => (
+      matchesSearch(topic.title, query) ||
+      (topic.lessons ?? []).some((lesson) => matchesSearch(lesson.title, query))
+    ))
+  ));
+}
+
 export default function LearningHubPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useLearningHubData(refreshVersion);
@@ -37,9 +65,10 @@ export default function LearningHubPage({ onNavigate }) {
     if (resumeQuiz) setResumeQuizId(resumeQuiz);
   }, []);
 
+  const normalizedSearch = search.trim().toLowerCase();
   const filtered = useMemo(() => (
-    search ? subjects.filter((subject) => subject.name.toLowerCase().includes(search.toLowerCase())) : subjects
-  ), [subjects, search]);
+    normalizedSearch ? subjects.filter((subject) => subjectMatchesSearch(subject, normalizedSearch)) : subjects
+  ), [subjects, normalizedSearch]);
 
   const handleAskAila = (prompt) => {
     setPrefillPrompt(prompt);
@@ -98,6 +127,12 @@ export default function LearningHubPage({ onNavigate }) {
             />
           ))}
         </div>
+      ) : subjects.length ? (
+        <EmptyState
+          icon={Search}
+          title="No matching courses"
+          message="Try a different search term."
+        />
       ) : (
         <EmptyState
           icon={BookOpen}

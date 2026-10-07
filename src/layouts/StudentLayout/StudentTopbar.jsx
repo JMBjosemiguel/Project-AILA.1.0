@@ -66,6 +66,26 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   }, [paletteOpen]);
 
   useEffect(() => {
+    setPaletteOpen(false);
+    setQuery('');
+    setActiveIndex(0);
+  }, [active]);
+
+  useEffect(() => {
+    const closeOnHidden = () => {
+      if (document.hidden) closePalette();
+    };
+    const closeOnBlur = () => closePalette();
+
+    document.addEventListener('visibilitychange', closeOnHidden);
+    window.addEventListener('blur', closeOnBlur);
+    return () => {
+      document.removeEventListener('visibilitychange', closeOnHidden);
+      window.removeEventListener('blur', closeOnBlur);
+    };
+  }, []);
+
+  useEffect(() => {
     setActiveIndex(0);
   }, [query]);
 
@@ -154,7 +174,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
 
       {paletteOpen && (
         <div
-          className="fixed inset-0 z-[160] bg-transparent flex items-start justify-center px-4 pt-20 sm:pt-24"
+          className="fixed inset-0 z-[160] bg-transparent flex items-start justify-center px-4 pt-[4.5rem]"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closePalette();

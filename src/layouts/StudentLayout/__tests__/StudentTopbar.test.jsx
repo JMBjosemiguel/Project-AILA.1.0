@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StudentTopbar from '../StudentTopbar';
 import { STUDENT_ROUTE_IDS } from '../../../app/routes/studentRoutes';
@@ -16,7 +16,7 @@ vi.mock('../../../hooks/useNotificationsData', () => ({
 }));
 
 function renderTopbar(onNavigate = vi.fn()) {
-  render(
+  const view = render(
     <StudentTopbar
       active={STUDENT_ROUTE_IDS.DASHBOARD}
       sidebarOpen={false}
@@ -24,7 +24,7 @@ function renderTopbar(onNavigate = vi.fn()) {
       onNavigate={onNavigate}
     />
   );
-  return { onNavigate };
+  return { onNavigate, ...view };
 }
 
 function getHeaderSearch() {
@@ -77,6 +77,41 @@ describe('StudentTopbar command palette', () => {
 
     await user.click(getHeaderSearch());
     await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('closes the palette when the active student route changes', async () => {
+    const user = userEvent.setup();
+    const { rerender, onNavigate } = renderTopbar();
+
+    await user.click(getHeaderSearch());
+    expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
+
+    rerender(
+      <StudentTopbar
+        active={STUDENT_ROUTE_IDS.ASSISTANT}
+        sidebarOpen={false}
+        onMenuClick={vi.fn()}
+        onNavigate={onNavigate}
+      />
+    );
+
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('closes the palette when the browser tab becomes hidden', async () => {
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(getHeaderSearch());
+    expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
+
+    const hiddenSpy = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    hiddenSpy.mockRestore();
 
     expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
   });

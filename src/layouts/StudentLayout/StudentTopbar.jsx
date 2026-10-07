@@ -154,7 +154,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
 
       {paletteOpen && (
         <div
-          className="fixed inset-0 z-[160] bg-ink-900/40 flex items-start justify-center px-4 pt-20 sm:pt-24"
+          className="fixed inset-0 z-[160] bg-transparent flex items-start justify-center px-4 pt-20 sm:pt-24"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closePalette();

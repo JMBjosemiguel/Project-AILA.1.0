@@ -3,7 +3,7 @@ const feedbackModel = require('../models/feedbackModel');
 const { logAdminAction } = require('../utils/adminAudit');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
-const CONTEXTS = ['ai_assistant', 'learning_hub', 'resources', 'planner', 'quiz'];
+const CONTEXTS = ['AILA Assistant', 'Learning Hub', 'Resource Library', 'Study Planner', 'Quizzes', 'Other'];
 
 const RATING_COLORS = {
   1: '#EF4444',

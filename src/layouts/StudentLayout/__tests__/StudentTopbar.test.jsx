@@ -53,6 +53,29 @@ describe('StudentTopbar command palette', () => {
     expect(getPaletteSearch()).toHaveFocus();
   });
 
+  it('aligns the palette with the header search box', async () => {
+    const user = userEvent.setup();
+    renderTopbar();
+    const headerSearch = getHeaderSearch().parentElement;
+    const boundsSpy = vi.spyOn(headerSearch, 'getBoundingClientRect').mockReturnValue({
+      x: 120,
+      y: 31,
+      left: 120,
+      top: 31,
+      right: 568,
+      bottom: 68,
+      width: 448,
+      height: 37,
+      toJSON: () => {},
+    });
+
+    await user.click(getHeaderSearch());
+
+    const dialog = screen.getByRole('dialog', { name: /search aila destinations/i });
+    expect(dialog).toHaveStyle({ left: '120px', top: '78px', width: '448px' });
+    boundsSpy.mockRestore();
+  });
+
   it('opens the palette with Ctrl+K', async () => {
     const user = userEvent.setup();
     renderTopbar();

@@ -1,5 +1,5 @@
 import { Bell, LogOut, Menu, Search, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STUDENT_NAV_GROUPS, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoutes';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationsData } from '../../hooks/useNotificationsData';
@@ -24,6 +24,8 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef(null);
+  const headerSearchRef = useRef(null);
+  const [palettePosition, setPalettePosition] = useState(null);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -32,7 +34,29 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       : STUDENT_SEARCH_DESTINATIONS;
   }, [query]);
 
+  const updatePalettePosition = useCallback(() => {
+    const rect = headerSearchRef.current?.getBoundingClientRect();
+    if (!rect?.width) {
+      setPalettePosition(null);
+      return;
+    }
+
+    const viewportPadding = 16;
+    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    const left = Math.min(
+      Math.max(rect.left, viewportPadding),
+      window.innerWidth - width - viewportPadding
+    );
+
+    setPalettePosition({
+      left,
+      top: rect.bottom + 10,
+      width,
+    });
+  }, []);
+
   const openPalette = () => {
+    updatePalettePosition();
     setPaletteOpen(true);
   };
 
@@ -64,6 +88,13 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
     if (!paletteOpen) return;
     searchInputRef.current?.focus();
   }, [paletteOpen]);
+
+  useEffect(() => {
+    if (!paletteOpen) return undefined;
+    updatePalettePosition();
+    window.addEventListener('resize', updatePalettePosition);
+    return () => window.removeEventListener('resize', updatePalettePosition);
+  }, [paletteOpen, updatePalettePosition]);
 
   useEffect(() => {
     setPaletteOpen(false);
@@ -138,7 +169,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       </div>
 
       <div className="flex-1 flex justify-end md:justify-center">
-        <div className="w-full max-w-md flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-white rounded-xl px-3 py-2 transition-colors">
+        <div ref={headerSearchRef} className="w-full max-w-md flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-white rounded-xl px-3 py-2 transition-colors">
           <Search size={15} className="text-ink-400 flex-shrink-0" />
           <input
             readOnly
@@ -174,7 +205,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
 
       {paletteOpen && (
         <div
-          className="fixed inset-0 z-[160] bg-transparent flex items-start justify-center px-4 pt-[4.5rem]"
+          className="fixed inset-0 z-[160] bg-transparent"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closePalette();
@@ -184,7 +215,16 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
             role="dialog"
             aria-modal="true"
             aria-labelledby="student-command-palette-title"
-            className="w-full max-w-lg bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden"
+            style={palettePosition ? {
+              left: `${palettePosition.left}px`,
+              top: `${palettePosition.top}px`,
+              width: `${palettePosition.width}px`,
+            } : {
+              left: '50%',
+              top: '4.5rem',
+              transform: 'translateX(-50%)',
+            }}
+            className="absolute w-[calc(100vw-2rem)] max-w-md bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden"
           >
             <div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100">
               <Search size={16} className="text-ink-400 flex-shrink-0" />

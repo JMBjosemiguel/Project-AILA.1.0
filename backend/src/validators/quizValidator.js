@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 
 const generateValidator = [
   body('topic').trim().notEmpty().withMessage('Please provide a topic.').isLength({ max: 200 }),
@@ -19,6 +19,10 @@ const attemptIdParamValidator = [
 
 const chatMessageIdParamValidator = [
   param('messageId').isInt({ min: 1 }).withMessage('Invalid message id.'),
+];
+
+const searchQuizzesValidator = [
+  query('search').optional().trim().isLength({ max: 200 }),
 ];
 
 // Legacy one-shot submission: POST /quizzes/:quizId/attempts
@@ -43,4 +47,5 @@ module.exports = {
   chatMessageIdParamValidator,
   submitAttemptValidator,
   saveAnswerValidator,
+  searchQuizzesValidator,
 };

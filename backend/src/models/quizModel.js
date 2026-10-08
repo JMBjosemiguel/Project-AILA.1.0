@@ -246,9 +246,23 @@ async function findQuizIdByChatMessage(userId, chatMessageId) {
   return rows[0]?.id ?? null;
 }
 
+// Strictly scoped to user_id — a quiz's `visibility`/share link lets someone
+// copy it into their own quizzes, but never makes it listable under search.
+async function searchQuizzesForUser(userId, searchTerm, limit = 20) {
+  return query(
+    `SELECT id, topic, quiz_type, difficulty, assessment_kind, subject_id, module_id
+       FROM quizzes
+      WHERE user_id = ? AND topic LIKE ?
+      ORDER BY created_at DESC
+      LIMIT ?`,
+    [userId, `%${searchTerm}%`, limit]
+  );
+}
+
 module.exports = {
   createQuiz,
   findQuizIdByChatMessage,
+  searchQuizzesForUser,
   getQuizWithQuestions,
   findActiveAttempt,
   createInProgressAttempt,

@@ -9,6 +9,12 @@ export function getQuiz(quizId) {
   return apiClient.get(API_ENDPOINTS.quizzes.quiz(quizId));
 }
 
+// Used by the Learning Hub search box. Returns { quizzes: [] } for a blank term.
+export function searchQuizzes(term) {
+  const params = new URLSearchParams({ search: term || '' });
+  return apiClient.get(`${API_ENDPOINTS.quizzes.search}?${params.toString()}`);
+}
+
 // Persist an informal chatbot mini-quiz as the student's own practice quiz.
 // Idempotent server-side: a repeat returns { alreadySaved: true, quizId, quiz }.
 export function saveChatQuizAsQuiz(messageId) {

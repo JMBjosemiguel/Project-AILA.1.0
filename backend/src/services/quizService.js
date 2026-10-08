@@ -929,6 +929,25 @@ async function deleteAttempt(userId, attemptId) {
   }
 }
 
+// Used by the Learning Hub search — the authenticated student's own quizzes
+// only, matched on topic. An empty term returns nothing rather than the whole
+// quiz list, since this endpoint only exists to back the search box.
+async function searchQuizzes(userId, search) {
+  const term = (search || '').trim();
+  if (!term) return [];
+
+  const rows = await quizModel.searchQuizzesForUser(userId, term);
+  return rows.map((row) => ({
+    id: row.id,
+    topic: row.topic,
+    quizType: row.quiz_type,
+    difficulty: row.difficulty,
+    assessmentKind: row.assessment_kind || 'practice',
+    subjectId: row.subject_id,
+    moduleId: row.module_id,
+  }));
+}
+
 module.exports = {
   generateQuiz,
   generateFlashcards,
@@ -944,6 +963,7 @@ module.exports = {
   listActiveAttempts,
   listQuizHistory,
   deleteAttempt,
+  searchQuizzes,
   formatQuizForTake,
   formatAttemptForResume,
   formatAttemptReview,

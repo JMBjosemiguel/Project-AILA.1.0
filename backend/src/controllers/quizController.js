@@ -69,6 +69,12 @@ const history = asyncHandler(async (req, res) => {
   sendSuccess(res, { attempts }, 200, 'Quiz history retrieved.');
 });
 
+// GET /quizzes/search — used by the Learning Hub search box.
+const search = asyncHandler(async (req, res) => {
+  const quizzes = await quizService.searchQuizzes(req.auth.user.id, req.query.search);
+  sendSuccess(res, { quizzes }, 200, 'Quizzes retrieved.');
+});
+
 // GET /quizzes/attempts/:attemptId — resume (in progress) or review (submitted).
 const getAttempt = asyncHandler(async (req, res) => {
   const attempt = await quizService.getAttempt(req.auth.user.id, req.params.attemptId);
@@ -89,6 +95,7 @@ module.exports = {
   submitAttempt,
   submitLegacyAttempt,
   history,
+  search,
   getAttempt,
   deleteAttempt,
 };

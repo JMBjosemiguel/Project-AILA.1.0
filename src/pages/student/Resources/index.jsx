@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, ExternalLink, FolderOpen, Link2, Loader2, Pencil, Sparkles, Trash2, Upload } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
@@ -15,6 +15,7 @@ import { RESOURCE_TYPES } from '../../../constants/ui';
 import { useResourceLibraryData } from '../../../hooks/useResourceLibraryData';
 import { addLinkResource, deleteResource, downloadResource, logResourceView, openResourceFile, uploadResource } from '../../../services/api/resourceService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
+import { consumeResourceSearchTarget } from '../../../utils/resourceSearchTarget';
 
 const ACCEPTED_FILE_TYPES = [
   'application/pdf',
@@ -51,6 +52,11 @@ export default function ResourcesPage({ onNavigate }) {
   const recentlyOpened = data?.recentlyOpened ?? [];
   const popular = data?.popular ?? [];
   const recommended = data?.recommended ?? [];
+
+  useEffect(() => {
+    const term = consumeResourceSearchTarget();
+    if (term) setSearch(term);
+  }, []);
 
   const filtered = useMemo(() => (resources ?? []).filter((file) => (
     (type === 'all' || file.type === type) &&

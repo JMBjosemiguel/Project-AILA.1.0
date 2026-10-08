@@ -10,6 +10,7 @@ const {
   submitAttemptValidator,
   saveAnswerValidator,
   chatMessageIdParamValidator,
+  searchQuizzesValidator,
 } = require('../validators/quizValidator');
 
 const router = express.Router();
@@ -19,6 +20,8 @@ router.post('/generate', authenticate, aiRateLimiter, generateValidator, validat
 // AI call, no aiRateLimiter — it copies already-generated questions.
 router.post('/from-chat-message/:messageId', authenticate, chatMessageIdParamValidator, validateRequest, quizController.saveFromChatMessage);
 router.get('/history', authenticate, quizController.history);
+// Registered ahead of the /:quizId catch-all so "search" is never read as a quiz id.
+router.get('/search', authenticate, searchQuizzesValidator, validateRequest, quizController.search);
 
 // Resumable attempt lifecycle.
 router.post('/:quizId/attempts/start', authenticate, quizIdParamValidator, validateRequest, quizController.startAttempt);

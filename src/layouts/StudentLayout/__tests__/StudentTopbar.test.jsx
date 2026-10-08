@@ -53,27 +53,28 @@ describe('StudentTopbar command palette', () => {
     expect(getPaletteSearch()).toHaveFocus();
   });
 
-  it('aligns the palette with the header search box', async () => {
+  it('shows exactly one search input at a time, in the same spot as the topbar search box', async () => {
     const user = userEvent.setup();
     renderTopbar();
-    const headerSearch = getHeaderSearch().parentElement;
-    const boundsSpy = vi.spyOn(headerSearch, 'getBoundingClientRect').mockReturnValue({
-      x: 120,
-      y: 31,
-      left: 120,
-      top: 31,
-      right: 568,
-      bottom: 68,
-      width: 448,
-      height: 37,
-      toJSON: () => {},
-    });
+
+    expect(screen.getAllByPlaceholderText('Search AILA...')).toHaveLength(1);
 
     await user.click(getHeaderSearch());
 
-    const dialog = screen.getByRole('dialog', { name: /search aila destinations/i });
-    expect(dialog).toHaveStyle({ left: '120px', top: '78px', width: '448px' });
-    boundsSpy.mockRestore();
+    expect(screen.getAllByPlaceholderText('Search AILA...')).toHaveLength(1);
+    expect(getPaletteSearch()).toBeInTheDocument();
+  });
+
+  it('closes the palette when clicking outside it', async () => {
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(getHeaderSearch());
+    expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
+
+    await user.click(document.body);
+
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
   });
 
   it('opens the palette with Ctrl+K', async () => {

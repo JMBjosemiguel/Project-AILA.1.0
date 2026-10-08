@@ -1,5 +1,5 @@
 import { Bell, LogOut, Menu, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { STUDENT_NAV_GROUPS, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoutes';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationsData } from '../../hooks/useNotificationsData';
@@ -25,7 +25,6 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef(null);
   const headerSearchRef = useRef(null);
-  const [palettePosition, setPalettePosition] = useState(null);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -34,29 +33,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       : STUDENT_SEARCH_DESTINATIONS;
   }, [query]);
 
-  const updatePalettePosition = useCallback(() => {
-    const rect = headerSearchRef.current?.getBoundingClientRect();
-    if (!rect?.width) {
-      setPalettePosition(null);
-      return;
-    }
-
-    const viewportPadding = 16;
-    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
-    const left = Math.min(
-      Math.max(rect.left, viewportPadding),
-      window.innerWidth - width - viewportPadding
-    );
-
-    setPalettePosition({
-      left,
-      top: rect.bottom + 10,
-      width,
-    });
-  }, []);
-
   const openPalette = () => {
-    updatePalettePosition();
     setPaletteOpen(true);
   };
 
@@ -91,10 +68,14 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
 
   useEffect(() => {
     if (!paletteOpen) return undefined;
-    updatePalettePosition();
-    window.addEventListener('resize', updatePalettePosition);
-    return () => window.removeEventListener('resize', updatePalettePosition);
-  }, [paletteOpen, updatePalettePosition]);
+    const handleClickOutside = (event) => {
+      if (headerSearchRef.current && !headerSearchRef.current.contains(event.target)) {
+        closePalette();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [paletteOpen]);
 
   useEffect(() => {
     setPaletteOpen(false);
@@ -169,15 +150,92 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       </div>
 
       <div className="flex-1 flex justify-end md:justify-center">
-        <div ref={headerSearchRef} className="w-full max-w-md flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-white rounded-xl px-3 py-2 transition-colors">
-          <Search size={15} className="text-ink-400 flex-shrink-0" />
-          <input
-            readOnly
-            onClick={openPalette}
-            onFocus={openPalette}
-            placeholder="Search AILA..."
-            className="flex-1 bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 min-w-0"
-          />
+        <div ref={headerSearchRef} className="relative w-full max-w-md h-9">
+          {!paletteOpen && (
+            <div className="h-9 w-full flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-white rounded-xl px-3 transition-colors">
+              <Search size={15} className="text-ink-400 flex-shrink-0" />
+              <input
+                readOnly
+                onClick={openPalette}
+                onFocus={openPalette}
+                placeholder="Search AILA..."
+                className="flex-1 bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 min-w-0"
+              />
+            </div>
+          )}
+
+          {paletteOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-command-palette-title"
+              className="absolute top-0 left-0 z-50 w-full bg-white rounded-xl shadow-soft ring-1 ring-inset ring-primary-300 overflow-hidden"
+            >
+              <div className="h-9 flex items-center gap-2 px-3">
+                <Search size={15} className="text-ink-400 flex-shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={handlePaletteKeyDown}
+                  placeholder="Search AILA..."
+                  aria-label="Search AILA"
+                  className="flex-1 bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 min-w-0"
+                />
+                <button
+                  type="button"
+                  onClick={closePalette}
+                  aria-label="Close search"
+                  className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto scrollbar-thin p-2 border-t border-ink-100">
+                <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
+                {results.length ? (
+                  <div role="listbox" aria-label="Student destinations" className="flex flex-col gap-1">
+                    {results.map((destination, index) => {
+                      const Icon = destination.icon;
+                      const selected = index === activeIndex;
+
+                      return (
+                        <button
+                          key={destination.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onMouseEnter={() => setActiveIndex(index)}
+                          onClick={() => navigateTo(destination)}
+                          className={[
+                            'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+                            selected ? 'bg-primary-50 text-primary' : 'text-ink-700 hover:bg-ink-50',
+                          ].join(' ')}
+                        >
+                          <span className={[
+                            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                            selected ? 'bg-white text-primary' : 'bg-ink-50 text-ink-400',
+                          ].join(' ')}>
+                            <Icon size={16} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold truncate">{destination.label}</span>
+                            <span className="block text-xs text-ink-400 truncate">{destination.subtitle}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-sm text-ink-400">
+                    <p className="font-semibold text-ink-600">No results found</p>
+                    <p className="text-xs mt-1">Try another destination.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -202,96 +260,6 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
           <LogOut size={17} />
         </button>
       </div>
-
-      {paletteOpen && (
-        <div
-          className="fixed inset-0 z-[160] bg-transparent"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closePalette();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="student-command-palette-title"
-            style={palettePosition ? {
-              left: `${palettePosition.left}px`,
-              top: `${palettePosition.top}px`,
-              width: `${palettePosition.width}px`,
-            } : {
-              left: '50%',
-              top: '4.5rem',
-              transform: 'translateX(-50%)',
-            }}
-            className="absolute w-[calc(100vw-2rem)] max-w-md bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden"
-          >
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100">
-              <Search size={16} className="text-ink-400 flex-shrink-0" />
-              <input
-                ref={searchInputRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={handlePaletteKeyDown}
-                placeholder="Search AILA..."
-                aria-label="Search AILA"
-                className="flex-1 bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 min-w-0"
-              />
-              <button
-                type="button"
-                onClick={closePalette}
-                aria-label="Close search"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="max-h-80 overflow-y-auto p-2">
-              <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
-              {results.length ? (
-                <div role="listbox" aria-label="Student destinations" className="flex flex-col gap-1">
-                  {results.map((destination, index) => {
-                    const Icon = destination.icon;
-                    const selected = index === activeIndex;
-
-                    return (
-                      <button
-                        key={destination.id}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        onMouseEnter={() => setActiveIndex(index)}
-                        onClick={() => navigateTo(destination)}
-                        className={[
-                          'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
-                          selected ? 'bg-primary-50 text-primary' : 'text-ink-700 hover:bg-ink-50',
-                        ].join(' ')}
-                      >
-                        <span className={[
-                          'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                          selected ? 'bg-white text-primary' : 'bg-ink-50 text-ink-400',
-                        ].join(' ')}>
-                          <Icon size={16} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold truncate">{destination.label}</span>
-                          <span className="block text-xs text-ink-400 truncate">{destination.subtitle}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-10 text-center text-sm text-ink-400">
-                  <p className="font-semibold text-ink-600">No results found</p>
-                  <p className="text-xs mt-1">Try another destination.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

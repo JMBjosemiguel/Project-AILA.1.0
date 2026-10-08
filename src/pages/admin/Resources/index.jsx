@@ -14,7 +14,7 @@ import {
   listAdminResources, deleteAdminResource, archiveAdminResource, unarchiveAdminResource, bulkResourceAction,
   openAdminResourceFile, downloadAdminResource,
 } from '../../../services/api/adminService';
-import { RESOURCE_TYPES } from '../../../constants/ui';
+import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
 
 const SORT_OPTIONS = [
   { id: 'newest', label: 'Newest' },
@@ -185,9 +185,9 @@ export default function AdminResourcesPage() {
           <button
             key={resourceType}
             onClick={() => setType(resourceType)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors capitalize ${type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
           >
-            {resourceType}
+            {RESOURCE_TYPE_LABELS[resourceType] ?? resourceType}
           </button>
         ))}
       </div>

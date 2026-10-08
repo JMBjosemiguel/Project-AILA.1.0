@@ -48,7 +48,7 @@ export default function ResourceCard({ file, onSelect, selected, onOpen, onDownl
         <p className="text-sm font-semibold text-ink-800 truncate">{file.title}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <DomainChip subject={subject} />
-          <span className="text-xs text-ink-400">{file.category_name ?? file.type}</span>
+          {file.category_name && <span className="text-xs text-ink-400">{file.category_name}</span>}
         </div>
       </div>
       <span className="text-[0.65rem] font-bold text-ink-400 uppercase flex-shrink-0">{file.type}</span>

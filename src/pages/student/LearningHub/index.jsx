@@ -232,7 +232,7 @@ export default function LearningHubPage({ onNavigate }) {
         <>
           {normalizedSearch && <h2 className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Courses</h2>}
           {filtered.length ? (
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4 items-start">
               {filtered.map((subject) => (
                 <SubjectCard
                   key={subject.id}

@@ -31,7 +31,7 @@ export default function EditResourceDialog({ file, subjects, onClose, onSaved })
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="edit-resource-title">
+    <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="edit-resource-title">
       <div className="w-full max-w-md max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <h3 id="edit-resource-title" className="text-[0.95rem] font-semibold text-ink-800">Edit resource</h3>

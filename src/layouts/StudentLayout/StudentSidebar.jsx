@@ -14,7 +14,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
     <aside
       id="student-sidebar-nav"
       className={[
-        'fixed lg:static top-0 left-0 bottom-0 z-[100] w-64 flex-shrink-0',
+        'fixed lg:static top-0 left-0 bottom-0 z-[100] w-64 h-screen flex-shrink-0',
         'bg-white border-r border-ink-100 flex flex-col transition-transform duration-300',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       ].join(' ')}
@@ -32,7 +32,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4 flex flex-col gap-5">
+      <nav className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-3 py-4 flex flex-col gap-5">
         {navGroups.map((group) => (
           <div key={group.label}>
             <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-3 mb-1.5">

@@ -87,7 +87,7 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
                 <span className="text-[0.6rem] font-bold uppercase tracking-wide text-ink-400 bg-ink-50 px-1.5 py-0.5 rounded-full flex-shrink-0">Copied</span>
               )}
             </div>
-            <div className="text-xs text-ink-400">{subject.code || (subject.difficulty ? `${subject.difficulty} level` : '')}</div>
+            {subject.code && <div className="text-xs text-ink-400">{subject.code}</div>}
           </div>
         </button>
         {nextLesson && (

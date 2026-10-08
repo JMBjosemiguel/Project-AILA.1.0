@@ -11,7 +11,7 @@ import { useToast } from '../../../components/common/Toast';
 import ResourceCard from '../../../components/student/resources/ResourceCard';
 import EditResourceDialog from '../../../components/student/resources/EditResourceDialog';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
-import { RESOURCE_TYPES } from '../../../constants/ui';
+import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
 import { useResourceLibraryData } from '../../../hooks/useResourceLibraryData';
 import { addLinkResource, deleteResource, downloadResource, logResourceView, openResourceFile, uploadResource } from '../../../services/api/resourceService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
@@ -229,11 +229,11 @@ export default function ResourcesPage({ onNavigate }) {
                 key={resourceType}
                 onClick={() => setType(resourceType)}
                 className={[
-                  'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors capitalize',
+                  'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
                   type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300',
                 ].join(' ')}
               >
-                {resourceType}
+                {RESOURCE_TYPE_LABELS[resourceType] ?? resourceType}
               </button>
             ))}
           </div>

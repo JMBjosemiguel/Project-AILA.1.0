@@ -79,8 +79,16 @@ async function purgeByTag(tag) {
       'study_tasks', 'task_status_log',
       'notification_recipients', 'dashboard_activity_log', 'learning_streaks', 'user_achievements', 'xp_events',
       'lesson_progress', 'learning_progress', 'user_sessions', 'feedback', 'user_profiles',
+      // admin_audit_log.admin_id is the actor, now also written for student
+      // actions (login/register/verify/upload/submit) — its FK is ON DELETE
+      // RESTRICT, so these rows must go before the final DELETE FROM users
+      // below or that delete silently fails for any tagged user who triggered one.
+      'admin_audit_log',
     ]) {
-      const col = t === 'resources' ? 'uploaded_by' : (t === 'quiz_questions' || t === 'quiz_attempt_answers' || t === 'chat_messages' || t === 'resource_views_log' || t === 'resource_subjects' || t === 'task_status_log') ? null : 'user_id';
+      const col = t === 'resources' ? 'uploaded_by'
+        : t === 'admin_audit_log' ? 'admin_id'
+        : (t === 'quiz_questions' || t === 'quiz_attempt_answers' || t === 'chat_messages' || t === 'resource_views_log' || t === 'resource_subjects' || t === 'task_status_log') ? null
+        : 'user_id';
       if (col) await db.query(`DELETE FROM ${t} WHERE ${col} = ?`, [id]).catch(() => {});
     }
   }

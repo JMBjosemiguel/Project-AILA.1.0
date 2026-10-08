@@ -11,6 +11,12 @@ function actionLabel(action) {
   return action.replace(/_/g, ' ').replace(/\./g, ' · ');
 }
 
+const ROLE_FILTERS = [
+  { id: 'all', label: 'All roles' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'student', label: 'Student' },
+];
+
 export default function AdminAuditLogPage() {
   const [entries, setEntries] = useState([]);
   const [actions, setActions] = useState([]);
@@ -19,6 +25,7 @@ export default function AdminAuditLogPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('all');
+  const [role, setRole] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
@@ -28,19 +35,19 @@ export default function AdminAuditLogPage() {
   const load = () => {
     setLoading(true);
     setError(null);
-    listAuditLog({ search, action, from, to, page, pageSize: 15 })
+    listAuditLog({ search, action, role, from, to, page, pageSize: 15 })
       .then((result) => { setEntries(result.entries ?? []); setActions(result.actions ?? []); setPagination(result.pagination); })
       .catch((err) => setError(err))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [search, action, from, to, page]);
-  useEffect(() => { setPage(1); }, [search, action, from, to]);
+  useEffect(load, [search, action, role, from, to, page]);
+  useEffect(() => { setPage(1); }, [search, action, role, from, to]);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportAuditLog({ search, action, from, to });
+      await exportAuditLog({ search, action, role, from, to });
     } catch (error) {
       toast.error(error.message || 'Could not export the audit log.');
     } finally {
@@ -50,20 +57,41 @@ export default function AdminAuditLogPage() {
 
   const columns = [
     { key: 'timestamp', label: 'Timestamp', render: (e) => <span className="text-ink-500 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</span> },
-    { key: 'admin', label: 'Admin', render: (e) => <span className="text-ink-700 font-medium">{e.first_name} {e.last_name}</span> },
+    {
+      key: 'user',
+      label: 'User',
+      render: (e) => (
+        <span className="flex items-center gap-2">
+          <span className="text-ink-700 font-medium">{e.first_name} {e.last_name}</span>
+          <span className="text-ink-400 text-xs">#{e.admin_id}</span>
+          <span className={`text-[0.6rem] font-bold uppercase px-1.5 py-0.5 rounded-full ${e.role === 'admin' ? 'bg-primary-50 text-primary' : 'bg-ink-50 text-ink-500'}`}>
+            {e.role}
+          </span>
+        </span>
+      ),
+    },
     { key: 'action', label: 'Action', render: (e) => <span className="text-ink-600 capitalize">{actionLabel(e.action)}</span> },
     {
       key: 'target',
       label: 'Affected object',
-      render: (e) => <span className="text-ink-500 capitalize">{e.target_table.replace(/_/g, ' ')}{e.target_id ? ` #${e.target_id}` : ''}</span>,
+      render: (e) => (
+        <span className="text-ink-500">
+          {e.target_name
+            ? <>{e.target_name}{e.target_id ? <span className="text-ink-400"> (#{e.target_id})</span> : null}</>
+            : <span className="capitalize">{e.target_table.replace(/_/g, ' ')}{e.target_id ? ` #${e.target_id}` : ''}</span>}
+        </span>
+      ),
     },
   ];
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp flex flex-col gap-4">
       <div className="flex flex-col sm:flex-row gap-3">
-        <SearchBar value={search} onChange={setSearch} placeholder="Search by admin or action..." className="flex-1" />
+        <SearchBar value={search} onChange={setSearch} placeholder="Search by name or action..." className="flex-1" />
         <div className="flex gap-2 flex-wrap items-center">
+          <select value={role} onChange={(event) => setRole(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none">
+            {ROLE_FILTERS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
           <select value={action} onChange={(event) => setAction(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none">
             <option value="all">All actions</option>
             {actions.map((a) => <option key={a} value={a}>{actionLabel(a)}</option>)}
@@ -83,7 +111,7 @@ export default function AdminAuditLogPage() {
         loading={loading}
         error={error}
         onRetry={load}
-        emptyState={{ icon: ScrollText, title: 'No admin activity yet', message: 'Actions taken by administrators will be recorded here.' }}
+        emptyState={{ icon: ScrollText, title: 'No activity yet', message: 'Actions taken by admins and students will be recorded here.' }}
         footer={<Pagination page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} pageSize={pagination.pageSize} onPageChange={setPage} />}
       />
     </div>

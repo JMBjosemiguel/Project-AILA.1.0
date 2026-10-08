@@ -139,8 +139,8 @@ const getAnalytics = asyncHandler(async (req, res) => {
 });
 
 const listAuditLog = asyncHandler(async (req, res) => {
-  const { search = '', action = 'all', from = '', to = '' } = req.query;
-  const result = await adminService.listAuditLog({ search, action, from, to, page: req.query.page, pageSize: req.query.pageSize });
+  const { search = '', action = 'all', role = 'all', from = '', to = '' } = req.query;
+  const result = await adminService.listAuditLog({ search, action, role, from, to, page: req.query.page, pageSize: req.query.pageSize });
   sendSuccess(res, result, 200, 'Audit log retrieved.');
 });
 
@@ -150,19 +150,24 @@ function csvEscape(value) {
 }
 
 const exportAuditLog = asyncHandler(async (req, res) => {
-  const { search = '', action = 'all', from = '', to = '' } = req.query;
-  const rows = await adminService.exportAuditLogCsv({ search, action, from, to });
+  const { search = '', action = 'all', role = 'all', from = '', to = '' } = req.query;
+  const rows = await adminService.exportAuditLogCsv({ search, action, role, from, to });
 
-  const header = ['Timestamp', 'Admin', 'Email', 'Action', 'Target Table', 'Target ID'];
+  const header = ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Target Table', 'Target ID', 'Affected Object'];
   const lines = [header.join(',')];
   for (const row of rows) {
+    const affectedObject = row.target_name
+      ? `${row.target_name}${row.target_id ? ` (#${row.target_id})` : ''}`
+      : `${row.target_table}${row.target_id ? ` #${row.target_id}` : ''}`;
     lines.push([
       new Date(row.created_at).toISOString(),
       csvEscape(`${row.first_name} ${row.last_name}`),
       csvEscape(row.email),
+      csvEscape(row.role),
       csvEscape(row.action),
       csvEscape(row.target_table),
       row.target_id ?? '',
+      csvEscape(affectedObject),
     ].join(','));
   }
 

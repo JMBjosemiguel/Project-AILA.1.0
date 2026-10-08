@@ -9,6 +9,7 @@ const { extractPdfText, truncateForAi } = require('../utils/pdfText');
 const { extractOfficeText } = require('../utils/officeText');
 const { assertFetchableExternalUrl } = require('../utils/safeUrl');
 const { deleteStoredFile, getStoredFile, storeResourceFile } = require('./storageService');
+const { logAdminAction } = require('../utils/adminAudit');
 
 const ANALYSIS_SCHEMA = {
   type: 'OBJECT',
@@ -289,6 +290,12 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
     title: 'Resource ready',
     body: `"${title}" has been processed. Ask AILA about it or generate a quiz from it.`,
   });
+
+  try {
+    await logAdminAction(userId, 'resource.upload', 'resources', resourceId);
+  } catch (error) {
+    console.error(`[resourceService] failed to write audit log entry for resource ${resourceId} upload: ${error.message}`);
+  }
 
   return { id: resourceId, title };
 }

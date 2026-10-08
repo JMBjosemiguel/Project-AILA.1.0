@@ -16,6 +16,17 @@ const { createSession, deleteSession } = require('../models/sessionModel');
 const emailVerificationModel = require('../models/emailVerificationModel');
 const emailService = require('../services/emailService');
 const { generateVerificationToken, hashVerificationToken, looksLikeVerificationToken } = require('../utils/verificationToken');
+const { logAdminAction } = require('../utils/adminAudit');
+
+// Audit logging is best-effort — it must never turn an already-successful
+// auth action into a reported failure.
+async function logAuditSafe(actorId, action, targetId, details = null) {
+  try {
+    await logAdminAction(actorId, action, 'users', targetId, details);
+  } catch (error) {
+    console.error(`[authService] failed to write audit log entry "${action}" for user ${targetId}: ${error.message}`);
+  }
+}
 
 const STUDENT_ROLE = 'student';
 const VERIFICATION_TOKEN_TTL_MS = 30 * 60 * 1000; // ~30 minutes
@@ -210,6 +221,7 @@ async function register(payload) {
   }
 
   const user = await findUserById(userId);
+  await logAuditSafe(userId, 'user.register', userId);
 
   // Steps 1-4 (validate, create user, create token, COMMIT) are already
   // durable at this point — the account exists no matter what happens next.
@@ -256,6 +268,7 @@ async function login(payload, requestMeta) {
   await updateLastLogin(userWithPassword.id);
 
   const user = await findUserById(userWithPassword.id);
+  await logAuditSafe(user.id, 'user.login', user.id);
 
   return {
     user,
@@ -265,6 +278,7 @@ async function login(payload, requestMeta) {
 
 async function logout(auth) {
   await deleteSession(auth.session.id, auth.user.id);
+  await logAuditSafe(auth.user.id, 'user.logout', auth.user.id);
 }
 
 async function verifyEmail(rawToken) {
@@ -272,8 +286,9 @@ async function verifyEmail(rawToken) {
     throw new ApiError(400, 'This verification link is invalid.', { code: 'TOKEN_INVALID' });
   }
   const tokenHash = hashVerificationToken(rawToken);
+  let verifiedUserId = null;
 
-  return transaction(async (connection) => {
+  const result = await transaction(async (connection) => {
     const tokenRow = await emailVerificationModel.findTokenByHashForUpdate(tokenHash, connection);
     if (!tokenRow) {
       throw new ApiError(400, 'This verification link is invalid.', { code: 'TOKEN_INVALID' });
@@ -304,8 +319,17 @@ async function verifyEmail(rawToken) {
     await emailVerificationModel.markTokenUsed(tokenRow.id, connection);
     await emailVerificationModel.markUserVerified(tokenRow.user_id, connection);
 
+    verifiedUserId = tokenRow.user_id;
     return { alreadyVerified: false };
   });
+
+  // Only the genuine state transition is logged — not a repeat click on an
+  // already-verified link.
+  if (verifiedUserId) {
+    await logAuditSafe(verifiedUserId, 'user.verify_email', verifiedUserId);
+  }
+
+  return result;
 }
 
 async function resendVerification(rawEmail) {

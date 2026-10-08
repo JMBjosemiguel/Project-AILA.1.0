@@ -11,6 +11,7 @@ const achievementService = require('./achievementService');
 const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 const { truncateForAi } = require('../utils/pdfText');
+const { logAdminAction } = require('../utils/adminAudit');
 
 const QUIZ_SYSTEM_RULES = [
   'You generate college quizzes as JSON only.',
@@ -853,6 +854,13 @@ async function submitAttempt(userId, attemptId) {
   if (isFormal && !passed) {
     review.recommendation = await buildFailRecommendation(userId, quiz);
   }
+
+  try {
+    await logAdminAction(userId, 'quiz.submit', 'quiz_attempts', attempt.id, { quizId: quiz.id, score, total, passed });
+  } catch (error) {
+    console.error(`[quizService] failed to write audit log entry for attempt ${attempt.id} submission: ${error.message}`);
+  }
+
   return review;
 }
 

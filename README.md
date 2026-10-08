@@ -36,7 +36,7 @@ For production, set `VITE_API_URL` to the deployed Render backend URL with `/api
 VITE_API_URL=https://your-render-service.onrender.com/api
 ```
 
-See `DEPLOYMENT.md` for the Cloudflare Pages, Render, Aiven MySQL, and Cloudflare R2 deployment flow.
+See `docs/DEPLOYMENT.md` for the Cloudflare Pages, Render, Aiven MySQL, and Cloudflare R2 deployment flow.
 
 ## Routes
 
@@ -128,7 +128,7 @@ when the request fails.
 Local dev uses `aila_db` on XAMPP MySQL/MariaDB. For a **fresh install** import
 `database/schema.sql` + `seed.sql` (see `database/migration_notes.md`). For an
 **existing database on v1.0.0**, apply the ordered migrations in
-`database/migrations/` (`001`–`007`) — see `database/migrations/README.md`.
+`database/migrations/` (`001`–`009`) — see `database/migrations/README.md`.
 
 ## Run
 

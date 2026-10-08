@@ -1,54 +1,72 @@
-# AILA Database Migration Notes
+# AILA Database Import Notes
+
+This document summarizes the local database package, import order,
+compatibility assumptions, and validation checks for the AILA MySQL/MariaDB
+schema.
 
 ## Validation Summary
 
-- The schema has 38 tables, matching the ERD, table definitions, and the frontend `DATABASE_TABLES` constant.
-- No duplicate table names.
-- No duplicate columns within a table.
-- Every relationship in the ERD is represented as a foreign key, except `feedback.context_type/context_id`, which is a lightweight polymorphic reference rather than a strict FK.
-- No circular foreign-key dependencies.
-- Junction tables use composite primary keys where specified.
-- Recommended indexes are included for login lookups, chatbot keyword matching, ordered chat history, task dashboards, unread notification counts, learning progress uniqueness, and foreign-key lookup columns.
-- Normalization targets 3NF. The only intentional denormalization/flexibility point is the feedback polymorphic reference described above.
+- The schema is normalized around users, learning content, resources, planner
+  tasks, quizzes, chat, notifications, feedback, analytics, and administration.
+- Tables use InnoDB, `utf8mb4`, and `utf8mb4_unicode_ci`.
+- Primary keys, foreign keys, indexes, and junction-table composite keys are
+  defined in the main schema files.
+- `feedback.context_type` and `feedback.context_id` are intentionally not
+  foreign-key constrained because feedback can refer to different application
+  areas.
+- `production_baseline.sql` contains only production-safe reference rows.
 
-## Import Order
+## Local Development Import
 
-Run the files in this order:
+Use these files for a fresh local XAMPP/phpMyAdmin database:
 
 1. `schema.sql`
-2. `seed.sql` for local development, or `production_baseline.sql` for production
+2. `seed.sql`
 3. `indexes.sql`
 4. `constraints.sql`
 
-`schema.sql` is self-contained and already creates tables, keys, indexes, and foreign keys. The separate `indexes.sql` and `constraints.sql` files are idempotent helper scripts that check `information_schema` before adding an index or foreign key, so they are safe to run after `schema.sql`.
+`schema.sql` creates and resets the local `aila_db` database. It is destructive
+and must not be used against production.
 
-For production, do not import `seed.sql` as-is. Use `production_baseline.sql`, then create admin and QA accounts with private passwords.
+`seed.sql` inserts development-only accounts and sample data. It must not be
+used for production or adviser-facing deployments.
 
-## phpMyAdmin Import Steps
+## Production Import
 
-1. Open XAMPP and start Apache and MySQL.
-2. Go to `http://localhost/phpmyadmin`.
+For a managed database such as Aiven, use:
+
+1. `production_schema.sql`
+2. `production_baseline.sql`
+
+Do not run `schema.sql`, `seed.sql`, `indexes.sql`, or `constraints.sql` against
+Aiven. The production schema already includes the required indexes and
+constraints.
+
+See `AIVEN_MIGRATION.md` for the complete Aiven runbook.
+
+## Local phpMyAdmin Steps
+
+1. Start Apache and MySQL from XAMPP.
+2. Open `http://localhost/phpmyadmin`.
 3. Open the SQL tab.
-4. Paste and run `database/schema.sql`.
-5. Paste and run `database/seed.sql`.
-6. Optionally paste and run `database/indexes.sql`.
-7. Optionally paste and run `database/constraints.sql`.
+4. Run `database/schema.sql`.
+5. Run `database/seed.sql`.
+6. Run `database/indexes.sql` if needed.
+7. Run `database/constraints.sql` if needed.
 
 ## Compatibility Notes
 
-- Target database name: `aila_db`.
-- Engine: InnoDB.
-- Charset: `utf8mb4`.
-- Collation: `utf8mb4_unicode_ci`.
-- Compatible with MySQL 8+ and MariaDB as bundled with XAMPP/phpMyAdmin.
-- `CHECK` constraints are included where useful. Older MariaDB/MySQL versions may parse or enforce them differently, but current MySQL 8+ and modern MariaDB support them.
-- Passwords in `seed.sql` are Node bcrypt-compatible hashes for local development only:
-  - `admin@aila.local` / `admin123`
-  - `student@aila.local` / `student123`
+- Local database name: `aila_db`.
+- Production database name is selected by the connection and may differ.
+- Compatible with modern MySQL and MariaDB versions used by the project.
+- Password hashes in `seed.sql` are for local development only.
 
-## Assumptions
+## Development-Only Accounts
 
-- `user_sessions`, `task_status_log`, `resource_views_log`, `admin_audit_log`, and `dashboard_activity_log` are optional/recommended tables, included for completeness.
-- `feedback.context_type/context_id` is not constrained by a foreign key because it is a polymorphic-style reference (it can point at different tables depending on `context_type`).
-- `schema.sql` uses a fresh-build approach and drops existing AILA tables before recreating them. Back up existing data before running it on a non-development database.
-- `production_baseline.sql` intentionally avoids demo users, QA users, admin passwords, and uploaded-resource sample data.
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@aila.local` | `admin123` |
+| Student | `student@aila.local` | `student123` |
+
+These accounts are not production accounts and must not be used for public QA,
+adviser review, or deployment.

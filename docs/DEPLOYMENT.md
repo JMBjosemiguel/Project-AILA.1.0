@@ -76,11 +76,11 @@ For migrating existing local data:
 
 `production_schema.sql` is the *destination* schema. A database already running
 v1.0.0 must instead apply the ordered, additive migrations in
-`database/migrations/` — `001` through `008` — **in order, once each**. Full
+`database/migrations/` — `001` through `009` — **in order, once each**. Full
 per-migration preflight → apply → verify → rollback checklist and STOP
 conditions are in `database/migrations/README.md`.
 
-- All eight migrations are additive (new tables + nullable columns + indexes).
+- All nine migrations are additive (new tables + nullable columns + indexes).
   v1.0.0 application code keeps working against the migrated schema, so the
   database can be migrated **before** the new backend is deployed.
 - After migration `006`, run the achievement reconciliation **once**

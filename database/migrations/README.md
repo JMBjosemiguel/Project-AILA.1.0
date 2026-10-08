@@ -1,70 +1,65 @@
-# AILA schema migrations (v1.0.0 → develop)
+# AILA Schema Migrations
 
-Additive, ordered, **apply-once** migrations that take the frozen production
-`v1.0.0` schema (`main` @ `0ea4423`) to the current `develop` schema.
+This folder contains ordered, apply-once migrations for upgrading an existing
+AILA database in place. A fresh installation does not need these files because
+`schema.sql` and `production_schema.sql` already include the latest structure.
 
-`database/schema.sql` and `database/production_schema.sql` are the *destination*
-state (a fresh install already includes every migration). These files are for an
-**existing** database that must be upgraded in place without losing data.
+## Migration Order
 
-## Order
+| # | File | Main change |
+| --- | --- | --- |
+| 001 | `001_xp_events.sql` | Adds XP ledger support. |
+| 002 | `002_resumable_quiz_attempts.sql` | Adds resumable formal quiz attempts. |
+| 003 | `003_personalization_context.sql` | Adds personalization context fields. |
+| 004 | `004_course_assessments.sql` | Adds course assessment metadata. |
+| 005 | `005_material_sharing.sql` | Adds material sharing support. |
+| 006 | `006_gamification.sql` | Adds achievements and profile gamification fields. |
+| 007 | `007_chat_quiz_provenance.sql` | Adds quiz provenance for chatbot-generated quizzes. |
+| 008 | `008_email_verification.sql` | Adds email verification support. |
+| 009 | `009_chat_pending_intent.sql` | Adds pending chatbot intent state. |
 
-| # | File | Touches | New tables |
-|---|------|---------|-----------|
-| 001 | `001_xp_events.sql` | — | `xp_events` |
-| 002 | `002_resumable_quiz_attempts.sql` | `quiz_attempts`, `quiz_attempt_answers` | — |
-| 003 | `003_personalization_context.sql` | `subjects`, `lessons`, `quizzes` | — |
-| 004 | `004_course_assessments.sql` | `quizzes`, `quiz_attempts` | — |
-| 005 | `005_material_sharing.sql` | `subjects`, `quizzes` | `material_shares` |
-| 006 | `006_gamification.sql` | `user_profiles` | `achievements`, `user_achievements` |
-| 007 | `007_chat_quiz_provenance.sql` | `quizzes` | — |
-| 008 | `008_email_verification.sql` | `users` | `email_verification_tokens` |
-| 009 | `009_chat_pending_intent.sql` | `chat_conversations` | — |
+Run migrations in this order only.
 
-Rehearsed end-to-end against a fresh copy of the `v1.0.0` production schema:
-43 tables → 48 tables (009 adds a column, not a table), every migration applies
-with no error, all expected columns / indexes / seeded rows present,
-`indexes.sql` + `constraints.sql` re-run clean afterwards.
+## When to Use These Migrations
 
-## Apply-once, not re-runnable — and that's intentional
+Use these files only for an existing database that must preserve data while
+moving to the current schema.
 
-MySQL 8.4 has no `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, so re-running a
-migration errors on the second `ADD COLUMN`/`CREATE TABLE`. This is deliberate:
-each migration file's header carries a **preflight** query (assert the change is
-absent) and a **verify** query (assert it landed). Do not rewrite them to be
-idempotent — run each exactly once, gated by its preflight.
+Do not run them on a fresh database that was created from `schema.sql` or
+`production_schema.sql`.
 
-## Per-migration deployment checklist
+## Deployment Checklist
 
-For every migration, in order:
+For each migration:
 
-1. **Back up** the target database.
-2. **Preflight** — run the `Preflight` query from the file header. It must show
-   the new column/table is **absent** and (where noted) that cached balances
-   already reconcile. If the change is already present, that migration was
-   already applied — skip it.
-3. **Apply** — pipe the file into the DB on the correct connection
-   (`mysql <conn> <dbname> < database/migrations/NNN_*.sql`). Local dev only;
-   never against Aiven here.
-4. **Verify** — run the `Verify` query from the header.
-5. **Post-steps** (001, 006, 008 have one; the rest don't):
-   - **001** — none; `xp_events` seeds each user's existing balance as one
-     `legacy_balance` row via `INSERT IGNORE ... SELECT`.
-   - **006** — `user_achievements` starts empty. Run the reconciliation utility
-     once to grant already-earned historical achievements
-     (`node -e "require('./backend/src/services/achievementService').reconcileAllUsers()..."`).
-     No bonus XP, no notifications; `source='backfill'`.
-   - **008** — runs its own backfill inline (every existing user is marked
-     verified as of their `created_at`); no separate script to run. Confirm
-     `SELECT COUNT(*) FROM users WHERE email_verified_at IS NULL` is `0`
-     immediately after applying it — any non-zero count is a brand-new
-     registration that landed mid-migration, not a backfill failure.
-6. If a step fails, **stop** and use the `Rollback` block in that file's header.
+1. Back up the target database.
+2. Run the migration file's preflight query.
+3. Apply the migration if the preflight confirms it has not been applied.
+4. Run the migration file's verification query.
+5. Complete any migration-specific post-step.
+6. Stop immediately if an error occurs.
 
-## STOP conditions
+## Apply-Once Behavior
 
-- Preflight shows the change already present but a *later* migration is missing —
-  investigate which migrations ran before proceeding.
-- `001` preflight shows `user_profiles.xp_points` not matching
-  `SUM(xp_events.points)` — do not migrate; the cache is already drifted.
-- Any migration errors mid-file — roll back that file, do not run the next.
+These migrations are intentionally not fully idempotent. MySQL 8.4 does not
+support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, and a repeated migration
+should fail rather than silently hide an inconsistent deployment state.
+
+If a preflight query shows that a migration is already applied, skip that file
+and verify the rest of the migration history before continuing.
+
+## Post-Steps
+
+- `001_xp_events.sql`: Seeds each user's existing XP balance into the ledger.
+- `006_gamification.sql`: Run achievement reconciliation once after applying.
+- `008_email_verification.sql`: Backfills existing users as verified during the
+  migration.
+
+## Stop Conditions
+
+Stop and review before proceeding if:
+
+- A preflight query reports unexpected existing objects.
+- A migration fails partway through.
+- Verification queries do not match expected results.
+- Data reconciliation checks report mismatches.

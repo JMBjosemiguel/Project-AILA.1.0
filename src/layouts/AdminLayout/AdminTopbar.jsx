@@ -1,6 +1,7 @@
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ADMIN_NAV_GROUPS, ADMIN_ROUTES } from '../../app/routes/adminRoutes';
+import { useConfirm } from '../../components/common/ConfirmDialog';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ADMIN_SEARCH_DESTINATIONS = ADMIN_NAV_GROUPS.flatMap((group) => group.items);
@@ -15,6 +16,7 @@ function routeMatches(route, query) {
 
 export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
+  const confirm = useConfirm();
   const route = ADMIN_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -44,6 +46,18 @@ export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNaviga
     if (!destination) return;
     closePalette();
     onNavigate(destination.id);
+  };
+
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: 'Log out?',
+      message: "You'll need to sign in again to continue.",
+      confirmLabel: 'Log out',
+      cancelLabel: 'Cancel',
+    });
+    if (!ok) return;
+    await logout();
+    onNavigate('/login');
   };
 
   useEffect(() => {
@@ -241,7 +255,7 @@ export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNaviga
           {avatarLetter}
         </button>
         <button
-          onClick={async () => { await logout(); onNavigate('/login'); }}
+          onClick={handleLogout}
           className="w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 transition-colors"
           title="Log out"
         >

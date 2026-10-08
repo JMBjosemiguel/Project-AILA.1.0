@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import StudentTopbar from '../StudentTopbar';
+import { ConfirmProvider } from '../../../components/common/ConfirmDialog';
 import { STUDENT_ROUTE_IDS } from '../../../app/routes/studentRoutes';
+
+const { logoutMock } = vi.hoisted(() => ({ logoutMock: vi.fn() }));
 
 vi.mock('../../../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { first_name: 'Sam', last_name: 'Lee' },
-    logout: vi.fn(),
+    logout: logoutMock,
   }),
 }));
 
@@ -17,12 +20,14 @@ vi.mock('../../../hooks/useNotificationsData', () => ({
 
 function renderTopbar(onNavigate = vi.fn()) {
   const view = render(
-    <StudentTopbar
-      active={STUDENT_ROUTE_IDS.DASHBOARD}
-      sidebarOpen={false}
-      onMenuClick={vi.fn()}
-      onNavigate={onNavigate}
-    />
+    <ConfirmProvider>
+      <StudentTopbar
+        active={STUDENT_ROUTE_IDS.DASHBOARD}
+        sidebarOpen={false}
+        onMenuClick={vi.fn()}
+        onNavigate={onNavigate}
+      />
+    </ConfirmProvider>
   );
   return { onNavigate, ...view };
 }
@@ -113,12 +118,14 @@ describe('StudentTopbar command palette', () => {
     expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
 
     rerender(
-      <StudentTopbar
-        active={STUDENT_ROUTE_IDS.ASSISTANT}
-        sidebarOpen={false}
-        onMenuClick={vi.fn()}
-        onNavigate={onNavigate}
-      />
+      <ConfirmProvider>
+        <StudentTopbar
+          active={STUDENT_ROUTE_IDS.ASSISTANT}
+          sidebarOpen={false}
+          onMenuClick={vi.fn()}
+          onNavigate={onNavigate}
+        />
+      </ConfirmProvider>
     );
 
     expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
@@ -203,5 +210,38 @@ describe('StudentTopbar command palette', () => {
     expect(screen.queryByRole('option', { name: /Users/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Knowledge Base/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Audit Log/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('StudentTopbar logout confirmation', () => {
+  it('asks for confirmation and stays logged in on Cancel', async () => {
+    const user = userEvent.setup();
+    const { onNavigate } = renderTopbar();
+    logoutMock.mockClear();
+
+    await user.click(screen.getByTitle('Log out'));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByText('Log out?')).toBeInTheDocument();
+    expect(within(dialog).getByText("You'll need to sign in again to continue.")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(logoutMock).not.toHaveBeenCalled();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('logs out and navigates to /login on Confirm', async () => {
+    const user = userEvent.setup();
+    const { onNavigate } = renderTopbar();
+    logoutMock.mockClear();
+
+    await user.click(screen.getByTitle('Log out'));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Log out' }));
+
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('/login');
   });
 });

@@ -3,7 +3,7 @@ const { body, param, query } = require('express-validator');
 const generateValidator = [
   body('topic').trim().notEmpty().withMessage('Please provide a topic.').isLength({ max: 200 }),
   body('quizType').optional().trim().isIn(['multiple_choice', 'true_false', 'identification']),
-  body('itemCount').optional().isInt({ min: 1, max: 30 }),
+  body('itemCount').optional().isInt({ min: 1, max: 20 }),
   body('difficulty').optional().trim().isIn(['easy', 'medium', 'hard']),
   body('sourceType').optional().trim().isIn(['chat', 'lesson', 'topic', 'resource', 'manual']),
   body('sourceId').optional({ values: 'null' }).isInt({ min: 1 }),

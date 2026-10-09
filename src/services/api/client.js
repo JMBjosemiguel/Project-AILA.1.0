@@ -3,6 +3,12 @@ import axios from 'axios';
 const TOKEN_KEY = 'aila.jwt';
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Slightly longer than the backend's own Gemini deadline (GEMINI_TIMEOUT_MS,
+// 30s by default) so a stuck AI generation request always ends in an error
+// here instead of an endless spinner, rather than waiting on axios's default
+// of no timeout at all.
+export const AI_GENERATION_REQUEST_TIMEOUT_MS = 35000;
+
 export class ApiClientError extends Error {
   constructor(message, { status = null, details = null } = {}) {
     super(message);

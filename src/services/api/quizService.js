@@ -1,8 +1,12 @@
-import { apiClient } from './client';
+import { apiClient, AI_GENERATION_REQUEST_TIMEOUT_MS } from './client';
 import { API_ENDPOINTS } from './endpoints';
 
 export function generateQuiz({ topic, quizType = 'multiple_choice', itemCount = 10, difficulty = 'medium', sourceType, sourceId }) {
-  return apiClient.post(API_ENDPOINTS.quizzes.generate, { topic, quizType, itemCount, difficulty, sourceType, sourceId });
+  return apiClient.post(
+    API_ENDPOINTS.quizzes.generate,
+    { topic, quizType, itemCount, difficulty, sourceType, sourceId },
+    { timeout: AI_GENERATION_REQUEST_TIMEOUT_MS }
+  );
 }
 
 export function getQuiz(quizId) {

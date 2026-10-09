@@ -1,5 +1,5 @@
 const ApiError = require('../utils/ApiError');
-const { callGemini, getResponseText } = require('./geminiClient');
+const { callGemini, getResponseText, GEMINI_TIMEOUT_MS } = require('./geminiClient');
 const { transaction } = require('../config/database');
 const quizModel = require('../models/quizModel');
 const chatModel = require('../models/chatModel');
@@ -23,8 +23,65 @@ const QUIZ_SYSTEM_RULES = [
 
 const QUIZ_XP_MAX = 20;
 
+// Gemini 3's thinkingLevel draws from the SAME maxOutputTokens budget as the
+// visible output — thinking tokens are spent first, so a tight cap can leave
+// too little room for the actual JSON once an item count climbs, cutting the
+// response off mid-item (finishReason: MAX_TOKENS) with unparseable JSON.
+// quizOutputBudget() sizes the cap to the request instead of a flat number:
+// THINKING_ALLOWANCE covers 'low'-level thinking with headroom, PER_ITEM_TOKENS
+// is a generous allowance for one multiple-choice item (the largest shape —
+// question + 4 options + answer + explanation). Covers the full validated
+// range (MAX_ITEM_COUNT) with room to spare; MAX_OUTPUT_TOKENS_CAP is just a
+// sanity ceiling, never reached at validated item counts.
+const THINKING_ALLOWANCE_TOKENS = 1200;
+const PER_ITEM_TOKENS = 200;
+const MAX_OUTPUT_TOKENS_CAP = 8192;
+function quizOutputBudget(itemCount) {
+  return Math.min(MAX_OUTPUT_TOKENS_CAP, THINKING_ALLOWANCE_TOKENS + Math.max(1, itemCount) * PER_ITEM_TOKENS);
+}
+
+// A second Gemini call (retry) shares the FIRST call's overall deadline
+// rather than getting its own fresh GEMINI_TIMEOUT_MS, so a request can never
+// take two full timeouts back to back. If less than this much is left, it's
+// not worth firing a request almost certain to be aborted immediately.
+const MIN_RETRY_BUDGET_MS = 3000;
+const QUIZ_TRUNCATION_ERROR = "AILA couldn't finish this quiz. Try again or ask for fewer items.";
+const FLASHCARDS_TRUNCATION_ERROR = "AILA couldn't finish those flashcards. Try again or ask for fewer cards.";
+
+// Gemini 3's thinking tokens mean a response can come back truncated
+// (finishReason: MAX_TOKENS) with incomplete JSON. Treating that the same as
+// a clean-but-empty result lets the existing retry-once logic in each
+// generation function handle both cases uniformly, instead of a parse
+// exception bypassing the retry entirely.
+function readGeminiJson(payload) {
+  const candidate = payload?.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const usage = payload?.usageMetadata;
+  let text = '';
+  try {
+    text = getResponseText(payload);
+  } catch {
+    // No usable text at all (e.g. the model returned only thinking tokens).
+  }
+  let parsed = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Truncated / malformed JSON — parsed stays null.
+    }
+  }
+  return { parsed, finishReason, usage };
+}
+
+// Server-side only: finishReason + token counts, never the prompt/response
+// content (which may include the student's topic or document text).
+function logTruncatedGeneration(label, finishReason, usage) {
+  console.error(`[quizService] ${label} generation returned no usable JSON (finishReason=${finishReason || 'unknown'}, usage=${JSON.stringify(usage || {})})`);
+}
+
 // Formal course assessments (migration 004). Question counts stay inside the
-// existing generateValidator ceiling of 30 and inside the Gemini output budget.
+// existing generateValidator ceiling.
 const CHECKPOINT_ITEMS = 8;
 const FINAL_ITEMS = 16;
 const DEFAULT_PASSING_SCORE = 70;
@@ -80,16 +137,6 @@ const FLASHCARDS_SCHEMA = {
   },
   required: ['topic', 'cards'],
 };
-
-function parseJsonResponse(payload, errorMessage) {
-  const text = getResponseText(payload);
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new ApiError(502, errorMessage);
-  }
-}
 
 // Validates + repairs structured quiz output BEFORE it is ever saved or shown
 // to a student. Gemini's responseSchema constrains the shape but not the
@@ -168,29 +215,42 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
   ].join('\n');
 
   const generationConfig = {
-    maxOutputTokens: 2048,
-    reasoningLevel: 'medium',
+    maxOutputTokens: quizOutputBudget(itemCount),
+    reasoningLevel: 'low',
     responseMimeType: 'application/json',
     responseSchema: QUIZ_SCHEMA,
   };
 
+  // Shared across both attempts below — a retry must not get its own fresh
+  // GEMINI_TIMEOUT_MS, or a request can take up to 2x as long worst case.
+  const deadline = Date.now() + GEMINI_TIMEOUT_MS;
+
   async function attempt() {
-    const payload = await callGemini({ systemInstruction, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig });
-    const result = parseJsonResponse(payload, 'AILA could not generate that quiz. Please try again.');
+    const payload = await callGemini({
+      systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig,
+      timeoutMs: Math.max(1000, deadline - Date.now()),
+    });
+    const { parsed, finishReason, usage } = readGeminiJson(payload);
+    if (!parsed) {
+      logTruncatedGeneration('quiz', finishReason, usage);
+      return { resolvedTopic: topic, items: [] };
+    }
     return {
-      resolvedTopic: result.topic || topic,
-      items: validateAndCleanQuizItems(result.items, quizType),
+      resolvedTopic: parsed.topic || topic,
+      items: validateAndCleanQuizItems(parsed.items, quizType),
     };
   }
 
   let { resolvedTopic, items } = await attempt();
-  if (!items.length) {
-    // Malformed/empty structured output — retry once before giving up.
+  if (!items.length && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
+    // Malformed/empty/truncated structured output — retry once before giving up.
     ({ resolvedTopic, items } = await attempt());
   }
 
   if (!items.length) {
-    throw new ApiError(502, 'AILA could not generate that quiz. Please try again.');
+    throw new ApiError(502, QUIZ_TRUNCATION_ERROR);
   }
 
   return { topic: resolvedTopic, quizType, items };
@@ -203,27 +263,42 @@ async function generateFlashcards({ topic, count }) {
     'Do not include any text outside the JSON object.',
   ].join(' ');
 
-  const payload = await callGemini({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: {
-      maxOutputTokens: 2048,
-      reasoningLevel: 'medium',
-      responseMimeType: 'application/json',
-      responseSchema: FLASHCARDS_SCHEMA,
-    },
-  });
+  const generationConfig = {
+    maxOutputTokens: quizOutputBudget(count),
+    reasoningLevel: 'low',
+    responseMimeType: 'application/json',
+    responseSchema: FLASHCARDS_SCHEMA,
+  };
 
-  const result = parseJsonResponse(payload, 'AILA could not generate those flashcards. Please try again.');
+  const deadline = Date.now() + GEMINI_TIMEOUT_MS;
 
-  const cards = (Array.isArray(result.cards) ? result.cards : []).filter(
-    (card) => card && typeof card.question === 'string' && card.question.trim() && typeof card.answer === 'string' && card.answer.trim()
-  );
-
-  if (!cards.length) {
-    throw new ApiError(502, 'AILA could not generate those flashcards. Please try again.');
+  async function attempt() {
+    const payload = await callGemini({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig,
+      timeoutMs: Math.max(1000, deadline - Date.now()),
+    });
+    const { parsed, finishReason, usage } = readGeminiJson(payload);
+    if (!parsed) {
+      logTruncatedGeneration('flashcards', finishReason, usage);
+      return { resolvedTopic: topic, cards: [] };
+    }
+    const cards = (Array.isArray(parsed.cards) ? parsed.cards : []).filter(
+      (card) => card && typeof card.question === 'string' && card.question.trim() && typeof card.answer === 'string' && card.answer.trim()
+    );
+    return { resolvedTopic: parsed.topic || topic, cards };
   }
 
-  return { topic: result.topic || topic, cards };
+  let { resolvedTopic, cards } = await attempt();
+  if (!cards.length && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
+    ({ resolvedTopic, cards } = await attempt());
+  }
+
+  if (!cards.length) {
+    throw new ApiError(502, FLASHCARDS_TRUNCATION_ERROR);
+  }
+
+  return { topic: resolvedTopic, cards };
 }
 
 function normalizeAnswer(value) {
@@ -536,21 +611,33 @@ async function generateAssessmentItems({ kind, outlineText, itemCount, personali
   ].join('\n');
 
   const generationConfig = {
-    maxOutputTokens: isFinal ? 3072 : 2048,
-    reasoningLevel: 'medium',
+    maxOutputTokens: quizOutputBudget(itemCount),
+    reasoningLevel: 'low',
     responseMimeType: 'application/json',
     responseSchema: QUIZ_SCHEMA,
   };
-  const errorMessage = `AILA could not generate that ${isFinal ? 'final assessment' : 'checkpoint'}. Please try again.`;
+  const errorMessage = `AILA couldn't finish that ${isFinal ? 'final assessment' : 'checkpoint'}. Please try again.`;
+  const label = isFinal ? 'course final' : 'checkpoint';
+
+  const deadline = Date.now() + GEMINI_TIMEOUT_MS;
 
   async function attempt() {
-    const payload = await callGemini({ systemInstruction, contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig });
-    const result = parseJsonResponse(payload, errorMessage);
-    return validateAndCleanQuizItems(result.items, 'multiple_choice').slice(0, itemCount);
+    const payload = await callGemini({
+      systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig,
+      timeoutMs: Math.max(1000, deadline - Date.now()),
+    });
+    const { parsed, finishReason, usage } = readGeminiJson(payload);
+    if (!parsed) {
+      logTruncatedGeneration(label, finishReason, usage);
+      return [];
+    }
+    return validateAndCleanQuizItems(parsed.items, 'multiple_choice').slice(0, itemCount);
   }
 
   let items = await attempt();
-  if (items.length < 3) {
+  if (items.length < 3 && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
     items = await attempt();
   }
   if (items.length < 3) {
@@ -981,4 +1068,7 @@ module.exports = {
   CHECKPOINT_PASS_XP,
   FINAL_PASS_XP,
   validateAndCleanQuizItems,
+  // exposed for unit tests only — not part of the intended public surface
+  quizOutputBudget,
+  readGeminiJson,
 };

@@ -15,7 +15,7 @@ const QUIZ_TYPE_PATTERNS = [
 const QUIZ_TYPES = new Set(['multiple_choice', 'true_false', 'identification']);
 const DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
 
-const MAX_ITEMS = 30;
+const MAX_ITEMS = 20;
 const DEFAULT_ITEMS = 10;
 
 // Words that mean "this is a fresh message, not a bare topic answer" even

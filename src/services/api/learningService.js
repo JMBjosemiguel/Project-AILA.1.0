@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, AI_GENERATION_REQUEST_TIMEOUT_MS } from './client';
 import { API_ENDPOINTS } from './endpoints';
 
 export async function getLearningHubData() {
@@ -30,9 +30,9 @@ export function getCourseAssessments(subjectId) {
 
 // Generates on first call, returns the same quiz thereafter. Take-safe payload.
 export function openModuleCheckpoint(subjectId, moduleId) {
-  return apiClient.post(API_ENDPOINTS.learning.moduleCheckpoint(subjectId, moduleId));
+  return apiClient.post(API_ENDPOINTS.learning.moduleCheckpoint(subjectId, moduleId), undefined, { timeout: AI_GENERATION_REQUEST_TIMEOUT_MS });
 }
 
 export function openCourseFinal(subjectId) {
-  return apiClient.post(API_ENDPOINTS.learning.courseFinal(subjectId));
+  return apiClient.post(API_ENDPOINTS.learning.courseFinal(subjectId), undefined, { timeout: AI_GENERATION_REQUEST_TIMEOUT_MS });
 }

@@ -118,7 +118,7 @@ async function rawRequest(body, timeoutMs = GEMINI_TIMEOUT_MS) {
   }
 }
 
-async function callGemini({ systemInstruction, contents, generationConfig }) {
+async function callGemini({ systemInstruction, contents, generationConfig, timeoutMs }) {
   const sanitizedConfig = sanitizeGenerationConfig(generationConfig);
   const body = {
     ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
@@ -126,7 +126,11 @@ async function callGemini({ systemInstruction, contents, generationConfig }) {
     generationConfig: sanitizedConfig,
   };
 
-  const deadline = Date.now() + GEMINI_TIMEOUT_MS;
+  // Callers that retry internally (e.g. quizService on a truncated/unparseable
+  // response) can pass the time remaining in THEIR OWN overall deadline here,
+  // so two attempts share one budget instead of each getting a fresh
+  // GEMINI_TIMEOUT_MS and the request taking up to 2x as long worst case.
+  const deadline = Date.now() + (timeoutMs ?? GEMINI_TIMEOUT_MS);
   let result = await rawRequest(body, deadline - Date.now());
 
   // One retry on a transient upstream failure (5xx / "high demand"), while the
@@ -171,6 +175,7 @@ function getResponseText(payload) {
 module.exports = {
   callGemini,
   getResponseText,
+  GEMINI_TIMEOUT_MS,
   // exposed for unit tests only — not part of the intended public surface
   isGemini3Model,
   sanitizeGenerationConfig,

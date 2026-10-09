@@ -177,7 +177,7 @@ export default function PlannerPage() {
   const completed = filtered.filter((task) => task.status === TASK_STATUS.COMPLETED);
 
   return (
-    <div className="p-5 lg:p-8 max-w-5xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHeader title="Your tasks" subtitle={`${pending.length} pending - ${completed.length} completed`} />

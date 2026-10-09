@@ -75,7 +75,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="p-5 lg:p-8 max-w-3xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="flex justify-end gap-2 mb-4">
         <Button variant="outline" size="sm" icon={<CheckCheck size={14} />} onClick={markAllRead} disabled={!items.length}>Mark all as read</Button>
         <Button variant="outline" size="sm" icon={<Trash2 size={14} />} onClick={handleDeleteAll} disabled={!items.length}>Delete all</Button>

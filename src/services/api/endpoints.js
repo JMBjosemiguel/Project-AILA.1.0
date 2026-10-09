@@ -104,6 +104,7 @@ export const API_ENDPOINTS = {
     users: '/admin/users',
     user: (id) => `/admin/users/${id}`,
     userResetProgress: (id) => `/admin/users/${id}/reset-progress`,
+    userPromote: (id) => `/admin/users/${id}/role`,
     resources: '/admin/resources',
     resource: (id) => `/admin/resources/${id}`,
     resourceDownload: (id) => `/admin/resources/${id}/download`,

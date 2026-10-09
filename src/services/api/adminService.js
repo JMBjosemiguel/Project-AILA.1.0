@@ -37,6 +37,10 @@ export function resetUserProgress(userId) {
   return apiClient.post(API_ENDPOINTS.admin.userResetProgress(userId));
 }
 
+export function promoteToAdmin(userId) {
+  return apiClient.patch(API_ENDPOINTS.admin.userPromote(userId));
+}
+
 // Resources
 export function listAdminResources(params) {
   return apiClient.get(`${API_ENDPOINTS.admin.resources}?${toQueryString(params)}`);

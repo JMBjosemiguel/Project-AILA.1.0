@@ -30,6 +30,11 @@ const setUserActive = asyncHandler(async (req, res) => {
   sendSuccess(res, null, 200, 'User updated.');
 });
 
+const promoteToAdmin = asyncHandler(async (req, res) => {
+  await adminService.promoteToAdmin(req.auth.user.id, req.params.userId);
+  sendSuccess(res, null, 200, 'User promoted to admin.');
+});
+
 const deleteUser = asyncHandler(async (req, res) => {
   await adminService.deleteUser(req.auth.user.id, req.params.userId);
   sendSuccess(res, null, 200, 'User deleted.');
@@ -182,6 +187,7 @@ module.exports = {
   listUsers,
   getUserDetail,
   setUserActive,
+  promoteToAdmin,
   deleteUser,
   resetUserProgress,
   listResources,

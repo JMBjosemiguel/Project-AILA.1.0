@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, RotateCcw, Trash2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
+import { Eye, RotateCcw, ShieldCheck, Trash2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
 import ActionMenu from '../../../components/common/ActionMenu';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -8,7 +8,7 @@ import Pagination from '../../../components/admin/Pagination';
 import SearchBar from '../../../components/admin/SearchBar';
 import UserDetailDialog from '../../../components/admin/UserDetailDialog';
 import {
-  deleteAdminUser, listAdminUsers, resetUserProgress, setUserActive,
+  deleteAdminUser, listAdminUsers, promoteToAdmin, resetUserProgress, setUserActive,
 } from '../../../services/api/adminService';
 
 const ROLE_FILTERS = [
@@ -94,6 +94,23 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handlePromote = async (user) => {
+    const ok = await confirm({
+      title: 'Promote this student to admin?',
+      message: `"${user.first_name} ${user.last_name}" will become an admin. This can't be undone from the app, and they will lose access to the student side (their progress is kept, just no longer reachable as a student).`,
+      confirmLabel: 'Promote',
+    });
+    if (!ok) return;
+
+    try {
+      await promoteToAdmin(user.id);
+      toast.success(`${user.first_name} is now an admin.`);
+      load();
+    } catch (error) {
+      toast.error(error.message || 'Could not promote that student.');
+    }
+  };
+
   const handleDelete = async (user) => {
     const ok = await confirm({
       title: 'Delete this student?',
@@ -149,6 +166,7 @@ export default function AdminUsersPage() {
               ? { label: u.is_active ? 'Deactivate' : 'Reactivate', icon: u.is_active ? <UserX size={14} /> : <UserCheck size={14} />, onClick: () => toggleActive(u) }
               : null,
             u.role === 'student' ? { label: 'Reset Progress', icon: <RotateCcw size={14} />, onClick: () => handleReset(u) } : null,
+            u.role === 'student' ? { label: 'Promote to Admin', icon: <ShieldCheck size={14} />, onClick: () => handlePromote(u) } : null,
             u.role === 'student' ? { label: 'Delete', icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(u) } : null,
           ].filter(Boolean)}
         />

@@ -30,6 +30,7 @@ router.delete('/announcements/:announcementId', announcementIdParamValidator, va
 router.get('/users', paginationQueryValidator, validateRequest, adminController.listUsers);
 router.get('/users/:userId', userIdParamValidator, validateRequest, adminController.getUserDetail);
 router.patch('/users/:userId', userIdParamValidator, setUserActiveValidator, validateRequest, adminController.setUserActive);
+router.patch('/users/:userId/role', userIdParamValidator, validateRequest, adminController.promoteToAdmin);
 router.delete('/users/:userId', userIdParamValidator, validateRequest, adminController.deleteUser);
 router.post('/users/:userId/reset-progress', userIdParamValidator, validateRequest, adminController.resetUserProgress);
 

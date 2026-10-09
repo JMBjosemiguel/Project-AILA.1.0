@@ -88,6 +88,37 @@ async function deleteUser(adminId, userId) {
   await logAdminAction(adminId, 'user.delete', 'users', Number(userId));
 }
 
+// Promote only, no demote. Resource visibility hardcodes role_id = 2 (admin)
+// in several places (resourceModel.js x5, learningModel.js x1) to show every
+// admin's uploads to every student, so a student with personal uploads is
+// blocked rather than silently making those uploads visible app-wide.
+async function promoteToAdmin(adminId, userId) {
+  const user = await adminModel.getUserForPromotion(Number(userId));
+  if (!user) {
+    throw new ApiError(404, 'User not found.');
+  }
+  if (user.role === 'admin') {
+    throw new ApiError(400, 'This user is already an admin.');
+  }
+  if (!user.email_verified_at) {
+    throw new ApiError(400, 'This student has not verified their email yet. They must verify before being promoted.');
+  }
+  if (!user.is_active) {
+    throw new ApiError(400, 'This student account is deactivated. Reactivate it before promoting.');
+  }
+
+  const uploadCount = await adminModel.countPersonalUploads(Number(userId));
+  if (uploadCount > 0) {
+    throw new ApiError(400, `This student has ${uploadCount} personal upload${uploadCount === 1 ? '' : 's'} that would become visible to all students. Remove them first.`);
+  }
+
+  const affectedRows = await adminModel.promoteToAdmin(Number(userId));
+  if (!affectedRows) {
+    throw new ApiError(404, 'User not found.');
+  }
+  await logAdminAction(adminId, 'user.promote_to_admin', 'users', Number(userId), { fromRole: 'student', toRole: 'admin' });
+}
+
 async function resetUserProgress(adminId, userId) {
   await transaction((connection) => adminModel.resetUserProgress(Number(userId), connection));
   await logAdminAction(adminId, 'user.reset_progress', 'users', Number(userId));
@@ -256,6 +287,7 @@ module.exports = {
   listUsers,
   getUserDetail,
   setUserActive,
+  promoteToAdmin,
   deleteUser,
   resetUserProgress,
   listResources,

@@ -230,6 +230,40 @@ async function setUserActive(userId, isActive) {
   return result.affectedRows;
 }
 
+// Role + status fields the promotion eligibility checks need — the same
+// shape getUserDetail already reads, just without the dashboard extras.
+async function getUserForPromotion(userId) {
+  const rows = await query(
+    `
+      SELECT u.id, u.is_active, u.email_verified_at, r.name AS role
+      FROM users u
+      INNER JOIN roles r ON r.id = u.role_id
+      WHERE u.id = ? AND u.deleted_at IS NULL
+      LIMIT 1
+    `,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+// Resource visibility hardcodes role_id = 2 (admin) in several places
+// (resourceModel.js, learningModel.js) to show every admin's uploads to
+// every student — so promoting a student with personal uploads would make
+// those uploads visible to the whole student body. The caller blocks the
+// promotion while this is non-zero.
+async function countPersonalUploads(userId) {
+  const rows = await query('SELECT COUNT(*) AS count FROM resources WHERE uploaded_by = ? AND deleted_at IS NULL', [userId]);
+  return rows[0].count;
+}
+
+async function promoteToAdmin(userId) {
+  const result = await query(
+    `UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'admin') WHERE id = ? AND deleted_at IS NULL`,
+    [userId]
+  );
+  return result.affectedRows;
+}
+
 const RESOURCE_SORT_MAP = {
   newest: 'r.created_at DESC',
   oldest: 'r.created_at ASC',
@@ -367,6 +401,9 @@ module.exports = {
   deleteUser,
   resetUserProgress,
   setUserActive,
+  getUserForPromotion,
+  countPersonalUploads,
+  promoteToAdmin,
   listResourcesAdmin,
   deleteResourceAdmin,
   setResourceArchived,

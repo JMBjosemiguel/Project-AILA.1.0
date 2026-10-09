@@ -121,7 +121,12 @@ As of v1.1 every student page is wired to a real backend endpoint (personalized
 course/lesson/quiz generation, resumable assessments, course checkpoints + final,
 material sharing, gamification, chatbot "Save as Quiz"). A page shows a proper empty
 state when the API succeeds with no data, and a retry-able error (`components/common/LoadError`)
-when the request fails.
+when the request fails. Generated quizzes (Resource Library, Learning Hub, chat) are
+capped at 20 items per quiz.
+
+The admin Audit Log also records student activity (login, registration, email
+verification, resource uploads, quiz submissions), not just admin actions. Admins can
+promote a verified, active student with no personal uploads to admin from the Users page.
 
 ## Database
 

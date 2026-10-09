@@ -565,16 +565,16 @@ Relationships: belongs to a user. The context fields are intentionally polymorph
 
 ## admin_audit_log
 
-Purpose: Append-only audit trail for admin actions.
+Purpose: Append-only audit trail for both admin and student actions (e.g. user.promote_to_admin, user.login, user.register, resource.upload, quiz.submit).
 
 | Column | Type | Description |
 | --- | --- | --- |
 | id | BIGINT UNSIGNED | Primary key. |
-| admin_id | BIGINT UNSIGNED | Foreign key to `users.id`. |
+| admin_id | BIGINT UNSIGNED | Foreign key to `users.id` — the acting user, whatever their role (admin or student). |
 | action | VARCHAR(100) | Action name. |
 | target_table | VARCHAR(100) | Table affected by the action. |
 | target_id | BIGINT UNSIGNED | Optional affected row id. |
 | details | JSON | Optional structured audit details. |
 | created_at | TIMESTAMP | Audit timestamp. |
 
-Relationships: many audit rows belong to one admin user.
+Relationships: many audit rows belong to one acting user (admin or student).

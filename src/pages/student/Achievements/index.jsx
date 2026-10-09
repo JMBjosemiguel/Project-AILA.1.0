@@ -150,7 +150,7 @@ function LeaderboardTab({ optedIn, onNavigate, refreshKey, onRetry }) {
                 className={['flex items-center gap-3 py-2.5', isMe ? '-mx-2 rounded-lg bg-primary-50 px-2' : ''].join(' ')}
               >
                 <span className="w-6 text-center text-sm font-bold text-ink-400">{entry.rank}</span>
-                <span className="flex-1 truncate text-sm font-medium text-ink-800">
+                <span className="flex-1 min-w-0 truncate text-sm font-medium text-ink-800">
                   {entry.displayName}
                   {isMe && <span className="ml-1.5 text-[0.7rem] font-semibold text-primary">You</span>}
                 </span>

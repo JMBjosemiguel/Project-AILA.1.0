@@ -309,7 +309,7 @@ export default function ResourcesPage({ onNavigate }) {
                   <div className="flex flex-col gap-2">
                     {popular.map((item) => (
                       <div key={item.id} className="flex items-center justify-between text-sm text-ink-600">
-                        <span className="truncate">{item.title}</span>
+                        <span className="truncate min-w-0">{item.title}</span>
                         <span className="text-xs text-ink-400 flex-shrink-0">{item.view_count} views</span>
                       </div>
                     ))}

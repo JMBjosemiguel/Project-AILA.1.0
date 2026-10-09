@@ -160,23 +160,38 @@ export default function AdminUsersPage() {
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by name, email, or student number..." className="flex-1" />
-        <div className="flex gap-2 flex-wrap">
-          {ROLE_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setRole(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${role === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
-              {f.label}
-            </button>
-          ))}
-          {STATUS_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setStatus(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
-              {f.label}
-            </button>
-          ))}
-          {VERIFICATION_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setVerification(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${verification === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
-              {f.label}
-            </button>
-          ))}
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Role</span>
+            <div className="flex gap-2 flex-wrap">
+              {ROLE_FILTERS.map((f) => (
+                <button key={f.id} onClick={() => setRole(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${role === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Status</span>
+            <div className="flex gap-2 flex-wrap">
+              {STATUS_FILTERS.map((f) => (
+                <button key={f.id} onClick={() => setStatus(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Verification</span>
+            <div className="flex gap-2 flex-wrap">
+              {VERIFICATION_FILTERS.map((f) => (
+                <button key={f.id} onClick={() => setVerification(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${verification === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none self-end">
             {SORT_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         </div>

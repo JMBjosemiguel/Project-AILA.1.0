@@ -73,7 +73,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-2.5">
               {strongTopics.map((topic) => (
                 <div key={topic.topic} className="flex items-center justify-between text-sm">
-                  <span className="text-ink-700 truncate">{topic.topic}</span>
+                  <span className="text-ink-700 truncate min-w-0">{topic.topic}</span>
                   <span className="text-emerald-600 font-semibold flex-shrink-0">{topic.pct}%</span>
                 </div>
               ))}
@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-2.5">
               {weakTopics.map((topic) => (
                 <div key={topic.topic} className="flex items-center justify-between text-sm">
-                  <span className="text-ink-700 truncate">{topic.topic}</span>
+                  <span className="text-ink-700 truncate min-w-0">{topic.topic}</span>
                   <span className="text-amber-600 font-semibold flex-shrink-0">{topic.pct}%</span>
                 </div>
               ))}

@@ -97,7 +97,9 @@ export default function AdminChatbotRulesPage() {
           items={data.popularCourses} empty="No courses generated yet"
           renderItem={(c) => (
             <div key={c.name} className="flex items-center justify-between py-2 text-sm">
-              <span className="text-ink-700 truncate">{c.name}</span>
+              <div className="min-w-0">
+                <span className="text-ink-700 truncate block">{c.name}</span>
+              </div>
               <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{c.generations}×</span>
             </div>
           )}
@@ -107,7 +109,9 @@ export default function AdminChatbotRulesPage() {
           items={data.popularResources.filter((r) => r.views > 0)} empty="No resource views yet"
           renderItem={(r) => (
             <div key={r.id} className="flex items-center justify-between py-2 text-sm">
-              <span className="text-ink-700 truncate">{r.title}</span>
+              <div className="min-w-0">
+                <span className="text-ink-700 truncate block">{r.title}</span>
+              </div>
               <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{r.views} views</span>
             </div>
           )}
@@ -117,7 +121,9 @@ export default function AdminChatbotRulesPage() {
           items={data.activeStudents.filter((s) => s.xp_points > 0)} empty="No student activity yet"
           renderItem={(s) => (
             <div key={s.id} className="flex items-center justify-between py-2 text-sm">
-              <span className="text-ink-700 truncate">{s.first_name} {s.last_name}</span>
+              <div className="min-w-0">
+                <span className="text-ink-700 truncate block">{s.first_name} {s.last_name}</span>
+              </div>
               <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{s.xp_points} XP · Lv.{s.level}</span>
             </div>
           )}

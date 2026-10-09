@@ -77,7 +77,7 @@ export default function CourseDetailDialog({ courseId, onClose }) {
                         {module_.topics.flatMap((topic) => topic.lessons).map((lesson) => (
                           <div key={lesson.id} className="flex items-center gap-2 text-xs text-ink-600">
                             {lesson.completed ? <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" /> : <Circle size={13} className="text-ink-300 flex-shrink-0" />}
-                            <span className="truncate">{lesson.title}</span>
+                            <span className="truncate min-w-0">{lesson.title}</span>
                           </div>
                         ))}
                       </div>

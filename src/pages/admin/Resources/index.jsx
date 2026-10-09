@@ -168,32 +168,39 @@ export default function AdminResourcesPage() {
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by title or owner..." className="flex-1" />
-        <div className="flex gap-2 flex-wrap">
-          {ARCHIVED_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
-              {f.label}
-            </button>
-          ))}
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Status</span>
+            <div className="flex gap-2 flex-wrap">
+              {ARCHIVED_FILTERS.map((f) => (
+                <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Type</span>
+            <div className="flex gap-2 flex-wrap">
+              {RESOURCE_TYPES.map((resourceType) => (
+                <button
+                  key={resourceType}
+                  onClick={() => setType(resourceType)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
+                >
+                  {RESOURCE_TYPE_LABELS[resourceType] ?? resourceType}
+                </button>
+              ))}
+            </div>
+          </div>
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none self-end">
             {SORT_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap mb-4">
-        {RESOURCE_TYPES.map((resourceType) => (
-          <button
-            key={resourceType}
-            onClick={() => setType(resourceType)}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
-          >
-            {RESOURCE_TYPE_LABELS[resourceType] ?? resourceType}
-          </button>
-        ))}
-      </div>
-
       {selected.length > 0 && (
-        <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-primary-50 border border-primary-100 rounded-xl">
+        <div className="flex flex-wrap items-center gap-3 gap-y-2 mb-3 px-4 py-2.5 bg-primary-50 border border-primary-100 rounded-xl">
           <span className="text-xs font-semibold text-primary">{selected.length} selected</span>
           <Button size="sm" variant="outline" icon={<Archive size={13} />} onClick={() => handleBulk('archive')}>Bulk Archive</Button>
           <Button size="sm" variant="danger" icon={<Trash2 size={13} />} onClick={() => handleBulk('delete')}>Bulk Delete</Button>

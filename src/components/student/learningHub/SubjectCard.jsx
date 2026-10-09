@@ -171,7 +171,7 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
                               ) : (
                                 <Circle size={13} className="text-ink-300 flex-shrink-0" />
                               )}
-                              <span className="truncate">{lesson.title}</span>
+                              <span className="truncate min-w-0">{lesson.title}</span>
                             </button>
                           ))}
                         </div>

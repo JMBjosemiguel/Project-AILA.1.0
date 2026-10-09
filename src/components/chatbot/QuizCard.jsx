@@ -257,7 +257,7 @@ export default function QuizCard({
 
       {!submitted && (
         <Button className="mt-4" full onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <><Loader2 size={14} className="animate-spin" /> Checking...</> : 'Check Answers'}
+          {submitting ? <><Loader2 size={14} className="animate-spin" /> Checking...</> : 'Check answers'}
         </Button>
       )}
 

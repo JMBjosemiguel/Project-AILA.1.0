@@ -96,7 +96,7 @@ export default function VerifyEmailPage({ onGoToLogin }) {
         </div>
         {showSignIn && (
           <Button type="button" full onClick={onGoToLogin} className="mt-2">
-            Sign In
+            Sign in
           </Button>
         )}
       </div>

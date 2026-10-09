@@ -197,7 +197,7 @@ export default function ResourcesPage({ onNavigate }) {
               onClick={handleUploadClick}
               disabled={uploading}
             >
-              {uploading ? 'Processing...' : 'Upload File'}
+              {uploading ? 'Processing...' : 'Upload file'}
             </Button>
           </div>
 
@@ -271,7 +271,7 @@ export default function ResourcesPage({ onNavigate }) {
                       icon={FolderOpen}
                       title="No resources uploaded"
                       message="Upload PDFs, Documents, PowerPoint files, Images or Links."
-                      action={<Button size="sm" icon={<Upload size={14} />} onClick={handleUploadClick}>Upload File</Button>}
+                      action={<Button size="sm" icon={<Upload size={14} />} onClick={handleUploadClick}>Upload file</Button>}
                     />
                   ) : (
                     <EmptyState title="No resources found" message="Adjust your search or filters to see resources here." />

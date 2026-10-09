@@ -31,7 +31,7 @@ export const STUDENT_ROUTES = {
     path: '/student/dashboard',
     label: 'Dashboard',
     title: 'Dashboard',
-    subtitle: "Welcome back - here's where you left off.",
+    subtitle: "Welcome back — here's where you left off.",
     icon: LayoutGrid,
     allowedRoles: [ROLES.STUDENT],
   },

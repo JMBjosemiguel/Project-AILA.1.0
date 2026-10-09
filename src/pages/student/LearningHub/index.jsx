@@ -255,7 +255,7 @@ export default function LearningHubPage({ onNavigate }) {
               icon={BookOpen}
               title="No courses yet"
               message="Generate your first AI-powered course."
-              action={<Button size="sm" icon={<Plus size={14} />} onClick={() => setAddingCourse(true)}>Generate Course</Button>}
+              action={<Button size="sm" icon={<Plus size={14} />} onClick={() => setAddingCourse(true)}>Generate course</Button>}
             />
           )}
         </>

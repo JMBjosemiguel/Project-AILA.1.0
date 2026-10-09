@@ -323,7 +323,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
 
         {step === 'setup' && (
           <div className="flex-shrink-0 border-t border-ink-100 px-5 py-4">
-            <Button full onClick={handleGenerate}>Generate Quiz</Button>
+            <Button full onClick={handleGenerate}>Generate quiz</Button>
           </div>
         )}
       </div>

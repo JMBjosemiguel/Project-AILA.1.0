@@ -16,7 +16,7 @@ import { createStudyTask, deleteStudyTask, duplicateStudyTask, updateStudyTask }
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'today', label: "Today" },
-  { id: 'week', label: 'This Week' },
+  { id: 'week', label: 'This week' },
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'overdue', label: 'Overdue' },
   { id: 'completed', label: 'Completed' },
@@ -180,7 +180,7 @@ export default function PlannerPage() {
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
-          <CardHeader title="Your tasks" subtitle={`${pending.length} pending - ${completed.length} completed`} />
+          <CardHeader title="Your tasks" subtitle={`${pending.length} pending — ${completed.length} completed`} />
 
           {editingTaskId && (
             <div className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary-50 rounded-lg px-3 py-1.5 mb-2">

@@ -7,7 +7,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
   const { user } = useAuth();
   const navGroups = STUDENT_NAV_GROUPS;
   const displayName = user ? `${user.first_name} ${user.last_name}` : 'Profile pending';
-  const profileLine = user?.profile?.program ? `${user.profile.program} - Yr ${user.profile.year_level ?? ''}` : 'Student';
+  const profileLine = user?.profile?.program ? `${user.profile.program} — Yr ${user.profile.year_level ?? ''}` : 'Student';
   const avatarLetter = user?.first_name?.[0] ?? 'A';
 
   return (

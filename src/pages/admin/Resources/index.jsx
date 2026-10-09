@@ -202,8 +202,8 @@ export default function AdminResourcesPage() {
       {selected.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 gap-y-2 mb-3 px-4 py-2.5 bg-primary-50 border border-primary-100 rounded-xl">
           <span className="text-xs font-semibold text-primary">{selected.length} selected</span>
-          <Button size="sm" variant="outline" icon={<Archive size={13} />} onClick={() => handleBulk('archive')}>Bulk Archive</Button>
-          <Button size="sm" variant="danger" icon={<Trash2 size={13} />} onClick={() => handleBulk('delete')}>Bulk Delete</Button>
+          <Button size="sm" variant="outline" icon={<Archive size={13} />} onClick={() => handleBulk('archive')}>Bulk archive</Button>
+          <Button size="sm" variant="danger" icon={<Trash2 size={13} />} onClick={() => handleBulk('delete')}>Bulk delete</Button>
         </div>
       )}
 

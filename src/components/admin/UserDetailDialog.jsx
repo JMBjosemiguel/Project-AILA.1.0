@@ -41,7 +41,7 @@ export default function UserDetailDialog({ userId, onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="user-detail-title" className="text-[0.95rem] font-semibold text-ink-800">
-              {loading ? 'Loading student...' : detail ? `${detail.first_name} ${detail.last_name}` : 'Student profile'}
+              {loading ? 'Loading...' : detail ? `${detail.first_name} ${detail.last_name}` : 'User profile'}
             </h3>
             <p className="text-xs text-ink-400 mt-0.5">{detail?.email}</p>
           </div>
@@ -53,7 +53,7 @@ export default function UserDetailDialog({ userId, onClose }) {
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
-              <Loader2 size={16} className="animate-spin" /> Loading student profile...
+              <Loader2 size={16} className="animate-spin" /> Loading profile...
             </div>
           ) : error ? (
             <div className="flex flex-col items-center gap-2 text-sm text-ink-500 py-10 text-center">

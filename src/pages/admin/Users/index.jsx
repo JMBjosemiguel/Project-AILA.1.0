@@ -40,7 +40,7 @@ const SORT_OPTIONS = [
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 10 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -128,8 +128,8 @@ export default function AdminUsersPage() {
   };
 
   const columns = [
-    { key: 'name', label: 'Name', render: (u) => <span className="font-medium text-ink-800">{u.first_name} {u.last_name}</span> },
-    { key: 'email', label: 'Email', render: (u) => <span className="text-ink-500">{u.email}</span> },
+    { key: 'name', label: 'Name', render: (u) => <span className="font-medium text-ink-800 block max-w-[180px] truncate" title={`${u.first_name} ${u.last_name}`}>{u.first_name} {u.last_name}</span> },
+    { key: 'email', label: 'Email', render: (u) => <span className="text-ink-500 block max-w-[200px] truncate" title={u.email}>{u.email}</span> },
     { key: 'program', label: 'Program', render: (u) => <span className="text-ink-500">{u.program || '—'}{u.year_level ? ` · Yr ${u.year_level}` : ''}</span> },
     { key: 'level', label: 'Level / XP', render: (u) => <span className="text-ink-500">Lv.{u.level ?? 1} · {u.xp_points ?? 0} XP</span> },
     { key: 'role', label: 'Role', render: (u) => <span className="text-ink-500 capitalize">{u.role}</span> },

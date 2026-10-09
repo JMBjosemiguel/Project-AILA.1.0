@@ -25,6 +25,7 @@ const {
   normalizeDifficulty,
   looksLikeTopicAnswer,
   cleanTopic,
+  matchButtonTemplate,
 } = require('../utils/chatIntent');
 
 const MAX_HISTORY_FOR_CLASSIFIER = 8;
@@ -95,9 +96,14 @@ const INTENT_SCHEMA = {
     topicConfidence: { type: 'STRING', enum: ['clear', 'ambiguous', 'none'] },
     topic: { type: 'STRING' },
     candidateTopics: { type: 'ARRAY', items: { type: 'STRING' } },
-    quizType: { type: 'STRING', enum: ['multiple_choice', 'true_false', 'identification', ''] },
+    // Neither field is in `required` below, so Gemini can simply omit it when
+    // it has no explicit value — an empty string in an enum list is rejected
+    // by the API outright (400: "cannot be empty"), which was silently taking
+    // down EVERY classifier call (caught by the fail-safe in classifyIntent()
+    // and misread as "normal chat").
+    quizType: { type: 'STRING', enum: ['multiple_choice', 'true_false', 'identification'] },
     itemCount: { type: 'INTEGER' },
-    difficulty: { type: 'STRING', enum: ['easy', 'medium', 'hard', ''] },
+    difficulty: { type: 'STRING', enum: ['easy', 'medium', 'hard'] },
   },
   required: ['intent', 'topicConfidence'],
 };
@@ -198,6 +204,20 @@ function clarificationDecision(type, { reason, candidateTopics = [], quizType, i
  * unrelated request.
  */
 async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null }) {
+  // The chat's own "Generate Quiz" / "Generate Flashcards" buttons fill in a
+  // complete, unambiguous request — resolve it directly, before even
+  // checking for a pending clarification, rather than leaving it to the
+  // classifier (or a stale pendingIntent) to recognize the UI's own wording.
+  const templateMatch = matchButtonTemplate(prompt);
+  if (templateMatch) {
+    return resolvedDecision(templateMatch.type, {
+      topic: templateMatch.topic,
+      quizType: templateMatch.type === 'quiz' ? 'multiple_choice' : null,
+      itemCount: templateMatch.itemCount,
+      difficulty: null,
+    });
+  }
+
   if (pendingIntent && (pendingIntent.type === 'quiz' || pendingIntent.type === 'flashcards')) {
     if (looksLikeTopicAnswer(prompt)) {
       return resolvedDecision(pendingIntent.type, {
@@ -253,4 +273,6 @@ async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null
 
 module.exports = {
   classifyIntent,
+  // exposed for unit tests only — not part of the intended public surface
+  INTENT_SCHEMA,
 };

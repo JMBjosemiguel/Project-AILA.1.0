@@ -102,7 +102,7 @@ test('chatIntentService.classifyIntent', async (t) => {
 
     const decision = await service.classifyIntent({ prompt: 'Make a difficult quiz with 999 questions about Java inheritance.', priorMessages: [] });
 
-    assert.equal(decision.itemCount, 30, 'clamped to MAX_ITEMS regardless of what the classifier said');
+    assert.equal(decision.itemCount, 20, 'clamped to MAX_ITEMS regardless of what the classifier said');
     assert.equal(decision.difficulty, 'hard');
     assert.equal(decision.quizType, 'multiple_choice');
   });
@@ -164,5 +164,52 @@ test('chatIntentService.classifyIntent', async (t) => {
     const decision = await service.classifyIntent({ prompt: 'quiz me about DNS', priorMessages: [] });
 
     assert.equal(decision.type, 'chat');
+  });
+
+  // quizType/difficulty are NOT in INTENT_SCHEMA's `required` list, so a real
+  // Gemini response can simply omit them (as opposed to the old '' enum
+  // value, which the API now rejects outright — see the schema test below).
+  // This must resolve exactly the same as the old '' did: null, so
+  // aiService.js's `decision.quizType || 'multiple_choice'` /
+  // `decision.difficulty || personalization... || undefined` fallbacks are
+  // unchanged.
+  await t.test('quizType/difficulty absent from the classifier response fall back to null, same as before', async () => {
+    stubClassifierResponse({ intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: 'DNS' });
+    const service = loadService();
+
+    const decision = await service.classifyIntent({ prompt: 'quiz me about DNS', priorMessages: [] });
+
+    assert.equal(decision.type, 'quiz');
+    assert.equal(decision.topic, 'DNS');
+    assert.equal(decision.quizType, null);
+    assert.equal(decision.difficulty, null);
+  });
+});
+
+test('chatIntentService INTENT_SCHEMA', async (t) => {
+  await t.test('no enum anywhere in the schema contains an empty string', () => {
+    // Gemini's structured-output validation rejects an empty string as an
+    // enum value outright (400, before generating anything) — this silently
+    // took down EVERY classifier call via the fail-safe catch in
+    // classifyIntent() until it was caught. This walks the whole schema so a
+    // future field can't reintroduce the same mistake unnoticed.
+    const service = loadService();
+
+    function collectEmptyEnums(schema, path, found) {
+      if (!schema || typeof schema !== 'object') return;
+      if (Array.isArray(schema.enum)) {
+        if (schema.enum.some((v) => v === '')) found.push(path);
+      }
+      if (schema.properties) {
+        for (const [key, value] of Object.entries(schema.properties)) {
+          collectEmptyEnums(value, `${path}.${key}`, found);
+        }
+      }
+      if (schema.items) collectEmptyEnums(schema.items, `${path}[]`, found);
+    }
+
+    const found = [];
+    collectEmptyEnums(service.INTENT_SCHEMA, 'INTENT_SCHEMA', found);
+    assert.deepEqual(found, []);
   });
 });

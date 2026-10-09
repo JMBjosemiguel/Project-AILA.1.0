@@ -13,6 +13,7 @@ const {
   extractExplicitItemCount,
   looksLikeTopicAnswer,
   cleanTopic,
+  matchButtonTemplate,
 } = require('../../src/utils/chatIntent');
 
 test('chatIntent (deterministic helpers)', async (t) => {
@@ -87,5 +88,49 @@ test('chatIntent (deterministic helpers)', async (t) => {
   await t.test('cleanTopic trims and strips trailing punctuation', () => {
     assert.equal(cleanTopic('  Operating Systems.  '), 'Operating Systems');
     assert.equal(cleanTopic('subnetting!'), 'subnetting');
+  });
+
+  await t.test('matchButtonTemplate recognizes the chat UI\'s own quiz/flashcards templates', () => {
+    assert.deepEqual(
+      matchButtonTemplate('Generate a 10-item multiple choice quiz about Scientists'),
+      { type: 'quiz', topic: 'Scientists', itemCount: 10 }
+    );
+    assert.deepEqual(
+      matchButtonTemplate('Generate 10 flashcards about Scientists'),
+      { type: 'flashcards', topic: 'Scientists', itemCount: 10 }
+    );
+    // Case-insensitive, and a trailing period on the typed topic is stripped
+    // the same way cleanTopic() does for everything else.
+    assert.deepEqual(
+      matchButtonTemplate('generate a 5-item multiple choice quiz about subnetting.'),
+      { type: 'quiz', topic: 'subnetting', itemCount: 5 }
+    );
+  });
+
+  await t.test('matchButtonTemplate rejects a count above MAX_ITEMS', () => {
+    assert.equal(matchButtonTemplate(`Generate a ${MAX_ITEMS + 10}-item multiple choice quiz about Scientists`), null);
+    assert.equal(matchButtonTemplate(`Generate ${MAX_ITEMS + 10} flashcards about Scientists`), null);
+  });
+
+  await t.test('matchButtonTemplate rejects a missing topic', () => {
+    assert.equal(matchButtonTemplate('Generate a 10-item multiple choice quiz about'), null);
+    assert.equal(matchButtonTemplate('Generate a 10-item multiple choice quiz about    '), null);
+    assert.equal(matchButtonTemplate('Generate 10 flashcards about'), null);
+  });
+
+  await t.test('matchButtonTemplate is anchored to the WHOLE message — text before the command, or breaking its exact wording, never matches', () => {
+    // Text before the recognized command.
+    assert.equal(matchButtonTemplate('Please Generate a 10-item multiple choice quiz about Scientists'), null);
+    // Everything after "about" is, by design, the topic (a real topic can
+    // contain any words) — but the command part itself must match exactly:
+    // inserting a word into it breaks the match rather than loosely resembling it.
+    assert.equal(matchButtonTemplate('Generate a 10-item easy multiple choice quiz about Scientists'), null);
+    assert.equal(matchButtonTemplate('Please generate 10 flashcards about Scientists'), null);
+  });
+
+  await t.test('matchButtonTemplate never matches a message merely ABOUT a quiz', () => {
+    for (const msg of ['what is a quiz', 'generate a quiz', 'I need a 10 item quiz', 'can you make flashcards about Scientists']) {
+      assert.equal(matchButtonTemplate(msg), null, msg);
+    }
   });
 });

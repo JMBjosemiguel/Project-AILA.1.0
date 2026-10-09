@@ -80,6 +80,40 @@ function cleanTopic(message) {
   return message.trim().replace(/[.?!]+$/, '').trim();
 }
 
+// Exact-template fast path for the chat's own "Generate Quiz" / "Generate
+// Flashcards" buttons (see ChatInput.jsx's useTemplate() calls) — a message
+// that IS the button's template with a topic typed in is unambiguous, so it
+// skips the Gemini classifier entirely rather than depending on it to
+// recognize its own UI's wording. Anchored (^...$) to the WHOLE message, so
+// something that merely mentions the template's words — "what is a quiz",
+// "generate a quiz" with no count/topic — can never match.
+const QUIZ_TEMPLATE_PATTERN = /^generate a (\d+)-item multiple choice quiz about\s+(.+)$/i;
+const FLASHCARDS_TEMPLATE_PATTERN = /^generate (\d+) flashcards about\s+(.+)$/i;
+
+function matchButtonTemplate(message) {
+  const trimmed = message.trim();
+
+  const quiz = trimmed.match(QUIZ_TEMPLATE_PATTERN);
+  if (quiz) {
+    const count = Number(quiz[1]);
+    const topic = cleanTopic(quiz[2]);
+    if (topic && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
+      return { type: 'quiz', topic, itemCount: count };
+    }
+  }
+
+  const flashcards = trimmed.match(FLASHCARDS_TEMPLATE_PATTERN);
+  if (flashcards) {
+    const count = Number(flashcards[1]);
+    const topic = cleanTopic(flashcards[2]);
+    if (topic && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
+      return { type: 'flashcards', topic, itemCount: count };
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   MAX_ITEMS,
   DEFAULT_ITEMS,
@@ -92,4 +126,5 @@ module.exports = {
   extractExplicitItemCount,
   looksLikeTopicAnswer,
   cleanTopic,
+  matchButtonTemplate,
 };

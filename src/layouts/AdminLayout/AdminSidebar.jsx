@@ -12,7 +12,7 @@ export default function AdminSidebar({ active, onNavigate, open, onClose }) {
     <aside
       id="admin-sidebar-nav"
       className={[
-        'fixed lg:static top-0 left-0 bottom-0 z-[100] w-64 h-screen flex-shrink-0',
+        'fixed lg:sticky top-0 left-0 bottom-0 z-[100] w-64 h-screen flex-shrink-0 lg:self-start',
         'bg-ink-900 text-white flex flex-col transition-transform duration-300',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       ].join(' ')}

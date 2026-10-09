@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, CalendarClock, FolderOpen, Flame, MessageSquare, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
 import ResumeTestCard from '../../../components/student/dashboard/ResumeTestCard';
@@ -22,6 +22,14 @@ import { deleteQuizAttempt } from '../../../services/api/quizService';
 import { setResumeLesson } from '../../../utils/learningHubTarget';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
+
+// Dashboard stats come from the API as plain label/value pairs; map labels to icons here.
+const STAT_ICONS = {
+  'Completed Lessons': BookOpenCheck,
+  'Study Streak': Flame,
+  'Pending Tasks': CalendarClock,
+  'Avg Quiz Score': BarChart3,
+};
 
 export default function DashboardPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -112,7 +120,7 @@ export default function DashboardPage({ onNavigate }) {
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => <SkeletonStat key={index} />)
         ) : stats.length ? (
-          stats.map((stat) => <StatCard key={stat.label} {...stat} />)
+          stats.map((stat) => <StatCard key={stat.label} {...stat} icon={STAT_ICONS[stat.label]} />)
         ) : (
           <div className="col-span-2 lg:col-span-4">
             <EmptyState title="No dashboard metrics yet" message="Complete a lesson, take a quiz, or add a task to start seeing your stats here." />

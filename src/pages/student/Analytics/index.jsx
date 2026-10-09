@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, Clock, MessageCircle, TrendingUp, Zap } from 'lucide-react';
+import { Award, BarChart3, BookOpenCheck, Clock, Flame, MessageCircle, TrendingUp, Zap } from 'lucide-react';
 import BarChart from '../../../components/analytics/BarChart';
 import DonutChart from '../../../components/analytics/DonutChart';
 import MasteryList from '../../../components/analytics/MasteryList';
@@ -9,6 +9,15 @@ import LoadError from '../../../components/common/LoadError';
 import StatCard from '../../../components/common/StatCard';
 import { SkeletonStat } from '../../../components/common/Skeleton';
 import { useAnalyticsData } from '../../../hooks/useAnalyticsData';
+
+// KPIs come from the API as plain label/value pairs; map labels to icons here
+// (same labels/icons as the student Dashboard's stat cards, for consistency).
+const KPI_ICONS = {
+  'Completed Lessons': BookOpenCheck,
+  'Avg Quiz Score': BarChart3,
+  'Study Streak': Flame,
+  'XP / Level': Zap,
+};
 
 export default function AnalyticsPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -39,7 +48,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => <SkeletonStat key={index} />)
-        ) : kpis.length ? kpis.map((kpi) => <StatCard key={kpi.label} {...kpi} />) : (
+        ) : kpis.length ? kpis.map((kpi) => <StatCard key={kpi.label} {...kpi} icon={KPI_ICONS[kpi.label]} />) : (
           <div className="col-span-2 lg:col-span-4">
             <EmptyState title="No analytics yet" message="Study activity, quizzes, and tasks will show up here as you use AILA." />
           </div>

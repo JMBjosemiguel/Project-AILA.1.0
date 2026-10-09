@@ -52,6 +52,19 @@ test('appYesterdayStr is the local calendar date one day earlier', () => {
   assert.equal(mnl.appYesterdayStr(new Date('2026-09-08T16:30:00Z')), '2026-09-08');
 });
 
+test('appStartOfDay returns local midnight (app tz) as a UTC instant', () => {
+  const utc = loadWith('UTC');
+  assert.equal(utc.appStartOfDay(new Date('2026-09-08T15:30:00Z')).toISOString(), '2026-09-08T00:00:00.000Z');
+
+  const mnl = loadWith('Asia/Manila');
+  // 15:30 UTC == 23:30 Manila, still the 8th -> today started 2026-09-07T16:00Z
+  assert.equal(mnl.appStartOfDay(new Date('2026-09-08T15:30:00Z')).toISOString(), '2026-09-07T16:00:00.000Z');
+  // 16:00 UTC == 00:00 Manila on the 9th — the boundary, a new day started
+  assert.equal(mnl.appStartOfDay(new Date('2026-09-08T16:00:00Z')).toISOString(), '2026-09-08T16:00:00.000Z');
+  // One minute earlier is still the 8th in Manila
+  assert.equal(mnl.appStartOfDay(new Date('2026-09-08T15:59:00Z')).toISOString(), '2026-09-07T16:00:00.000Z');
+});
+
 test('appStartOfWeek returns Monday 00:00 (app tz) as a UTC instant', () => {
   // 2026-09-08 is a Tuesday.
   const utc = loadWith('UTC');

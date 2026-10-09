@@ -1,5 +1,6 @@
 const { query, execute } = require('../config/database');
 const { buildTombstoneEmail, buildTombstoneStudentNumber } = require('./userModel');
+const { appStartOfDay } = require('../utils/appTime');
 
 async function getDashboardStats() {
   const [users, courses, resources, conversations, lessons, quizzes, attempts, feedback, activeToday] = await Promise.all([
@@ -11,7 +12,11 @@ async function getDashboardStats() {
     query('SELECT COUNT(*) AS count FROM quizzes'),
     query('SELECT COUNT(*) AS count FROM quiz_attempts'),
     query('SELECT ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS count FROM feedback WHERE rating IS NOT NULL AND deleted_at IS NULL'),
-    query("SELECT COUNT(*) AS count FROM users WHERE deleted_at IS NULL AND last_login_at >= CURDATE()"),
+    // "Today" means the application timezone's calendar day (APP_TIMEZONE),
+    // not MySQL's own session date (CURDATE() depends on the connection's
+    // session time_zone, which is UTC as of the earlier timezone fix — a
+    // different boundary than APP_TIMEZONE whenever they're not the same zone).
+    query('SELECT COUNT(*) AS count FROM users WHERE deleted_at IS NULL AND last_login_at >= ?', [appStartOfDay()]),
   ]);
 
   return {

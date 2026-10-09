@@ -70,6 +70,18 @@ function localMidnightUtc(year, month, day) {
 }
 
 /**
+ * The UTC instant at which "today" (00:00 in the application timezone)
+ * began. Compare directly against a UTC timestamp column — e.g. "active
+ * today" should mean active since local midnight, not MySQL's own session
+ * date (CURDATE()), which depends on the connection's session time_zone
+ * rather than APP_TIMEZONE.
+ */
+function appStartOfDay(instant = new Date()) {
+  const [year, month, day] = appDateStr(instant).split('-').map(Number);
+  return localMidnightUtc(year, month, day);
+}
+
+/**
  * The UTC instant at which the current ISO week (starting Monday 00:00 in the
  * application timezone) began. Compare directly against a UTC `created_at`.
  */
@@ -87,5 +99,6 @@ module.exports = {
   APP_TIMEZONE,
   appDateStr,
   appYesterdayStr,
+  appStartOfDay,
   appStartOfWeek,
 };

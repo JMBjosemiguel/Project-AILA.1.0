@@ -22,7 +22,7 @@ const STATUS_STYLE = {
 
 function StatusBadge({ status }) {
   return (
-    <span className={`inline-flex items-center gap-1 text-[0.6rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${STATUS_STYLE[status] || STATUS_STYLE.locked}`}>
+    <span className={`inline-flex items-center gap-1 text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${STATUS_STYLE[status] || STATUS_STYLE.locked}`}>
       {status === 'locked' && <Lock size={9} />}
       {status === 'passed' && <CheckCircle2 size={9} />}
       {status === 'failed' && <AlertCircle size={9} />}

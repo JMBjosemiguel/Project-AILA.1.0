@@ -46,7 +46,7 @@ export default function ChatSidebar({
 
         <button
           onClick={onNewChat}
-          className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 hover:bg-primary-600 transition-colors"
+          className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 shadow-lift hover:bg-primary-600 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-1"
         >
           <Plus size={16} /> New chat
         </button>

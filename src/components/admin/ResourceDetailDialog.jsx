@@ -53,7 +53,7 @@ export default function ResourceDetailDialog({ resource, onClose }) {
                 {resource.ai_keywords?.length > 0 && (
                   <div className="flex gap-1.5 flex-wrap">
                     {resource.ai_keywords.map((keyword) => (
-                      <span key={keyword} className="text-[0.7rem] font-medium px-2 py-0.5 rounded-full bg-ink-50 text-ink-500">{keyword}</span>
+                      <span key={keyword} className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full bg-ink-50 text-ink-500">{keyword}</span>
                     ))}
                   </div>
                 )}

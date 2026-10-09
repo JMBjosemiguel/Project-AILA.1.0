@@ -360,7 +360,7 @@ export default function ResourcesPage({ onNavigate }) {
               {selected.ai_keywords?.length > 0 && (
                 <div className="flex gap-1.5 flex-wrap mt-2.5">
                   {selected.ai_keywords.map((keyword) => (
-                    <span key={keyword} className="text-[0.7rem] font-medium px-2 py-0.5 rounded-full bg-ink-50 text-ink-500">{keyword}</span>
+                    <span key={keyword} className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full bg-ink-50 text-ink-500">{keyword}</span>
                   ))}
                 </div>
               )}
@@ -398,7 +398,7 @@ function FilterPill({ active, onClick, label, count, color = '#64748B' }) {
     >
       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
       <span className="flex-1 min-w-0 truncate">{label}</span>
-      <span className="text-[0.65rem] text-ink-400 bg-ink-50 px-1.5 rounded-full flex-shrink-0">{count}</span>
+      <span className="text-[0.65rem] text-ink-400 bg-ink-50 px-1.5 py-0.5 rounded-full flex-shrink-0">{count}</span>
     </button>
   );
 }

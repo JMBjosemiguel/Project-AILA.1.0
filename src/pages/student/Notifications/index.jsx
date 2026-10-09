@@ -102,7 +102,7 @@ export default function NotificationsPage() {
               }
             }}
             className={[
-              'group flex items-start gap-3.5 bg-white border rounded-xl p-4 transition-colors cursor-pointer',
+              'group flex items-start gap-3.5 bg-white border rounded-2xl shadow-soft p-4 transition-colors cursor-pointer',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
               !notification.is_read ? 'border-primary-200' : 'border-ink-100',
             ].join(' ')}

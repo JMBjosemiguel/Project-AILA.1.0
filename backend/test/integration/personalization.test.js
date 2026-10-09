@@ -23,7 +23,7 @@ function loadServices(geminiText) {
     geminiCallCount += 1;
     lastGemini = body;
     const text = typeof geminiText === 'function' ? geminiText(body) : geminiText;
-    return { candidates: [{ content: { parts: [{ text }] } }] };
+    return { candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] };
   };
 
   for (const p of [

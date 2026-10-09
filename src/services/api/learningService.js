@@ -1,4 +1,4 @@
-import { apiClient, AI_GENERATION_REQUEST_TIMEOUT_MS } from './client';
+import { apiClient, AI_GENERATION_REQUEST_TIMEOUT_MS, COURSE_GENERATION_REQUEST_TIMEOUT_MS } from './client';
 import { API_ENDPOINTS } from './endpoints';
 
 export async function getLearningHubData() {
@@ -7,7 +7,9 @@ export async function getLearningHubData() {
 }
 
 export function getLesson(lessonId) {
-  return apiClient.get(API_ENDPOINTS.learning.lesson(lessonId));
+  // Generates the lesson's content on first load (server-side), so this can
+  // be a slow AI request, not just a read.
+  return apiClient.get(API_ENDPOINTS.learning.lesson(lessonId), { timeout: COURSE_GENERATION_REQUEST_TIMEOUT_MS });
 }
 
 export function completeLesson(lessonId) {
@@ -15,7 +17,7 @@ export function completeLesson(lessonId) {
 }
 
 export function generateCourse({ courseName, difficulty, goal }) {
-  return apiClient.post(API_ENDPOINTS.learning.generateCourse, { courseName, difficulty, goal });
+  return apiClient.post(API_ENDPOINTS.learning.generateCourse, { courseName, difficulty, goal }, { timeout: COURSE_GENERATION_REQUEST_TIMEOUT_MS });
 }
 
 export function deleteCourse(subjectId) {

@@ -31,7 +31,7 @@ function loadService({ storedContent = null, geminiImpl } = {}) {
     geminiCalls += 1;
     if (geminiImpl) return geminiImpl(...args);
     await new Promise((r) => setTimeout(r, 20));
-    return { candidates: [{ content: { parts: [{ text: '## Summary\nGenerated body.' }] } }] };
+    return { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '## Summary\nGenerated body.' }] } }] };
   };
 
   require(NOTIFY_PATH).notifyUser = async () => {};
@@ -77,7 +77,7 @@ test('generateLessonContent', async (t) => {
       geminiImpl: async () => {
         attempt += 1;
         if (attempt === 1) throw new Error('transient');
-        return { candidates: [{ content: { parts: [{ text: '## Summary\nGenerated body.' }] } }] };
+        return { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '## Summary\nGenerated body.' }] } }] };
       },
     });
     await assert.rejects(() => svc.generateLessonContent(LESSON), /transient/);

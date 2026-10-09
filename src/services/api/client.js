@@ -9,6 +9,13 @@ const API_URL = import.meta.env.VITE_API_URL;
 // of no timeout at all.
 export const AI_GENERATION_REQUEST_TIMEOUT_MS = 35000;
 
+// Course roadmap + lesson generation get their own longer backend deadline
+// (COURSE_GENERATION_DEADLINE_MS, 60s — see courseGenerationService.js)
+// because a full roadmap or a 9-section lesson can legitimately take longer
+// to stream than a quiz or chat reply. Slightly above that for the same
+// reason as AI_GENERATION_REQUEST_TIMEOUT_MS above.
+export const COURSE_GENERATION_REQUEST_TIMEOUT_MS = 65000;
+
 export class ApiClientError extends Error {
   constructor(message, { status = null, details = null } = {}) {
     super(message);

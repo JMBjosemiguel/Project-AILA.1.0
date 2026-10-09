@@ -63,6 +63,7 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
           <div className="flex flex-col items-center gap-2 text-sm text-ink-400 py-14 justify-center">
             <Loader2 size={20} className="animate-spin" />
             <span>AILA is building your course roadmap...</span>
+            <span className="text-xs text-ink-300">This can take up to a minute.</span>
           </div>
         ) : (
           <>

@@ -280,8 +280,9 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
         });
       }
     }
-  } catch {
+  } catch (error) {
     // Analysis is best-effort; the file itself is already saved and usable.
+    console.error(`[resourceService] AI analysis failed for resource ${resourceId}: ${error.message}`);
   }
 
   await logActivity(userId, 'resource_viewed', resourceId, `Uploaded resource: ${title}`);
@@ -327,8 +328,9 @@ async function addLinkResource(userId, { url, title, subjectId } = {}) {
         difficulty: normalizeDifficulty(analysis.difficulty),
       });
     }
-  } catch {
+  } catch (error) {
     // Link analysis is best-effort; the link itself is already saved.
+    console.error(`[resourceService] AI analysis failed for link resource ${resourceId}: ${error.message}`);
   }
 
   await logActivity(userId, 'resource_viewed', resourceId, `Added resource link: ${resolvedTitle}`);

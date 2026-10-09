@@ -154,7 +154,8 @@ async function bulkResourceAction(adminId, { ids, action }) {
       if (action === 'delete') await deleteResource(adminId, id);
       else if (action === 'archive') await setResourceArchived(adminId, id, true);
       results.push({ id, ok: true });
-    } catch {
+    } catch (error) {
+      console.error(`[adminService] bulk ${action} failed for resource ${id} (admin ${adminId}): ${error.message}`);
       results.push({ id, ok: false });
     }
   }

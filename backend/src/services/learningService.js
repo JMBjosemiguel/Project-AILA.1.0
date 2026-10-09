@@ -36,7 +36,8 @@ async function generateCourse(userId, { courseName, difficulty, goal }) {
       generationType: 'course',
       knownSubject: { name: courseName, goal },
     });
-  } catch {
+  } catch (error) {
+    console.error(`[learningService] personalization context failed for user ${userId} (course generation): ${error.message}`);
     context = null;
   }
 
@@ -58,7 +59,8 @@ async function getLesson(userId, lessonId) {
         generationType: 'lesson',
         knownSubject: { id: detail.subject.id, name: detail.subject.name, goal: detail.subject.goal },
       });
-    } catch {
+    } catch (error) {
+      console.error(`[learningService] personalization context failed for user ${userId}, lesson ${detail.lesson.id}: ${error.message}`);
       context = null; // optional context failed — generate generically
     }
 
@@ -73,10 +75,11 @@ async function getLesson(userId, lessonId) {
         goal: detail.subject.goal,
       }, context);
       detail.lesson.personalizationLevel = context?.personalizationLevel ?? null;
-    } catch {
+    } catch (error) {
       // AI is unavailable right now — return the lesson shell so the page can
       // render a retry instead of failing the whole request. Nothing partial
       // was stored, so a later open will try again.
+      console.error(`[learningService] lesson generation failed for lesson ${detail.lesson.id} (user ${userId}): ${error.message}`);
       detail.lesson.content = null;
       detail.lesson.contentError = true;
     }

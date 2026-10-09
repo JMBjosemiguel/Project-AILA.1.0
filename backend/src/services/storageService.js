@@ -265,8 +265,9 @@ async function deleteStoredFile(filePath) {
   try {
     const absolutePath = path.join(UPLOADS_DIR, path.basename(filePath));
     await fs.promises.unlink(absolutePath);
-  } catch {
+  } catch (error) {
     // Best-effort cleanup; the DB row is already soft-deleted regardless.
+    console.error(`[storageService] failed to remove local file for ${filePath}: ${error.message}`);
   }
 }
 

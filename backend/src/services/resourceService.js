@@ -53,7 +53,8 @@ async function extractTextForType(type, buffer) {
   if (type === 'doc' || type === 'docx' || type === 'pptx' || type === 'ppt') {
     try {
       return await extractOfficeText(buffer, type);
-    } catch {
+    } catch (error) {
+      console.error(`[resourceService] Office text extraction failed for a .${type} upload: ${error.message}`);
       return '';
     }
   }

@@ -10,7 +10,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "test": "node --test \"test/unit/**/*.test.js\"",
-    "test:integration": "node --test \"test/integration/**/*.test.js\"",
+    "test:integration": "node --test --test-concurrency=1 \"test/integration/**/*.test.js\"",
     "test:smoke": "node --check src/server.js",
     "validate:deployment": "node src/scripts/validateDeploymentConfig.js"
   },

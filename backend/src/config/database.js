@@ -35,6 +35,16 @@ const pool = mysql.createPool({
   ssl: buildSslConfig(),
 });
 
+// `timezone: 'Z'` above only tells this driver to treat values MySQL returns
+// as UTC — it does not touch the server's own session time_zone. If that
+// session is non-UTC (e.g. XAMPP's MySQL inherits the host OS's local zone),
+// TIMESTAMP columns get converted to local wall-clock time before the driver
+// ever sees them, then get mislabeled as UTC on top of that: a double shift.
+// Forcing every pooled connection's session to UTC makes the two agree.
+pool.on('connection', (connection) => {
+  connection.query("SET time_zone = '+00:00'");
+});
+
 // Use the text protocol (pool.query) rather than server-side prepared statements
 // (pool.execute). Parameters are still bound via `?` and escaped by mysql2, so
 // this stays injection-safe, but `LIMIT ?` / `OFFSET ?` work on strict MySQL 8

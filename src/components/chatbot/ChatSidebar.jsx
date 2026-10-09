@@ -201,6 +201,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
       <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 flex-shrink-0">
         <button
           onClick={startEdit}
+          aria-label={`Rename conversation: ${label}`}
           className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-primary hover:bg-white"
         >
           <Pencil size={11} />
@@ -210,6 +211,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
             event.stopPropagation();
             setConfirmingDelete(true);
           }}
+          aria-label={`Delete conversation: ${label}`}
           className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-rose-600 hover:bg-white"
         >
           <Trash2 size={11} />

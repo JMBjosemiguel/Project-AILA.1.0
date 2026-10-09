@@ -77,7 +77,7 @@ export default function FeedbackPage() {
               <select
                 value={contextType}
                 onChange={(event) => setContextType(event.target.value)}
-                className="w-full border border-ink-100 focus:border-primary-300 rounded-xl px-3.5 py-2 text-sm outline-none bg-white"
+                className="w-full border border-ink-100 focus:border-primary-300 rounded-xl px-3.5 py-2 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
               >
                 <option value="">General</option>
                 {(data?.contexts ?? []).map((context) => (

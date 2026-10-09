@@ -42,7 +42,7 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
           </button>
         </div>
         <div className="flex items-end gap-2 bg-white border border-ink-100 focus-within:border-primary-300 rounded-2xl px-3.5 py-2.5 shadow-soft transition-colors">
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0">
+          <button aria-label="Attach file" className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0">
             <Paperclip size={16} />
           </button>
           <textarea
@@ -57,6 +57,7 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
           <button
             onClick={onSend}
             disabled={disabled || !value.trim()}
+            aria-label="Send message"
             className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-white disabled:opacity-40 hover:bg-primary-600 transition-colors flex-shrink-0"
           >
             <ArrowUp size={16} />

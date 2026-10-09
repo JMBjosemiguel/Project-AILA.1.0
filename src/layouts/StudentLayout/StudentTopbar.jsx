@@ -256,6 +256,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       <div className="flex items-center gap-2 flex-shrink-0">
         <button
           onClick={() => onNavigate(STUDENT_ROUTE_IDS.NOTIFICATIONS)}
+          aria-label="View notifications"
           className="relative w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 transition-colors"
         >
           <Bell size={17} />
@@ -270,6 +271,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
           onClick={handleLogout}
           className="w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 transition-colors"
           title="Log out"
+          aria-label="Log out"
         >
           <LogOut size={17} />
         </button>

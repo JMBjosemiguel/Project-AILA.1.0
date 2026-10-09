@@ -67,7 +67,7 @@ function thinkingVisible() {
 }
 
 async function openChat(user, name) {
-  await user.click(screen.getByRole('button', { name: new RegExp(name) }));
+  await user.click(screen.getByRole('button', { name: new RegExp(`^${name}$`) }));
 }
 
 async function typeAndSend(user, text) {
@@ -187,10 +187,7 @@ describe('AssistantPage — conversation-scoped thinking / message state', () =>
     expect(thinkingVisible()).toBe(true);
 
     // delete Chat A from the sidebar
-    const chatABtn = screen.getByRole('button', { name: /Chat A/ });
-    const item = chatABtn.parentElement;
-    const trashIcon = item.querySelector('.lucide-trash-2, .lucide-trash2');
-    await user.click(trashIcon.closest('button'));
+    await user.click(screen.getByRole('button', { name: /Delete conversation: Chat A/ }));
     await user.click(screen.getByRole('button', { name: /^Delete$/ }));
 
     await waitFor(() => expect(deleteConversation).toHaveBeenCalledWith(1));

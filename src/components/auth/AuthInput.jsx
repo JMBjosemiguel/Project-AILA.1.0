@@ -7,7 +7,7 @@ export default function AuthInput({ label, icon: Icon, rightElement, type = 'tex
         <input
           type={type}
           className={[
-            'w-full border border-ink-100 focus:border-primary-300 rounded-xl py-2.5 text-sm outline-none transition-colors placeholder:text-ink-400',
+            'w-full border border-ink-100 focus:border-primary-300 rounded-xl py-2.5 text-sm outline-none transition-colors placeholder:text-ink-400 focus-visible:ring-2 focus-visible:ring-primary-200',
             Icon ? 'pl-9' : 'pl-3.5',
             rightElement ? 'pr-10' : 'pr-3.5',
           ].join(' ')}

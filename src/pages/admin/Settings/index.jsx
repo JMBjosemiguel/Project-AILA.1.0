@@ -193,25 +193,25 @@ export default function AdminSettingsPage() {
           </div>
 
           {targetType === 'user' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none">
+            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
               <option value="">Select a student...</option>
               {userOptions.map((u) => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
             </select>
           )}
           {targetType === 'course' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none">
+            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
               <option value="">Select a course...</option>
               {courseOptions.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.first_name} {c.last_name})</option>)}
             </select>
           )}
           {targetType === 'year_level' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none">
+            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
               <option value="">Select a year level...</option>
               {YEAR_LEVELS.map((y) => <option key={y} value={y}>Year {y}</option>)}
             </select>
           )}
           {targetType === 'role' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none">
+            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
               <option value="">Select a role...</option>
               {ROLES.map((r) => <option key={r} value={r} className="capitalize">{r}</option>)}
             </select>

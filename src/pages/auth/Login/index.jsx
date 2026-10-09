@@ -74,7 +74,7 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           rightElement={
-            <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-ink-400 hover:text-primary">
+            <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="text-ink-400 hover:text-primary">
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           }

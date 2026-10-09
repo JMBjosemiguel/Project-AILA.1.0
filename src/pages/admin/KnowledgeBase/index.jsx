@@ -126,7 +126,7 @@ export default function AdminKnowledgeBasePage() {
               ))}
             </div>
           </div>
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none self-end">
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200 self-end">
             {SORT_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         </div>

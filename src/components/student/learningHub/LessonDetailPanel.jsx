@@ -93,7 +93,7 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
             </div>
           )}
         </div>
-        <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 flex-shrink-0">
+        <button onClick={onClose} aria-label="Close" className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 flex-shrink-0">
           <X size={16} />
         </button>
       </div>

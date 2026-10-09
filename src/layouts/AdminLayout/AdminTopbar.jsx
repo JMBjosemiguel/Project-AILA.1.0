@@ -258,6 +258,7 @@ export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNaviga
           onClick={handleLogout}
           className="w-9 h-9 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 transition-colors"
           title="Log out"
+          aria-label="Log out"
         >
           <LogOut size={17} />
         </button>

@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { formatDateTime } from '../../utils/formatDate';
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
@@ -35,10 +36,10 @@ export default function ResourceDetailDialog({ resource, onClose }) {
             <Row label="Owner" value={resource.first_name ? `${resource.first_name} ${resource.last_name}` : 'Unknown'} />
             <Row label="Type" value={resource.type?.toUpperCase()} />
             <Row label="File size" value={formatBytes(resource.file_size_bytes)} />
-            <Row label="Uploaded" value={new Date(resource.created_at).toLocaleString()} />
+            <Row label="Uploaded" value={formatDateTime(resource.created_at)} />
             <Row label="Associated course" value={resource.course_name} />
             <Row label="Usage count" value={resource.view_count} />
-            <Row label="Last accessed" value={resource.last_accessed_at ? new Date(resource.last_accessed_at).toLocaleString() : 'Never'} />
+            <Row label="Last accessed" value={resource.last_accessed_at ? formatDateTime(resource.last_accessed_at) : 'Never'} />
           </div>
 
           <div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import EmptyState from '../common/EmptyState';
 import { useMobileDrawer } from '../../hooks/useMobileDrawer';
+import { formatDate } from '../../utils/formatDate';
 
 export default function ChatSidebar({
   activeChat,
@@ -112,7 +113,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
-  const label = chat.title || (chat.started_at ? `Chat from ${new Date(chat.started_at).toLocaleDateString()}` : 'New conversation');
+  const label = chat.title || (chat.started_at ? `Chat from ${formatDate(chat.started_at)}` : 'New conversation');
 
   const startEdit = (event) => {
     event.stopPropagation();

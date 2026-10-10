@@ -15,6 +15,7 @@ import {
   openAdminResourceFile, downloadAdminResource,
 } from '../../../services/api/adminService';
 import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
+import { formatDate } from '../../../utils/formatDate';
 
 const SORT_OPTIONS = [
   { id: 'newest', label: 'Newest' },
@@ -142,7 +143,7 @@ export default function AdminResourcesPage() {
     { key: 'owner', label: 'Owner', render: (r) => <span className="text-ink-500">{r.first_name ? `${r.first_name} ${r.last_name}` : 'Admin'}</span> },
     { key: 'course', label: 'Course', render: (r) => <span className="text-ink-500">{r.course_name || '—'}</span> },
     { key: 'views', label: 'Views', render: (r) => <span className="text-ink-500">{r.view_count}</span> },
-    { key: 'uploaded', label: 'Uploaded', render: (r) => <span className="text-ink-500">{new Date(r.created_at).toLocaleDateString()}</span> },
+    { key: 'uploaded', label: 'Uploaded', render: (r) => <span className="text-ink-500">{formatDate(r.created_at)}</span> },
     {
       key: 'actions',
       label: '',

@@ -2,6 +2,7 @@ import Card, { CardHeader } from '../../common/Card';
 import EmptyState from '../../common/EmptyState';
 import { SkeletonList } from '../../common/Skeleton';
 import { ACTIVITY_ICONS, ACTIVITY_ICON_FALLBACK } from '../../../utils/activityIcons';
+import { formatDateTime } from '../../../utils/formatDate';
 
 export default function ActivityCard({ activities = [], loading = false }) {
   return (
@@ -20,7 +21,7 @@ export default function ActivityCard({ activities = [], loading = false }) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                  <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
+                  <span className="text-xs text-ink-400">{formatDateTime(activity.created_at)}</span>
                 </div>
               </div>
             );

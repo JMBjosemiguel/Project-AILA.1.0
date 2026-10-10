@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Flame, Loader2, MessageSquare, X } from 'lucide-react';
 import { getAdminUserDetail } from '../../services/api/adminService';
+import { formatDate, formatDateTime } from '../../utils/formatDate';
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
@@ -77,8 +78,8 @@ export default function UserDetailDialog({ userId, onClose }) {
                 </div>
                 <div className="text-ink-500">Storage used: {formatBytes(detail.storageBytes)}</div>
                 <div className="text-ink-500">Program: {detail.program || 'Not set'} {detail.year_level ? `· Yr ${detail.year_level}` : ''}</div>
-                <div className="text-ink-500">Joined: {new Date(detail.created_at).toLocaleDateString()}</div>
-                <div className="text-ink-500 col-span-2">Last login: {detail.last_login_at ? new Date(detail.last_login_at).toLocaleString() : 'Never'}</div>
+                <div className="text-ink-500">Joined: {formatDate(detail.created_at)}</div>
+                <div className="text-ink-500 col-span-2">Last login: {detail.last_login_at ? formatDateTime(detail.last_login_at) : 'Never'}</div>
               </div>
 
               <div>
@@ -88,7 +89,7 @@ export default function UserDetailDialog({ userId, onClose }) {
                     {detail.recentActivity.map((item) => (
                       <div key={item.id} className="py-2 text-sm text-ink-600">
                         {item.description}
-                        <span className="block text-xs text-ink-300">{new Date(item.created_at).toLocaleString()}</span>
+                        <span className="block text-xs text-ink-300">{formatDateTime(item.created_at)}</span>
                       </div>
                     ))}
                   </div>

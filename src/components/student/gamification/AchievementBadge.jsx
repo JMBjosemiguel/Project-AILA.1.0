@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react';
 import ProgressBar from '../../common/ProgressBar';
 import { achievementIcon, CATEGORY_ACCENT } from './achievementIcons';
+import { formatDate } from '../../../utils/formatDate';
 
 // Progress label for a countable achievement ("7 / 10 lessons"). Binary
 // achievements pass progress = null and get no bar.
@@ -51,7 +52,7 @@ export default function AchievementBadge({ achievement, earned = false, earnedAt
 
         {earned && earnedAt && (
           <p className="mt-1.5 text-[0.7rem] font-medium text-emerald-600">
-            Earned {new Date(earnedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            Earned {formatDate(earnedAt)}
           </p>
         )}
 

@@ -10,6 +10,7 @@ import CourseDetailDialog from '../../../components/admin/CourseDetailDialog';
 import {
   listAdminCourses, deleteAdminCourse, archiveAdminCourse, unarchiveAdminCourse,
 } from '../../../services/api/adminService';
+import { formatDate } from '../../../utils/formatDate';
 
 const SORT_OPTIONS = [
   { id: 'newest', label: 'Newest' },
@@ -91,7 +92,7 @@ export default function AdminKnowledgeBasePage() {
     { key: 'lessons', label: 'Lessons', render: (c) => <span className="text-ink-500">{c.lesson_count}</span> },
     { key: 'completion', label: 'Completion', render: (c) => <span className="text-ink-500">{c.completion_rate !== null ? `${c.completion_rate}%` : '—'}</span> },
     { key: 'quiz', label: 'Avg Quiz', render: (c) => <span className="text-ink-500">{c.avg_quiz_score !== null ? `${c.avg_quiz_score}%` : '—'}</span> },
-    { key: 'created', label: 'Generated', render: (c) => <span className="text-ink-500">{new Date(c.created_at).toLocaleDateString()}</span> },
+    { key: 'created', label: 'Generated', render: (c) => <span className="text-ink-500">{formatDate(c.created_at)}</span> },
     {
       key: 'actions',
       label: '',

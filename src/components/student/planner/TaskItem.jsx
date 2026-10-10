@@ -1,6 +1,7 @@
 import { AlertCircle, Bell, Check, Copy, Pencil, Repeat, RotateCcw, Trash2 } from 'lucide-react';
 import { TASK_STATUS } from '../../../constants/ui';
 import ActionMenu from '../../common/ActionMenu';
+import { formatDate } from '../../../utils/formatDate';
 
 const PRIORITY_STYLE = {
   high: 'bg-rose-50 text-rose-600',
@@ -40,7 +41,7 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit, onDuplicate
         <p className={`text-sm font-medium truncate ${isDone ? 'text-ink-300 line-through' : 'text-ink-800'}`}>{task.title}</p>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`text-xs ${task.is_overdue ? 'text-rose-500 font-semibold' : 'text-ink-400'}`}>
-            Due {task.deadline ? new Date(task.deadline).toLocaleString() : 'not scheduled'}
+            Due {task.deadline ? formatDate(task.deadline) : 'not scheduled'}
           </span>
           {task.subject_name && <span className="text-xs text-ink-300">- {task.subject_name}</span>}
           {task.repeat_interval && task.repeat_interval !== 'none' && <Repeat size={11} className="text-ink-300" />}

@@ -6,6 +6,7 @@ import Pagination from '../../../components/admin/Pagination';
 import SearchBar from '../../../components/admin/SearchBar';
 import { useToast } from '../../../components/common/Toast';
 import { listAuditLog, exportAuditLog } from '../../../services/api/adminService';
+import { formatDateTime } from '../../../utils/formatDate';
 
 function actionLabel(action) {
   return action.replace(/_/g, ' ').replace(/\./g, ' · ');
@@ -56,7 +57,7 @@ export default function AdminAuditLogPage() {
   };
 
   const columns = [
-    { key: 'timestamp', label: 'Timestamp', render: (e) => <span className="text-ink-500 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</span> },
+    { key: 'timestamp', label: 'Timestamp', render: (e) => <span className="text-ink-500 whitespace-nowrap">{formatDateTime(e.created_at)}</span> },
     {
       key: 'user',
       label: 'User',

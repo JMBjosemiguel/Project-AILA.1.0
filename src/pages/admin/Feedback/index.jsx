@@ -9,6 +9,7 @@ import Pagination from '../../../components/admin/Pagination';
 import SearchBar from '../../../components/admin/SearchBar';
 import FeedbackReplyDialog from '../../../components/admin/FeedbackReplyDialog';
 import DonutChart from '../../../components/analytics/DonutChart';
+import { formatDate } from '../../../utils/formatDate';
 import {
   listAdminFeedback, getAdminFeedbackAnalytics, archiveAdminFeedback, unarchiveAdminFeedback, deleteAdminFeedback, restoreAdminFeedback,
 } from '../../../services/api/adminService';
@@ -129,7 +130,7 @@ export default function AdminFeedbackPage() {
         </span>
       ),
     },
-    { key: 'created', label: 'Date', render: (f) => <span className="text-ink-500">{new Date(f.created_at).toLocaleDateString()}</span> },
+    { key: 'created', label: 'Date', render: (f) => <span className="text-ink-500">{formatDate(f.created_at)}</span> },
     {
       key: 'actions',
       label: '',

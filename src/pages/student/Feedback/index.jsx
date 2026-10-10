@@ -9,6 +9,7 @@ import { useToast } from '../../../components/common/Toast';
 import StarRating from '../../../components/student/feedback/StarRating';
 import { useFeedbackData } from '../../../hooks/useFeedbackData';
 import { deleteFeedback, getMyFeedback, submitFeedback } from '../../../services/api/feedbackService';
+import { formatDateTime } from '../../../utils/formatDate';
 
 export default function FeedbackPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -116,7 +117,7 @@ export default function FeedbackPage() {
                         )}
                       </div>
                       {entry.comment && <p className="text-sm text-ink-600 mt-1.5">{entry.comment}</p>}
-                      <span className="text-xs text-ink-300 mt-1 block">{new Date(entry.created_at).toLocaleString()}</span>
+                      <span className="text-xs text-ink-300 mt-1 block">{formatDateTime(entry.created_at)}</span>
                     </div>
                     <button
                       onClick={() => handleDelete(entry)}

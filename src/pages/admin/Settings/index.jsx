@@ -13,6 +13,7 @@ import {
   listAnnouncements, archiveAnnouncement, unarchiveAnnouncement, deleteAnnouncement,
   sendAnnouncement, listAdminUsers, listAdminCourses,
 } from '../../../services/api/adminService';
+import { formatDate } from '../../../utils/formatDate';
 
 const TARGET_TYPES = [
   { id: 'all', label: 'Everyone' },
@@ -142,7 +143,7 @@ export default function AdminSettingsPage() {
     { key: 'target', label: 'Target', render: (a) => <span className="text-ink-500">{targetLabel(a)}</span> },
     { key: 'recipients', label: 'Recipients', render: (a) => <span className="text-ink-500">{a.recipient_count}</span> },
     { key: 'read', label: 'Read', render: (a) => <span className="text-ink-500">{a.recipient_count ? `${Math.round((a.read_count / a.recipient_count) * 100)}%` : '—'}</span> },
-    { key: 'sent', label: 'Sent', render: (a) => <span className="text-ink-500">{new Date(a.created_at).toLocaleDateString()}</span> },
+    { key: 'sent', label: 'Sent', render: (a) => <span className="text-ink-500">{formatDate(a.created_at)}</span> },
     {
       key: 'actions',
       label: '',

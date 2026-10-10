@@ -13,6 +13,7 @@ import {
   listChatSessionUsers, listChatSessionsForUser, getChatSession,
   deleteChatSession, archiveChatSession, unarchiveChatSession, renameChatSession,
 } from '../../../services/api/adminChatService';
+import { formatDateTime } from '../../../utils/formatDate';
 
 const FILTERS = [
   { id: 'newest', label: 'Newest' },
@@ -23,7 +24,7 @@ const FILTERS = [
 
 function formatDate(value) {
   if (!value) return 'No activity yet';
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 export default function AdminChatSessionsPage() {

@@ -8,6 +8,7 @@ import { useToast } from '../../../components/common/Toast';
 import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
 import { ACTIVITY_ICONS, ACTIVITY_ICON_FALLBACK } from '../../../utils/activityIcons';
+import { formatDateTime } from '../../../utils/formatDate';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
@@ -219,7 +220,7 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                        <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
+                        <span className="text-xs text-ink-400">{formatDateTime(activity.created_at)}</span>
                       </div>
                     </div>
                   );

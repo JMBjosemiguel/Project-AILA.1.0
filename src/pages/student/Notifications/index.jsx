@@ -10,6 +10,7 @@ import { useNotificationsData } from '../../../hooks/useNotificationsData';
 import {
   deleteAllNotifications, deleteNotification, markAllNotificationsRead, markNotificationRead,
 } from '../../../services/api/notificationService';
+import { formatDateTime } from '../../../utils/formatDate';
 
 export default function NotificationsPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -113,7 +114,7 @@ export default function NotificationsPage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink-800">{notification.title}</p>
               <p className="text-xs text-ink-400 mt-0.5 leading-relaxed">{notification.body}</p>
-              <span className="text-[0.7rem] text-ink-300 mt-1.5 block">{new Date(notification.created_at).toLocaleString()}</span>
+              <span className="text-[0.7rem] text-ink-300 mt-1.5 block">{formatDateTime(notification.created_at)}</span>
             </div>
             {!notification.is_read && <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
             <button

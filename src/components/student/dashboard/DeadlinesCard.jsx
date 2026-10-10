@@ -2,6 +2,7 @@ import Card, { CardHeader } from '../../common/Card';
 import { DomainDot } from '../../common/DomainChip';
 import EmptyState from '../../common/EmptyState';
 import { SkeletonList } from '../../common/Skeleton';
+import { formatDate } from '../../../utils/formatDate';
 
 const PRIORITY_STYLE = {
   high: 'bg-rose-50 text-rose-600',
@@ -25,7 +26,7 @@ export default function DeadlinesCard({ deadlines = [], loading = false, onViewA
               <DomainDot subject={deadline.subject} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-ink-800 truncate">{deadline.title}</p>
-                <span className="text-xs text-ink-400">Due {new Date(deadline.deadline).toLocaleDateString()}</span>
+                <span className="text-xs text-ink-400">Due {formatDate(deadline.deadline)}</span>
               </div>
               <span className={`text-[0.65rem] font-bold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${PRIORITY_STYLE[deadline.priority_label?.toLowerCase()] ?? PRIORITY_STYLE.low}`}>
                 {deadline.priority_label}

@@ -72,7 +72,13 @@ export default function PlannerPage() {
     try {
       const updated = await updateStudyTask(id, { status: nextStatus });
       setTasks((current) => current.map((item) => (item.id === id ? updated : item)));
-      toast.success(nextStatus === TASK_STATUS.COMPLETED ? 'Task marked complete.' : 'Task marked incomplete.');
+      if (nextStatus === TASK_STATUS.COMPLETED && updated.xpAwarded > 0) {
+        toast.success(`Task marked complete. +${updated.xpAwarded} XP earned.`);
+      } else {
+        toast.success(nextStatus === TASK_STATUS.COMPLETED ? 'Task marked complete.' : 'Task marked incomplete.');
+      }
+      if (updated.leveledUp) toast.success(`Level up! You're now Level ${updated.level}.`);
+      (updated.newAchievements ?? []).forEach((a) => toast.success(`Achievement unlocked: ${a.name}`));
     } catch (error) {
       toast.error(error.message || 'Could not update that task.');
     }

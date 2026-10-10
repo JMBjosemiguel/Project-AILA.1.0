@@ -7,8 +7,7 @@ import Switch from '../../../components/common/Switch';
 import { useToast } from '../../../components/common/Toast';
 import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
-import { ACTIVITY_ICONS, ACTIVITY_ICON_FALLBACK } from '../../../utils/activityIcons';
-import { formatDateTime } from '../../../utils/formatDate';
+import ActivityList from '../../../components/student/ActivityList';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
@@ -210,22 +209,7 @@ export default function ProfilePage() {
           <Card>
             <CardHeader title="Activity history" />
             {data?.activities?.length ? (
-              <div className="flex flex-col gap-3.5">
-                {data.activities.map((activity) => {
-                  const Icon = ACTIVITY_ICONS[activity.activity_type] || ACTIVITY_ICON_FALLBACK;
-                  return (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center text-ink-400 flex-shrink-0">
-                        <Icon size={15} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                        <span className="text-xs text-ink-400">{formatDateTime(activity.created_at)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <ActivityList activities={data.activities} />
             ) : <EmptyState title="No activity yet" message="Your learning activity will show up here as you use AILA." />}
           </Card>
         </div>

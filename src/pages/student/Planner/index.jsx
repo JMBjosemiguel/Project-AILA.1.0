@@ -318,7 +318,7 @@ export default function PlannerPage() {
                   id="remind-me"
                   checked={details.remind_me}
                   onChange={(event) => setDetails((current) => ({ ...current, remind_me: event.target.checked }))}
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-primary"
                 />
                 <label htmlFor="remind-me" className="text-xs font-semibold text-ink-600">Remind me before deadline</label>
               </div>

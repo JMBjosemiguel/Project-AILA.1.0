@@ -127,10 +127,11 @@ export default function AdminResourcesPage() {
   const columns = [
     {
       key: 'select',
-      label: <input type="checkbox" checked={resources.length > 0 && selected.length === resources.length} onChange={toggleSelectAll} aria-label="Select all" />,
+      label: <input type="checkbox" className="accent-primary" checked={resources.length > 0 && selected.length === resources.length} onChange={toggleSelectAll} aria-label="Select all" />,
       render: (r) => (
         <input
           type="checkbox"
+          className="accent-primary"
           checked={selected.includes(r.id)}
           onChange={() => setSelected((current) => (current.includes(r.id) ? current.filter((id) => id !== r.id) : [...current, r.id]))}
           aria-label={`Select ${r.title}`}

@@ -152,7 +152,7 @@ export default function AdminFeedbackPage() {
   ];
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp flex flex-col gap-5">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-5">
       {analytics && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>

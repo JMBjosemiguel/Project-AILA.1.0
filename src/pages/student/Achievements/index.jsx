@@ -178,7 +178,7 @@ export default function AchievementsPage({ onNavigate }) {
   const { data: summary, loading: summaryLoading } = useGamificationSummary(refreshKey);
 
   return (
-    <div className="mx-auto max-w-6xl animate-fadeUp p-5 lg:p-8">
+    <div className="mx-auto max-w-6xl 2xl:max-w-7xl animate-fadeUp p-5 lg:p-8">
       <XpHeader summary={summary} loading={summaryLoading} />
 
       <div className="mb-5 flex gap-1 border-b border-ink-100" role="tablist" aria-label="Achievements and leaderboard">

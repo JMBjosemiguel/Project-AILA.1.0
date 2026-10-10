@@ -31,7 +31,7 @@ export default function AchievementsPreviewCard({ summary, loading = false, onNa
   const next = summary?.nextAchievements ?? [];
 
   return (
-    <Card>
+    <Card className="lg:col-span-2">
       <CardHeader
         title="Achievements"
         action={

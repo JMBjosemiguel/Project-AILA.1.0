@@ -33,7 +33,7 @@ export default function AnalyticsPage() {
 
   if (!loading && error) {
     return (
-      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+      <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
         <LoadError
           title="Couldn't load your analytics"
           message={error.message || 'Something went wrong loading your analytics.'}
@@ -44,7 +44,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {loading ? (
           Array.from({ length: 4 }).map((_, index) => <SkeletonStat key={index} />)

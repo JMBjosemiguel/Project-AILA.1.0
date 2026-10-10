@@ -85,7 +85,7 @@ export default function AdminAuditLogPage() {
   ];
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp flex flex-col gap-4">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-4">
       <div className="flex flex-col sm:flex-row gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by name or action..." className="flex-1" />
         <div className="flex gap-2 flex-wrap items-center">

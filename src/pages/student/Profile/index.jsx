@@ -99,7 +99,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="flex flex-col gap-5">
           <Card padded={false} className="overflow-hidden">

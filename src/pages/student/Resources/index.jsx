@@ -161,7 +161,7 @@ export default function ResourcesPage({ onNavigate }) {
   };
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="grid lg:grid-cols-[200px_1fr] gap-6">
         <Card className="h-fit lg:sticky lg:top-20 min-w-0">
           <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2 px-1">Subjects</div>

@@ -144,7 +144,7 @@ export default function AdminChatSessionsPage() {
   };
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="grid grid-cols-1 lg:grid-cols-[19rem_1fr] gap-5 items-start">
         <Card padded={false} className="overflow-hidden">
           {!selectedUser ? (

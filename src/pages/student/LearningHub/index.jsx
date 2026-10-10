@@ -194,7 +194,7 @@ export default function LearningHubPage({ onNavigate }) {
   };
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2 bg-white border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5 max-w-sm w-full sm:w-auto">
           <Search size={16} className="text-ink-400" />

@@ -92,7 +92,7 @@ export default function AdminDashboardPage() {
   ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 12) : [];
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       {error && !loading && (
         <div className="mb-5 flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />

@@ -66,39 +66,40 @@ export default function FeedbackPage() {
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
       <div className="grid lg:grid-cols-[1fr_300px] gap-5 items-start">
         <div className="flex flex-col gap-5">
-          <Card className="flex flex-col gap-6">
+          <Card>
             <CardHeader title="Rate your experience" />
+            <div className="flex flex-col gap-6">
+              <Field label="Overall satisfaction with AILA">
+                <StarRating value={overall} onChange={setOverall} />
+              </Field>
 
-            <Field label="Overall satisfaction with AILA">
-              <StarRating value={overall} onChange={setOverall} />
-            </Field>
+              <Field label="Feedback context">
+                <select
+                  value={contextType}
+                  onChange={(event) => setContextType(event.target.value)}
+                  className="w-full border border-ink-100 focus:border-primary-300 rounded-xl px-3.5 py-2 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                >
+                  <option value="">General</option>
+                  {(data?.contexts ?? []).map((context) => (
+                    <option key={context} value={context}>{context}</option>
+                  ))}
+                </select>
+              </Field>
 
-            <Field label="Feedback context">
-              <select
-                value={contextType}
-                onChange={(event) => setContextType(event.target.value)}
-                className="w-full border border-ink-100 focus:border-primary-300 rounded-xl px-3.5 py-2 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
-              >
-                <option value="">General</option>
-                {(data?.contexts ?? []).map((context) => (
-                  <option key={context} value={context}>{context}</option>
-                ))}
-              </select>
-            </Field>
+              <Field label="Share your thoughts">
+                <textarea
+                  rows={4}
+                  value={comment}
+                  onChange={(event) => setComment(event.target.value)}
+                  placeholder="Tell us what you liked, what could be better, or any bugs you ran into..."
+                  className="w-full border border-ink-100 focus:border-primary-300 rounded-xl p-3 text-sm outline-none resize-y"
+                />
+              </Field>
 
-            <Field label="Share your thoughts">
-              <textarea
-                rows={4}
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                placeholder="Tell us what you liked, what could be better, or any bugs you ran into..."
-                className="w-full border border-ink-100 focus:border-primary-300 rounded-xl p-3 text-sm outline-none resize-y"
-              />
-            </Field>
-
-            <Button onClick={submit} className="self-start">
-              {submitted ? 'Thank you' : 'Submit feedback'}
-            </Button>
+              <Button onClick={submit} className="self-start">
+                {submitted ? 'Thank you' : 'Submit feedback'}
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -133,7 +134,7 @@ export default function FeedbackPage() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="lg:sticky lg:top-20">
           <CardHeader title="Satisfaction summary" />
           {data?.averageRating ? (
             <>

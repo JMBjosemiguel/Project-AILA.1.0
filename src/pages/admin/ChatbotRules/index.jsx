@@ -44,7 +44,7 @@ export default function AdminChatbotRulesPage() {
 
   if (loading) {
     return (
-      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+      <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
         <SkeletonList count={6} />
       </div>
     );
@@ -52,7 +52,7 @@ export default function AdminChatbotRulesPage() {
 
   if (error || !data) {
     return (
-      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+      <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
         <Card>
           <EmptyState
             icon={AlertTriangle}
@@ -71,7 +71,7 @@ export default function AdminChatbotRulesPage() {
   const lessonCompletions = data.lessonCompletions.map((r) => ({ day: shortDate(r.date), hours: r.count }));
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp flex flex-col gap-5">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-5">
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="New registrations" subtitle="Last 14 days" />

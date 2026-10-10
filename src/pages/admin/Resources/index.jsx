@@ -165,7 +165,7 @@ export default function AdminResourcesPage() {
   ];
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by title or owner..." className="flex-1" />
         <div className="flex flex-wrap gap-4">

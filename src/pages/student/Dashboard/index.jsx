@@ -89,7 +89,7 @@ export default function DashboardPage({ onNavigate }) {
 
   if (!loading && error) {
     return (
-      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+      <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
         <Card>
           <EmptyState
             icon={AlertTriangle}
@@ -103,7 +103,7 @@ export default function DashboardPage({ onNavigate }) {
   }
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <WelcomeHeader profile={data?.profile} onAskAI={() => onNavigate('assistant')} />
 
       {/* An unfinished formal assessment is the most time-sensitive action — it comes first. */}
@@ -129,7 +129,7 @@ export default function DashboardPage({ onNavigate }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
         <CourseProgressCard courses={data?.courses ?? []} loading={loading} onViewAll={() => onNavigate('hub')} />
         <QuickActionsCard onNavigate={onNavigate} />
         <ActivityCard activities={data?.activities ?? []} loading={loading} />

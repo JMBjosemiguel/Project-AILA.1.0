@@ -163,7 +163,7 @@ export default function AdminSettingsPage() {
   ];
 
   return (
-    <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp flex flex-col gap-5">
+    <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-5">
       <Card>
         <CardHeader title="New announcement" subtitle="Broadcast a notification to students." />
         <div className="flex flex-col gap-3">

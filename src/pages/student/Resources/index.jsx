@@ -270,7 +270,7 @@ export default function ResourcesPage({ onNavigate }) {
                     <EmptyState
                       icon={FolderOpen}
                       title="No resources uploaded"
-                      message="Upload PDFs, Documents, PowerPoint files, Images or Links."
+                      message="Upload PDFs, documents, PowerPoint files, images or links."
                       action={<Button size="sm" icon={<Upload size={14} />} onClick={handleUploadClick}>Upload file</Button>}
                     />
                   ) : (

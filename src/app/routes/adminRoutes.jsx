@@ -92,7 +92,7 @@ export const ADMIN_ROUTES = {
     path: '/admin/audit-log',
     label: 'Audit Log',
     title: 'Audit Log',
-    subtitle: 'Track administrator changes.',
+    subtitle: 'Track admin and student activity.',
     icon: ScrollText,
     allowedRoles: [ROLES.ADMIN],
   },

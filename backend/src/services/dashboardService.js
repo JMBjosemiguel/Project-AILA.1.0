@@ -9,6 +9,7 @@ const quizService = require('./quizService');
 const { weekdayLabel } = require('../utils/dateLabels');
 const { appStartOfDay } = require('../utils/appTime');
 const { appWindowStart, windowStartDays, countByAppDay } = require('../utils/dayBucket');
+const { displayStreak } = require('../utils/gamification');
 const { getStudentContext, buildRecommendation } = require('./studentContextService');
 
 async function getWeeklyLessonCount(userId) {
@@ -22,10 +23,12 @@ async function getWeeklyLessonCount(userId) {
 
 async function getStreak(userId) {
   const rows = await query(
-    'SELECT current_streak, longest_streak FROM learning_streaks WHERE user_id = ? LIMIT 1',
+    'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
     [userId]
   );
-  return rows[0] || { current_streak: 0, longest_streak: 0 };
+  const row = rows[0];
+  if (!row) return { current_streak: 0, longest_streak: 0 };
+  return { current_streak: displayStreak(row), longest_streak: row.longest_streak };
 }
 
 // The "this week's activity" chart is captioned as completed lessons / quizzes /

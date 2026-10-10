@@ -3,6 +3,7 @@ import { Award, BarChart3, BookOpenCheck, Clock, Flame, MessageCircle, TrendingU
 import BarChart from '../../../components/analytics/BarChart';
 import DonutChart from '../../../components/analytics/DonutChart';
 import MasteryList from '../../../components/analytics/MasteryList';
+import TrendLine from '../../../components/analytics/TrendLine';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
 import LoadError from '../../../components/common/LoadError';
@@ -58,7 +59,7 @@ export default function AnalyticsPage() {
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHeader title="Study hours this week" />
-          {studyHours.length ? <BarChart data={studyHours} /> : <EmptyState icon={Clock} title="No study sessions logged" message="Start a study session to see your weekly hours here." />}
+          {studyHours.length ? <BarChart data={studyHours} /> : <EmptyState icon={Clock} title="No study hours logged" message="Study session tracking isn't available yet, so this chart stays empty for now." />}
         </Card>
 
         <Card>
@@ -106,7 +107,7 @@ export default function AnalyticsPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader title="XP over time" />
-          {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
+          {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
         </Card>
 
         <Card>
@@ -115,34 +116,5 @@ export default function AnalyticsPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function TrendLine({ points, color = '#2563EB', maxValue = null }) {
-  const values = points.map((point) => point.value);
-  const max = maxValue ?? Math.max(...values, 1);
-  const stepX = points.length > 1 ? 500 / (points.length - 1) : 0;
-
-  const coords = points.map((point, index) => {
-    const x = points.length > 1 ? index * stepX : 250;
-    const y = 130 - (point.value / max) * 120;
-    return [x, y];
-  });
-
-  const linePath = coords.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
-  const areaPath = `${linePath} L${coords[coords.length - 1][0]},140 L0,140 Z`;
-  const gradientId = `trendGrad-${color.replace('#', '')}`;
-
-  return (
-    <svg viewBox="0 0 500 140" className="w-full h-36" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      <path d={areaPath} fill={`url(#${gradientId})`} />
-    </svg>
   );
 }

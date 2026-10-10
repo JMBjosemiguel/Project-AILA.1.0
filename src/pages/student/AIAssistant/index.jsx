@@ -305,7 +305,7 @@ export default function AssistantPage({ onNavigate }) {
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-canvas">
-        <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 border-b border-ink-100 bg-white">
+        <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 border-b border-ink-100 bg-surface">
           <button
             onClick={() => setChatSidebarOpen(true)}
             aria-label="Open conversation list"

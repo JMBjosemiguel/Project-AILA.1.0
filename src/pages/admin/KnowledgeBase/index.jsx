@@ -121,13 +121,13 @@ export default function AdminKnowledgeBasePage() {
             <span className="text-[0.65rem] font-bold uppercase tracking-wide text-ink-400">Status</span>
             <div className="flex gap-2 flex-wrap">
               {ARCHIVED_FILTERS.map((f) => (
-                <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+                <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}>
                   {f.label}
                 </button>
               ))}
             </div>
           </div>
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200 self-end">
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200 self-end">
             {SORT_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         </div>

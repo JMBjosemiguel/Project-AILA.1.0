@@ -196,7 +196,7 @@ export default function LearningHubPage({ onNavigate }) {
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-white border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5 max-w-sm w-full sm:w-auto">
+        <div className="flex items-center gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5 max-w-sm w-full sm:w-auto">
           <Search size={16} className="text-ink-400" />
           <input
             value={search}
@@ -270,7 +270,7 @@ export default function LearningHubPage({ onNavigate }) {
                 key={lesson.id}
                 type="button"
                 onClick={() => handleOpenLesson(lesson.id)}
-                className="w-full flex items-center gap-3 bg-white border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
+                className="w-full flex items-center gap-3 bg-surface border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
               >
                 <span className="w-8 h-8 rounded-lg bg-ink-50 text-ink-400 flex items-center justify-center flex-shrink-0">
                   <FileText size={15} />
@@ -294,7 +294,7 @@ export default function LearningHubPage({ onNavigate }) {
                 key={quiz.id}
                 type="button"
                 onClick={() => handleOpenQuiz(quiz.id)}
-                className="w-full flex items-center gap-3 bg-white border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
+                className="w-full flex items-center gap-3 bg-surface border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
               >
                 <span className="w-8 h-8 rounded-lg bg-ink-50 text-ink-400 flex items-center justify-center flex-shrink-0">
                   <ListChecks size={15} />
@@ -318,7 +318,7 @@ export default function LearningHubPage({ onNavigate }) {
                 key={resource.id}
                 type="button"
                 onClick={handleOpenResource}
-                className="w-full flex items-center gap-3 bg-white border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
+                className="w-full flex items-center gap-3 bg-surface border border-ink-100 hover:border-primary-200 rounded-xl px-4 py-3 text-left transition-colors"
               >
                 <span className="w-8 h-8 rounded-lg bg-ink-50 text-ink-400 flex items-center justify-center flex-shrink-0">
                   <FolderOpen size={15} />

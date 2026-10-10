@@ -23,7 +23,7 @@ const FEATURES = [
 export default function AuthLayout({ title, subtitle, children }) {
   return (
     <div className="min-h-screen flex bg-canvas">
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-ink-800 flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-ink-900 flex-col justify-between p-12">
         <div
           className="absolute inset-0 opacity-70"
           style={{
@@ -73,7 +73,7 @@ export default function AuthLayout({ title, subtitle, children }) {
             <AilaOrb size={30} />
             <span className="font-display font-bold text-ink-800">AILA</span>
           </div>
-          <div className="bg-white border border-ink-100 rounded-2xl shadow-card p-5 sm:p-8">
+          <div className="bg-surface border border-ink-100 rounded-2xl shadow-card p-5 sm:p-8">
             <div className="mb-6">
               <h2 className="font-display text-xl font-bold text-ink-800">{title}</h2>
               {subtitle && <p className="text-sm text-ink-400 mt-1">{subtitle}</p>}

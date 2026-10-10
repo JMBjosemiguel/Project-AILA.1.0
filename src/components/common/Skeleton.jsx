@@ -4,7 +4,7 @@ export function SkeletonBlock({ className = '' }) {
 
 export function SkeletonCard({ className = '' }) {
   return (
-    <div className={`bg-white border border-ink-100 rounded-2xl shadow-soft p-5 ${className}`}>
+    <div className={`bg-surface border border-ink-100 rounded-2xl shadow-soft p-5 ${className}`}>
       <div className="flex items-center gap-3">
         <SkeletonBlock className="w-10 h-10 rounded-xl flex-shrink-0" />
         <div className="flex-1 min-w-0 flex flex-col gap-2">
@@ -31,7 +31,7 @@ export function SkeletonRow({ className = '' }) {
 
 export function SkeletonStat({ className = '' }) {
   return (
-    <div className={`bg-white border border-ink-100 rounded-2xl shadow-soft p-4 flex flex-col gap-2 ${className}`}>
+    <div className={`bg-surface border border-ink-100 rounded-2xl shadow-soft p-4 flex flex-col gap-2 ${className}`}>
       <SkeletonBlock className="w-8 h-8 rounded-lg" />
       <SkeletonBlock className="h-6 w-1/2" />
       <SkeletonBlock className="h-3 w-2/3" />

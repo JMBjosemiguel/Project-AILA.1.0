@@ -176,7 +176,7 @@ export default function ResourcesPage({ onNavigate }) {
 
         <div className="flex flex-col gap-4 min-w-0">
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 flex items-center gap-2 bg-white border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5">
+            <div className="flex-1 flex items-center gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5">
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -207,13 +207,13 @@ export default function ResourcesPage({ onNavigate }) {
                 value={linkUrl}
                 onChange={(event) => setLinkUrl(event.target.value)}
                 placeholder="https://example.com/article"
-                className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-300"
+                className="flex-1 bg-surface border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-300"
               />
               <input
                 value={linkTitle}
                 onChange={(event) => setLinkTitle(event.target.value)}
                 placeholder="Title (optional)"
-                className="flex-1 bg-white border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-300"
+                className="flex-1 bg-surface border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary-300"
               />
               <Button size="sm" onClick={handleAddLink} disabled={addingLink || !linkUrl.trim()}>
                 {addingLink ? 'Adding...' : 'Add'}
@@ -230,7 +230,7 @@ export default function ResourcesPage({ onNavigate }) {
                 onClick={() => setType(resourceType)}
                 className={[
                   'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-                  type === resourceType ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300',
+                  type === resourceType ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
                 ].join(' ')}
               >
                 {RESOURCE_TYPE_LABELS[resourceType] ?? resourceType}

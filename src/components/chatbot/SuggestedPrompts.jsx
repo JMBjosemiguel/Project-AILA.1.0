@@ -16,7 +16,7 @@ export default function SuggestedPrompts({ questions = [], onPick }) {
             <button
               key={question.id}
               onClick={() => onPick(question.question_text)}
-              className="text-xs sm:text-sm px-3.5 py-2 rounded-full border border-ink-100 bg-white text-ink-600 hover:border-primary-300 hover:text-primary hover:bg-primary-50 transition-colors"
+              className="text-xs sm:text-sm px-3.5 py-2 rounded-full border border-ink-100 bg-surface text-ink-600 hover:border-primary-300 hover:text-primary hover:bg-primary-50 transition-colors"
             >
               {question.question_text}
             </button>

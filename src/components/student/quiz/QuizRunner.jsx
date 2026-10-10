@@ -173,7 +173,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="quiz-runner-title">
-      <div className="w-full max-w-xl max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
+      <div className="w-full max-w-xl max-h-[90vh] flex flex-col bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div className="min-w-0">
             <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800 flex items-center gap-1.5">
@@ -210,7 +210,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
                         aria-checked={quizType === option.value}
                         className={[
                           'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
-                          quizType === option.value ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300',
+                          quizType === option.value ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
                         ].join(' ')}
                       >
                         {option.label}
@@ -230,7 +230,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
                         aria-checked={difficulty === option}
                         className={[
                           'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
-                          difficulty === option ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300',
+                          difficulty === option ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
                         ].join(' ')}
                       >
                         {option}

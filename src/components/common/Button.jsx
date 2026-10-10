@@ -1,6 +1,6 @@
 const variants = {
   primary: 'bg-primary text-white shadow-lift hover:bg-primary-600 active:scale-[0.98]',
-  outline: 'bg-white text-ink-800 border border-ink-100 hover:border-primary-300 hover:text-primary',
+  outline: 'bg-surface text-ink-800 border border-ink-100 hover:border-primary-300 hover:text-primary',
   ghost: 'bg-transparent text-ink-400 hover:bg-ink-50 hover:text-ink-800',
   subtle: 'bg-primary-50 text-primary hover:bg-primary-100',
   danger: 'bg-rose-600 text-white shadow-lift hover:bg-rose-700 active:scale-[0.98]',

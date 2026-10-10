@@ -220,7 +220,7 @@ export default function PlannerPage() {
                   id="task-subject"
                   value={details.subject_id}
                   onChange={(event) => setDetails((current) => ({ ...current, subject_id: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
                 >
                   <option value="">None</option>
                   {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
@@ -234,7 +234,7 @@ export default function PlannerPage() {
                   type="datetime-local"
                   value={details.deadline}
                   onChange={(event) => setDetails((current) => ({ ...current, deadline: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
                 />
               </div>
 
@@ -244,7 +244,7 @@ export default function PlannerPage() {
                   id="task-priority"
                   value={details.priority_id}
                   onChange={(event) => setDetails((current) => ({ ...current, priority_id: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
                 >
                   {(data?.priorities ?? []).map((priority) => <option key={priority.id} value={priority.id}>{priority.label}</option>)}
                 </select>
@@ -261,7 +261,7 @@ export default function PlannerPage() {
                       aria-checked={details.difficulty === option}
                       className={[
                         'text-xs font-semibold px-2.5 py-1.5 rounded-full border transition-colors capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
-                        details.difficulty === option ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600',
+                        details.difficulty === option ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600',
                       ].join(' ')}
                     >
                       {option}
@@ -279,7 +279,7 @@ export default function PlannerPage() {
                   max={600}
                   value={details.estimated_minutes}
                   onChange={(event) => setDetails((current) => ({ ...current, estimated_minutes: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
                 />
               </div>
 
@@ -289,7 +289,7 @@ export default function PlannerPage() {
                   id="task-repeat"
                   value={details.repeat_interval}
                   onChange={(event) => setDetails((current) => ({ ...current, repeat_interval: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white capitalize focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface capitalize focus-visible:ring-2 focus-visible:ring-primary-200"
                 >
                   {REPEAT_OPTIONS.map((option) => <option key={option} value={option} className="capitalize">{option}</option>)}
                 </select>
@@ -330,7 +330,7 @@ export default function PlannerPage() {
                   rows={2}
                   value={details.notes}
                   onChange={(event) => setDetails((current) => ({ ...current, notes: event.target.value }))}
-                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-white resize-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                  className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface resize-none focus-visible:ring-2 focus-visible:ring-primary-200"
                 />
               </div>
             </div>
@@ -343,7 +343,7 @@ export default function PlannerPage() {
                 onClick={() => setFilter(option.id)}
                 className={[
                   'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
-                  filter === option.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300',
+                  filter === option.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
                 ].join(' ')}
               >
                 {option.label}

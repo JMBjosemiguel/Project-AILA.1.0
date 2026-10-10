@@ -15,7 +15,7 @@ export default function StudentSidebar({ active, onNavigate, open, onClose }) {
       id="student-sidebar-nav"
       className={[
         'fixed lg:sticky top-0 left-0 bottom-0 z-[100] w-64 h-screen flex-shrink-0 lg:self-start',
-        'bg-white border-r border-ink-100 flex flex-col transition-transform duration-300',
+        'bg-surface border-r border-ink-100 flex flex-col transition-transform duration-300',
         open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
       ].join(' ')}
     >

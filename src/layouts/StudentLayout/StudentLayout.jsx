@@ -17,7 +17,7 @@ export default function StudentLayout({ active, onNavigate, children }) {
         onClose={closeSidebar}
       />
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-ink-800/40 z-[90] lg:hidden" onClick={closeSidebar} aria-hidden="true" />
+        <div className="fixed inset-0 bg-ink-900/40 z-[90] lg:hidden" onClick={closeSidebar} aria-hidden="true" />
       )}
       <div className="flex-1 min-w-0 flex flex-col">
         <StudentTopbar active={active} sidebarOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} onNavigate={onNavigate} />

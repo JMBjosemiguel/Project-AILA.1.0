@@ -12,7 +12,7 @@ export default function ProtectedRoute({ route, children, onNavigate }) {
 
   return (
     <div className="p-5 lg:p-8 max-w-3xl mx-auto animate-fadeUp">
-      <div className="bg-white border border-ink-100 rounded-2xl shadow-soft p-6 text-sm text-ink-600 flex flex-col gap-4">
+      <div className="bg-surface border border-ink-100 rounded-2xl shadow-soft p-6 text-sm text-ink-600 flex flex-col gap-4">
         <div>
           <h2 className="font-display font-bold text-ink-800 text-lg">Unauthorized</h2>
           <p className="text-ink-400 mt-1">Your current role cannot access this page.</p>

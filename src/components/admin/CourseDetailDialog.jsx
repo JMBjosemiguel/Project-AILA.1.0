@@ -34,7 +34,7 @@ export default function CourseDetailDialog({ courseId, onClose }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="course-detail-title">
-      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="course-detail-title" className="text-[0.95rem] font-semibold text-ink-800">

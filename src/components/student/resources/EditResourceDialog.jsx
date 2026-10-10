@@ -32,7 +32,7 @@ export default function EditResourceDialog({ file, subjects, onClose, onSaved })
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="edit-resource-title">
-      <div className="w-full max-w-md max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
+      <div className="w-full max-w-md max-h-[90vh] flex flex-col bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <h3 id="edit-resource-title" className="text-[0.95rem] font-semibold text-ink-800">Edit resource</h3>
           <button
@@ -62,7 +62,7 @@ export default function EditResourceDialog({ file, subjects, onClose, onSaved })
                 id="resource-subject"
                 value={subjectId}
                 onChange={(event) => setSubjectId(event.target.value)}
-                className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none bg-white focus-visible:ring-2 focus-visible:ring-primary-200"
+                className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
               >
                 <option value="">Unassigned</option>
                 {subjects.map((subject) => (

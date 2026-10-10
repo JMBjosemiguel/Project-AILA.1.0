@@ -150,7 +150,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 flex items-center gap-4 px-4 lg:px-8 bg-white/80 backdrop-blur-md border-b border-ink-100">
+    <header className="sticky top-0 z-40 h-16 flex items-center gap-4 px-4 lg:px-8 bg-surface/80 backdrop-blur-md border-b border-ink-100">
       <button
         onClick={onMenuClick}
         aria-label="Open navigation menu"
@@ -169,7 +169,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       <div className="flex-1 flex justify-end md:justify-center">
         <div ref={headerSearchRef} className="relative w-full max-w-md h-9">
           {!paletteOpen && (
-            <div className="h-9 w-full flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-white rounded-xl px-3 transition-colors">
+            <div className="h-9 w-full flex items-center gap-2 bg-ink-50 border border-ink-100 focus-within:border-primary-300 focus-within:bg-surface rounded-xl px-3 transition-colors">
               <Search size={15} className="text-ink-400 flex-shrink-0" />
               <input
                 readOnly
@@ -186,7 +186,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
               role="dialog"
               aria-modal="true"
               aria-labelledby="student-command-palette-title"
-              className="absolute top-0 left-0 z-50 w-full bg-white rounded-xl shadow-soft ring-1 ring-inset ring-primary-300 overflow-hidden"
+              className="absolute top-0 left-0 z-50 w-full bg-surface rounded-xl shadow-soft ring-1 ring-inset ring-primary-300 overflow-hidden"
             >
               <div className="h-9 flex items-center gap-2 px-3">
                 <Search size={15} className="text-ink-400 flex-shrink-0" />
@@ -232,7 +232,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
                         >
                           <span className={[
                             'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                            selected ? 'bg-white text-primary' : 'bg-ink-50 text-ink-400',
+                            selected ? 'bg-surface text-primary' : 'bg-ink-50 text-ink-400',
                           ].join(' ')}>
                             <Icon size={16} />
                           </span>

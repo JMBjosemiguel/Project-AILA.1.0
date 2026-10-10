@@ -29,19 +29,19 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
           <button
             type="button"
             onClick={() => useTemplate('Generate a 10-item multiple choice quiz about ')}
-            className="flex items-center gap-1.5 text-xs font-medium text-ink-500 bg-white border border-ink-100 rounded-full px-3 py-1.5 hover:border-primary-300 hover:text-primary transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-500 bg-surface border border-ink-100 rounded-full px-3 py-1.5 hover:border-primary-300 hover:text-primary transition-colors"
           >
             <ClipboardList size={13} /> Generate Quiz
           </button>
           <button
             type="button"
             onClick={() => useTemplate('Generate 10 flashcards about ')}
-            className="flex items-center gap-1.5 text-xs font-medium text-ink-500 bg-white border border-ink-100 rounded-full px-3 py-1.5 hover:border-primary-300 hover:text-primary transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium text-ink-500 bg-surface border border-ink-100 rounded-full px-3 py-1.5 hover:border-primary-300 hover:text-primary transition-colors"
           >
             <Layers size={13} /> Flashcards
           </button>
         </div>
-        <div className="flex items-end gap-2 bg-white border border-ink-100 focus-within:border-primary-300 rounded-2xl px-3.5 py-2.5 shadow-soft transition-colors">
+        <div className="flex items-end gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-2xl px-3.5 py-2.5 shadow-soft transition-colors">
           <button aria-label="Attach file" className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0">
             <Paperclip size={16} />
           </button>

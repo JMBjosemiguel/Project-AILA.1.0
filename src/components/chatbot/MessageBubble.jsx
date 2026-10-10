@@ -38,7 +38,7 @@ export default function MessageBubble({
     <div className={`flex flex-col ${isRichContent ? 'max-w-full' : 'max-w-2xl'} ${isUser ? 'items-end ml-auto' : 'items-start'}`}>
       <div className={`flex gap-2.5 w-full ${isUser ? 'flex-row-reverse' : ''}`}>
         {isUser ? (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-ink-800 to-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-ink-900 to-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {avatarLetter}
           </div>
         ) : (
@@ -64,7 +64,7 @@ export default function MessageBubble({
               'px-4 py-3 rounded-2xl leading-relaxed',
               isUser
                 ? 'bg-primary text-white rounded-tr-sm text-[0.9rem] whitespace-pre-wrap'
-                : 'bg-white border border-ink-100 text-ink-800 rounded-tl-sm',
+                : 'bg-surface border border-ink-100 text-ink-800 rounded-tl-sm',
             ].join(' ')}
           >
             {isUser ? text : <MarkdownRenderer text={text} />}
@@ -101,7 +101,7 @@ export function TypingBubble() {
   return (
     <div className="flex gap-2.5 max-w-2xl">
       <AilaOrb size={30} />
-      <div className="flex items-center gap-2 px-4 py-3.5 rounded-2xl rounded-tl-sm bg-white border border-ink-100">
+      <div className="flex items-center gap-2 px-4 py-3.5 rounded-2xl rounded-tl-sm bg-surface border border-ink-100">
         <span className="text-xs text-ink-400 font-medium">AILA is thinking...</span>
         <span className="flex items-center gap-1">
           {[0, 1, 2].map((index) => (

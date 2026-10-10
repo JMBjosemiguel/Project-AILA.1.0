@@ -66,7 +66,7 @@ export default function ShareDialog({ materialType, materialId, materialName, on
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title">
-      <div className="w-full max-w-md bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
+      <div className="w-full max-w-md bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-ink-100">
           <div className="min-w-0">
             <h3 id="share-dialog-title" className="text-[0.95rem] font-semibold text-ink-800">Share this {materialType === 'subject' ? 'course' : 'quiz'}</h3>

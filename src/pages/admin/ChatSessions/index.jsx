@@ -187,7 +187,7 @@ export default function AdminChatSessionsPage() {
                     <button
                       key={f.id}
                       onClick={() => changeFilter(f.id)}
-                      className={`text-[0.7rem] font-semibold px-2.5 py-1 rounded-full border transition-colors ${filter === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
+                      className={`text-[0.7rem] font-semibold px-2.5 py-1 rounded-full border transition-colors ${filter === f.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}
                     >
                       {f.label}
                     </button>

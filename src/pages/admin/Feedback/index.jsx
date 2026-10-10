@@ -185,23 +185,23 @@ export default function AdminFeedbackPage() {
         <SearchBar value={search} onChange={setSearch} placeholder="Search by comment or student..." className="flex-1" />
         <div className="flex gap-2 flex-wrap">
           {STATUS_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setStatus(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+            <button key={f.id} onClick={() => setStatus(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === f.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}>
               {f.label}
             </button>
           ))}
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
+          <select value={sort} onChange={(event) => setSort(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
             {SORT_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        <select value={rating} onChange={(event) => setRating(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
+        <select value={rating} onChange={(event) => setRating(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
           <option value="all">All ratings</option>
           {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} star{r === 1 ? '' : 's'}</option>)}
         </select>
         {ARCHIVED_FILTERS.map((f) => (
-          <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+          <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}>
             {f.label}
           </button>
         ))}

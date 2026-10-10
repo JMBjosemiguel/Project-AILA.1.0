@@ -103,7 +103,7 @@ export default function ActionMenu({ items, label = 'Open actions menu' }) {
           ref={menuRef}
           role="menu"
           style={{ position: 'fixed', top: position.top, left: position.left, visibility: position ? 'visible' : 'hidden' }}
-          className="z-[130] min-w-[9.5rem] bg-white border border-ink-100 rounded-xl shadow-card py-1.5"
+          className="z-[130] min-w-[9.5rem] bg-surface border border-ink-100 rounded-xl shadow-card py-1.5"
           onClick={(event) => event.stopPropagation()}
         >
           {items.map((item) => (

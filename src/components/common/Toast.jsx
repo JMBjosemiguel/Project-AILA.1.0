@@ -38,7 +38,7 @@ export function ToastProvider({ children }) {
           return (
             <div
               key={item.id}
-              className="pointer-events-auto flex items-center gap-2.5 bg-white border border-ink-100 rounded-xl shadow-card px-4 py-3 w-full sm:w-auto max-w-sm animate-fadeUp"
+              className="pointer-events-auto flex items-center gap-2.5 bg-surface border border-ink-100 rounded-xl shadow-card px-4 py-3 w-full sm:w-auto max-w-sm animate-fadeUp"
             >
               <Icon size={16} className={`flex-shrink-0 ${meta.iconColor}`} />
               <span className="text-sm text-ink-800 flex-1">{item.message}</span>

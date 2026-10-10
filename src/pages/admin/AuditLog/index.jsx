@@ -90,16 +90,16 @@ export default function AdminAuditLogPage() {
       <div className="flex flex-col sm:flex-row gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Search by name or action..." className="flex-1" />
         <div className="flex gap-2 flex-wrap items-center">
-          <select value={role} onChange={(event) => setRole(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
+          <select value={role} onChange={(event) => setRole(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
             {ROLE_FILTERS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
-          <select value={action} onChange={(event) => setAction(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
+          <select value={action} onChange={(event) => setAction(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
             <option value="all">All actions</option>
             {actions.map((a) => <option key={a} value={a}>{actionLabel(a)}</option>)}
           </select>
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200" />
+          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200" />
           <span className="text-xs text-ink-400">to</span>
-          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-white text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200" />
+          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-ink-100 bg-surface text-ink-600 outline-none focus-visible:ring-2 focus-visible:ring-primary-200" />
           <Button size="sm" variant="outline" icon={<Download size={13} />} onClick={handleExport} disabled={exporting}>
             {exporting ? 'Exporting...' : 'Export CSV'}
           </Button>

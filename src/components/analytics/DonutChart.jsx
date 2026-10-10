@@ -8,7 +8,7 @@ export default function DonutChart({ data }) {
   return (
     <div className="flex items-center gap-5 flex-wrap">
       <svg viewBox="0 0 100 100" width="112" height="112" className="-rotate-90 flex-shrink-0">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#F1F5F9" strokeWidth="14" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgb(var(--ink-100))" strokeWidth="14" />
         {data.map((d) => {
           const len = (d.pct / 100) * circumference;
           const circle = (

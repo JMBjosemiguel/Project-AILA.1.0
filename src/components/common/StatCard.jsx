@@ -5,7 +5,7 @@ export default function StatCard({ label, value, delta, trend = 'neutral', subje
   const tint = domainTint(subject);
   const trendColor = trend === 'up' ? 'text-emerald-600 bg-emerald-50' : 'text-ink-400 bg-ink-50';
   return (
-    <div className="bg-white border border-ink-100 rounded-2xl p-5 shadow-soft hover:shadow-card transition-shadow">
+    <div className="bg-surface border border-ink-100 rounded-2xl p-5 shadow-soft hover:shadow-card transition-shadow">
       <div className="flex items-start justify-between mb-3">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold" style={{ background: tint, color }}>
           {Icon ? <Icon size={16} /> : '●'}

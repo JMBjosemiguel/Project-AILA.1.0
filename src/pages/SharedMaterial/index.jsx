@@ -124,7 +124,7 @@ export default function SharedMaterialPage({ token, isAuthenticated, onNavigate,
 
   return (
     <div className="min-h-screen bg-ink-50/40">
-      <header className="bg-white border-b border-ink-100 px-5 py-3">
+      <header className="bg-surface border-b border-ink-100 px-5 py-3">
         <div className="max-w-3xl mx-auto flex items-center gap-2 text-sm font-display font-semibold text-ink-800">
           <Sparkles size={16} className="text-primary" /> AILA · Shared learning material
         </div>

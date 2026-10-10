@@ -38,7 +38,7 @@ export default function ResourceCard({ file, onSelect, selected, onOpen, onDownl
       className={[
         'flex items-center gap-3.5 w-full text-left p-5 rounded-2xl border shadow-soft transition-colors cursor-pointer',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
-        selected ? 'border-primary-300 bg-primary-50' : 'border-ink-100 bg-white hover:border-primary-200',
+        selected ? 'border-primary-300 bg-primary-50' : 'border-ink-100 bg-surface hover:border-primary-200',
       ].join(' ')}
     >
       <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: meta.tint, color: meta.color }}>

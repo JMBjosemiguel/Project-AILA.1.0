@@ -26,7 +26,7 @@ export default function FeedbackReplyDialog({ feedback, onClose, onSaved }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="feedback-reply-title">
-      <div className="w-full max-w-lg max-h-[90vh] flex flex-col bg-white border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
+      <div className="w-full max-w-lg max-h-[90vh] flex flex-col bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="feedback-reply-title" className="text-[0.95rem] font-semibold text-ink-800">{feedback.first_name} {feedback.last_name}</h3>
@@ -52,13 +52,13 @@ export default function FeedbackReplyDialog({ feedback, onClose, onSaved }) {
             <div className="flex gap-2">
               <button
                 onClick={() => setStatus('pending')}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === 'pending' ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-ink-100 text-ink-600'}`}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === 'pending' ? 'bg-amber-500 border-amber-500 text-white' : 'bg-surface border-ink-100 text-ink-600'}`}
               >
                 Pending
               </button>
               <button
                 onClick={() => setStatus('resolved')}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === 'resolved' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-ink-100 text-ink-600'}`}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${status === 'resolved' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-surface border-ink-100 text-ink-600'}`}
               >
                 Resolved
               </button>

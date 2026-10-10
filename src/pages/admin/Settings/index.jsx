@@ -186,7 +186,7 @@ export default function AdminSettingsPage() {
               <button
                 key={t.id}
                 onClick={() => setTargetType(t.id)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${targetType === t.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${targetType === t.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}
               >
                 {t.label}
               </button>
@@ -228,7 +228,7 @@ export default function AdminSettingsPage() {
         <SearchBar value={search} onChange={setSearch} placeholder="Search announcements..." className="flex-1" />
         <div className="flex gap-2 flex-wrap">
           {ARCHIVED_FILTERS.map((f) => (
-            <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-white border-ink-100 text-ink-600 hover:border-primary-300'}`}>
+            <button key={f.id} onClick={() => setArchived(f.id)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${archived === f.id ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300'}`}>
               {f.label}
             </button>
           ))}

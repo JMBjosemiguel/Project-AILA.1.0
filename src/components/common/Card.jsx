@@ -2,7 +2,7 @@ export default function Card({ children, className = '', padded = true, hover = 
   return (
     <div
       className={[
-        'bg-white border border-ink-100 rounded-2xl shadow-soft',
+        'bg-surface border border-ink-100 rounded-2xl shadow-soft',
         padded ? 'p-5' : '',
         hover ? 'transition-shadow hover:shadow-card' : '',
         className,

@@ -31,7 +31,7 @@ export function ConfirmProvider({ children }) {
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"
         >
-          <div className="w-full max-w-sm bg-white border border-ink-100 rounded-2xl shadow-soft p-5">
+          <div className="w-full max-w-sm bg-surface border border-ink-100 rounded-2xl shadow-soft p-5">
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle size={16} />

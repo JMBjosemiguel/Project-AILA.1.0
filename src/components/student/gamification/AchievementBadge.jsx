@@ -25,7 +25,7 @@ export default function AchievementBadge({ achievement, earned = false, earnedAt
     <div
       className={[
         'flex gap-3 rounded-2xl border p-4 transition-colors',
-        earned ? 'border-ink-100 bg-white' : 'border-dashed border-ink-100 bg-ink-50/40',
+        earned ? 'border-ink-100 bg-surface' : 'border-dashed border-ink-100 bg-ink-50/40',
       ].join(' ')}
     >
       <div

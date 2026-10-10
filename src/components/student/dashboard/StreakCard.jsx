@@ -30,8 +30,7 @@ export default function StreakCard({ streak, weeklyActivity, loading = false }) 
             {days.map((entry, index) => (
               <div
                 key={`${entry.day}-${index}`}
-                className="aspect-square rounded-md"
-                style={{ background: entry.count > 0 ? '#2563EB' : '#F1F5F9' }}
+                className={`aspect-square rounded-md ${entry.count > 0 ? 'bg-primary' : 'bg-ink-100'}`}
               />
             ))}
           </div>

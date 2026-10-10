@@ -27,13 +27,13 @@ export default function ChatSidebar({
   return (
     <>
       {open && (
-        <div className="fixed inset-0 bg-ink-800/40 z-[90] md:hidden" onClick={onClose} aria-hidden="true" />
+        <div className="fixed inset-0 bg-ink-900/40 z-[90] md:hidden" onClick={onClose} aria-hidden="true" />
       )}
       <div
         id="chat-sidebar-nav"
         className={[
           'fixed md:static top-0 left-0 bottom-0 z-[100] md:z-auto w-72 md:w-64 flex-shrink-0',
-          'flex flex-col md:flex border-r border-ink-100 bg-white p-3 gap-4 overflow-y-auto scrollbar-thin',
+          'flex flex-col md:flex border-r border-ink-100 bg-surface p-3 gap-4 overflow-y-auto scrollbar-thin',
           'transition-transform duration-300',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
@@ -153,7 +153,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
               cancelEdit();
             }
           }}
-          className="flex-1 min-w-0 text-sm bg-white border border-primary-300 rounded-md px-1.5 py-0.5 outline-none"
+          className="flex-1 min-w-0 text-sm bg-surface border border-primary-300 rounded-md px-1.5 py-0.5 outline-none"
         />
       </div>
     );
@@ -203,7 +203,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
         <button
           onClick={startEdit}
           aria-label={`Rename conversation: ${label}`}
-          className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-primary hover:bg-white"
+          className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-primary hover:bg-surface-raised"
         >
           <Pencil size={11} />
         </button>
@@ -213,7 +213,7 @@ function ChatItem({ chat, active, onClick, onRename, onDelete }) {
             setConfirmingDelete(true);
           }}
           aria-label={`Delete conversation: ${label}`}
-          className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-rose-600 hover:bg-white"
+          className="w-5 h-5 flex items-center justify-center rounded text-ink-400 hover:text-rose-600 hover:bg-surface-raised"
         >
           <Trash2 size={11} />
         </button>

@@ -164,7 +164,7 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
                             <button
                               key={lesson.id}
                               onClick={() => onSelectLesson?.(lesson.id)}
-                              className="flex items-center gap-2 text-left text-xs text-ink-600 hover:text-primary py-1 pl-1 rounded-md hover:bg-white transition-colors"
+                              className="flex items-center gap-2 text-left text-xs text-ink-600 hover:text-primary py-1 pl-1 rounded-md hover:bg-surface transition-colors"
                             >
                               {lesson.completed ? (
                                 <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" />

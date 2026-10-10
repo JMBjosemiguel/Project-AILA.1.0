@@ -1,56 +1,57 @@
 const { query } = require('../config/database');
+const { appWindowStart, windowStartDays, countByAppDay, avgPercentByAppDay } = require('../utils/dayBucket');
 
 async function getRegistrationsOverTime(days = 14) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(created_at) AS date, COUNT(*) AS count
+      SELECT created_at AS ts
       FROM users
       WHERE role_id = (SELECT id FROM roles WHERE name = 'student') AND deleted_at IS NULL
-        AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY date ASC
+        AND created_at >= ?
     `,
-    [days]
+    [appWindowStart(days - 1)]
   );
+  const validDays = new Set(windowStartDays(days));
+  return countByAppDay(rows, 'ts').filter((row) => validDays.has(row.date));
 }
 
 async function getAiUsageOverTime(days = 14) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(cm.created_at) AS date, COUNT(*) AS count
+      SELECT cm.created_at AS ts
       FROM chat_messages cm
-      WHERE cm.sender = 'user' AND cm.created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY DATE(cm.created_at)
-      ORDER BY date ASC
+      WHERE cm.sender = 'user' AND cm.created_at >= ?
     `,
-    [days]
+    [appWindowStart(days - 1)]
   );
+  const validDays = new Set(windowStartDays(days));
+  return countByAppDay(rows, 'ts').filter((row) => validDays.has(row.date));
 }
 
 async function getQuizScoreTrend(days = 14) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(completed_at) AS date, ROUND(AVG(score / total) * 100) AS avg_percent
+      SELECT completed_at AS ts, score, total
       FROM quiz_attempts
-      WHERE completed_at IS NOT NULL AND completed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY DATE(completed_at)
-      ORDER BY date ASC
+      WHERE completed_at IS NOT NULL AND completed_at >= ?
     `,
-    [days]
+    [appWindowStart(days - 1)]
   );
+  const validDays = new Set(windowStartDays(days));
+  return avgPercentByAppDay(rows, 'ts').filter((row) => validDays.has(row.date));
 }
 
 async function getLessonCompletionsOverTime(days = 14) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(completed_at) AS date, COUNT(*) AS count
+      SELECT completed_at AS ts
       FROM lesson_progress
-      WHERE completed_at IS NOT NULL AND completed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY DATE(completed_at)
-      ORDER BY date ASC
+      WHERE completed_at IS NOT NULL AND completed_at >= ?
     `,
-    [days]
+    [appWindowStart(days - 1)]
   );
+  const validDays = new Set(windowStartDays(days));
+  return countByAppDay(rows, 'ts').filter((row) => validDays.has(row.date));
 }
 
 async function getPopularCourses(limit = 5) {

@@ -7,12 +7,15 @@ const resourceModel = require('../models/resourceModel');
 const chatModel = require('../models/chatModel');
 const quizService = require('./quizService');
 const { weekdayLabel } = require('../utils/dateLabels');
+const { appStartOfDay } = require('../utils/appTime');
+const { appWindowStart, windowStartDays, countByAppDay } = require('../utils/dayBucket');
 const { getStudentContext, buildRecommendation } = require('./studentContextService');
 
 async function getWeeklyLessonCount(userId) {
+  const cutoff = new Date(appStartOfDay().getTime() - 6 * 24 * 60 * 60 * 1000);
   const rows = await query(
-    "SELECT COUNT(*) AS count FROM lesson_progress WHERE user_id = ? AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)",
-    [userId]
+    'SELECT COUNT(*) AS count FROM lesson_progress WHERE user_id = ? AND completed_at >= ?',
+    [userId, cutoff]
   );
   return rows[0]?.count ?? 0;
 }
@@ -33,17 +36,18 @@ const LEARNING_ACTIVITY_TYPES = ['lesson_completed', 'quiz_completed', 'task_com
 async function getWeeklyActivity(userId) {
   const rows = await query(
     `
-      SELECT DATE(created_at) AS date, COUNT(*) AS count
+      SELECT created_at AS ts
       FROM dashboard_activity_log
       WHERE user_id = ?
         AND activity_type IN (?, ?, ?)
-        AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY date ASC
+        AND created_at >= ?
     `,
-    [userId, ...LEARNING_ACTIVITY_TYPES]
+    [userId, ...LEARNING_ACTIVITY_TYPES, appWindowStart(6)]
   );
-  return rows.map((row) => ({ day: weekdayLabel(row.date), count: Number(row.count) }));
+  const validDays = new Set(windowStartDays(7));
+  return countByAppDay(rows, 'ts')
+    .filter((row) => validDays.has(row.date))
+    .map((row) => ({ day: weekdayLabel(row.date), count: row.count }));
 }
 
 function findLessonForTopic(subjects, topicId) {

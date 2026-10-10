@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { appWindowStart, windowStartDays, sumByAppDay, avgPercentByAppDay } = require('../utils/dayBucket');
 
 async function getCompletionCounts(userId) {
   const rows = await query(
@@ -20,16 +21,18 @@ async function getCompletionCounts(userId) {
 }
 
 async function getStudyHoursThisWeek(userId) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(started_at) AS date, ROUND(SUM(COALESCE(duration_minutes, 0)) / 60, 1) AS hours
+      SELECT started_at AS ts, COALESCE(duration_minutes, 0) AS minutes
       FROM study_sessions
-      WHERE user_id = ? AND started_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      GROUP BY DATE(started_at)
-      ORDER BY date ASC
+      WHERE user_id = ? AND started_at >= ?
     `,
-    [userId]
+    [userId, appWindowStart(6)]
   );
+  const validDays = new Set(windowStartDays(7));
+  return sumByAppDay(rows, 'ts', 'minutes')
+    .filter((row) => validDays.has(row.date))
+    .map((row) => ({ date: row.date, hours: Math.round((row.value / 60) * 10) / 10 }));
 }
 
 async function getMasteryBySubject(userId) {
@@ -62,30 +65,37 @@ async function getChatUsageBreakdown(userId) {
 }
 
 async function getQuizPerformanceTrend(userId) {
-  return query(
+  // Ordered DESC with a row cap (not a SQL-side GROUP BY) so re-bucketing by
+  // APP_TIMEZONE below can pick the most recent 14 distinct calendar days —
+  // the old `GROUP BY DATE(...) ORDER BY date ASC LIMIT 14` picked the
+  // EARLIEST 14 days of all-time history, which for any account with more
+  // than 14 days of quiz activity silently stayed stuck showing ancient data.
+  const rows = await query(
     `
-      SELECT DATE(completed_at) AS date, ROUND(AVG(score / total) * 100, 0) AS avg_percent
+      SELECT completed_at AS ts, score, total
       FROM quiz_attempts
       WHERE user_id = ? AND completed_at IS NOT NULL
-      GROUP BY DATE(completed_at)
-      ORDER BY date ASC
-      LIMIT 14
+      ORDER BY completed_at DESC
+      LIMIT 1000
     `,
     [userId]
   );
+  return avgPercentByAppDay(rows).slice(-14);
 }
 
 async function getXpOverTime(userId, days = 14) {
-  return query(
+  const rows = await query(
     `
-      SELECT DATE(created_at) AS date, SUM(COALESCE(reference_id, 0)) AS xp
+      SELECT created_at AS ts, COALESCE(reference_id, 0) AS xp
       FROM dashboard_activity_log
-      WHERE user_id = ? AND activity_type = 'xp_earned' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY date ASC
+      WHERE user_id = ? AND activity_type = 'xp_earned' AND created_at >= ?
     `,
-    [userId, Number(days)]
+    [userId, appWindowStart(Number(days) - 1)]
   );
+  const validDays = new Set(windowStartDays(Number(days)));
+  return sumByAppDay(rows, 'ts', 'xp')
+    .filter((row) => validDays.has(row.date))
+    .map((row) => ({ date: row.date, xp: row.value }));
 }
 
 async function getResourceUsage(userId) {

@@ -111,7 +111,13 @@ async function getResourceUsage(userId) {
   );
 }
 
-async function getTopicMasteryList(userId, order, limit = 3) {
+// Every topic the student has started, ranked highest mastery first. The
+// service splits this single ranked list into "strong" and "weak" topics so
+// the same topic can never land in both — two independent DESC/ASC queries
+// (the old approach) return the SAME topics whenever there are only a
+// handful of in-progress topics, which is exactly the "strong and weak show
+// identical topics" bug.
+async function getTopicMasteryRanked(userId) {
   return query(
     `
       SELECT t.title AS topic, s.name AS subject, lp.progress_percent AS pct
@@ -120,10 +126,9 @@ async function getTopicMasteryList(userId, order, limit = 3) {
       INNER JOIN modules m ON m.id = t.module_id
       INNER JOIN subjects s ON s.id = m.subject_id
       WHERE lp.user_id = ? AND lp.status != 'not_started'
-      ORDER BY lp.progress_percent ${order === 'asc' ? 'ASC' : 'DESC'}
-      LIMIT ?
+      ORDER BY lp.progress_percent DESC
     `,
-    [userId, Number(limit)]
+    [userId]
   );
 }
 
@@ -135,5 +140,5 @@ module.exports = {
   getQuizPerformanceTrend,
   getXpOverTime,
   getResourceUsage,
-  getTopicMasteryList,
+  getTopicMasteryRanked,
 };

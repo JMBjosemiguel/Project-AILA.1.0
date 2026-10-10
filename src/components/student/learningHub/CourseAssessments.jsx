@@ -39,7 +39,7 @@ function AssessmentRow({ title, kind, state, lockedHint, busy, onTake, onResume,
     : status === 'failed'
       ? `Score ${latestScore}% · need ${passingScore}%`
       : status === 'ready' || status === 'in_progress'
-        ? `Passing score ${passingScore}%${itemCount ? ` · ${itemCount} questions` : ''}`
+        ? `Passing score ${passingScore}%${itemCount ? ` · ${itemCount} question${itemCount === 1 ? '' : 's'}` : ''}`
         : lockedHint;
 
   return (
@@ -111,7 +111,7 @@ export default function CourseAssessments({ subjectId, refreshKey = 0, onLaunchA
             title={`Checkpoint — ${module_.title}`}
             kind="module_checkpoint"
             state={module_.checkpoint}
-            lockedHint={`Complete this module's lessons to unlock (${module_.completedTopics}/${module_.totalTopics} topics done)`}
+            lockedHint={`Complete this module's lessons to unlock (${module_.completedTopics}/${module_.totalTopics} topic${module_.totalTopics === 1 ? '' : 's'} done)`}
             busy={busyId === `cp-${module_.moduleId}`}
             onTake={() => launch(`cp-${module_.moduleId}`, () => openModuleCheckpoint(subjectId, module_.moduleId))}
             onResume={() => launch(`cp-${module_.moduleId}`, () => openModuleCheckpoint(subjectId, module_.moduleId))}

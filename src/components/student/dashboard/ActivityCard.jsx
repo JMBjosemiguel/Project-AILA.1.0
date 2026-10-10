@@ -1,6 +1,7 @@
 import Card, { CardHeader } from '../../common/Card';
 import EmptyState from '../../common/EmptyState';
 import { SkeletonList } from '../../common/Skeleton';
+import { ACTIVITY_ICONS, ACTIVITY_ICON_FALLBACK } from '../../../utils/activityIcons';
 
 export default function ActivityCard({ activities = [], loading = false }) {
   return (
@@ -10,17 +11,20 @@ export default function ActivityCard({ activities = [], loading = false }) {
         <SkeletonList count={3} />
       ) : activities.length ? (
         <div className="flex flex-col gap-3.5">
-          {activities.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center text-sm flex-shrink-0">
-                {activity.activity_type?.slice(0, 1).toUpperCase()}
+          {activities.map((activity) => {
+            const Icon = ACTIVITY_ICONS[activity.activity_type] || ACTIVITY_ICON_FALLBACK;
+            return (
+              <div key={activity.id} className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center text-ink-400 flex-shrink-0">
+                  <Icon size={15} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
+                  <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <EmptyState title="No recent activity" message="Complete a lesson or quiz to see your activity here." />

@@ -55,7 +55,7 @@ async function getSummary(userId) {
   const kpis = [
     { label: 'Completed Lessons', value: String(completion.completed_lessons), trend: 'up' },
     { label: 'Avg Quiz Score', value: quizAverage.avg_percent != null ? `${quizAverage.avg_percent}%` : '--', trend: 'neutral' },
-    { label: 'Study Streak', value: `${streak.current_streak} days`, trend: streak.current_streak > 0 ? 'up' : 'neutral' },
+    { label: 'Study Streak', value: `${streak.current_streak} day${streak.current_streak === 1 ? '' : 's'}`, trend: streak.current_streak > 0 ? 'up' : 'neutral' },
     { label: 'XP / Level', value: `${profile.xp_points} XP`, delta: `Lv. ${profile.level}`, trend: 'up' },
   ];
 

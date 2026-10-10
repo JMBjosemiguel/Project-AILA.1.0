@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-display font-extrabold text-ink-800">{stats.avgFeedbackRating}</span>
                 <span className="text-ink-400">/ 5.0</span>
-                <span className="text-xs text-ink-400 ml-2">({stats.totalFeedback} responses)</span>
+                <span className="text-xs text-ink-400 ml-2">({stats.totalFeedback} response{stats.totalFeedback === 1 ? '' : 's'})</span>
               </div>
             ) : (
               <EmptyState title="No feedback yet" message="Ratings will appear here once students respond." />

@@ -112,7 +112,7 @@ export default function AdminChatbotRulesPage() {
               <div className="min-w-0">
                 <span className="text-ink-700 truncate block">{r.title}</span>
               </div>
-              <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{r.views} views</span>
+              <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{r.views} view{r.views === 1 ? '' : 's'}</span>
             </div>
           )}
         />

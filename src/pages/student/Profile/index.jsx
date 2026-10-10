@@ -7,6 +7,7 @@ import Switch from '../../../components/common/Switch';
 import { useToast } from '../../../components/common/Toast';
 import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
+import { ACTIVITY_ICONS, ACTIVITY_ICON_FALLBACK } from '../../../utils/activityIcons';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
@@ -209,15 +210,20 @@ export default function ProfilePage() {
             <CardHeader title="Activity history" />
             {data?.activities?.length ? (
               <div className="flex flex-col gap-3.5">
-                {data.activities.map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center text-sm flex-shrink-0">{activity.activity_type?.slice(0, 1).toUpperCase()}</div>
-                    <div>
-                      <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                      <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
+                {data.activities.map((activity) => {
+                  const Icon = ACTIVITY_ICONS[activity.activity_type] || ACTIVITY_ICON_FALLBACK;
+                  return (
+                    <div key={activity.id} className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-ink-50 flex items-center justify-center text-ink-400 flex-shrink-0">
+                        <Icon size={15} />
+                      </div>
+                      <div>
+                        <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
+                        <span className="text-xs text-ink-400">{new Date(activity.created_at).toLocaleString()}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : <EmptyState title="No activity yet" message="Your learning activity will show up here as you use AILA." />}
           </Card>

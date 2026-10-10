@@ -310,7 +310,7 @@ export default function ResourcesPage({ onNavigate }) {
                     {popular.map((item) => (
                       <div key={item.id} className="flex items-center justify-between text-sm text-ink-600">
                         <span className="truncate min-w-0">{item.title}</span>
-                        <span className="text-xs text-ink-400 flex-shrink-0">{item.view_count} views</span>
+                        <span className="text-xs text-ink-400 flex-shrink-0">{item.view_count} view{item.view_count === 1 ? '' : 's'}</span>
                       </div>
                     ))}
                   </div>

@@ -166,7 +166,7 @@ export default function AdminChatSessionsPage() {
                         <span className="truncate">{user.first_name} {user.last_name}</span>
                       </div>
                       <p className="text-xs text-ink-400 mt-1 truncate">{user.email}</p>
-                      <p className="text-[0.7rem] text-ink-400 mt-0.5">{user.conversation_count} conversations · {formatDate(user.last_activity_at)}</p>
+                      <p className="text-[0.7rem] text-ink-400 mt-0.5">{user.conversation_count} conversation{user.conversation_count === 1 ? '' : 's'} · {formatDate(user.last_activity_at)}</p>
                     </button>
                   ))
                 )}
@@ -219,7 +219,7 @@ export default function AdminChatSessionsPage() {
                             <span className="truncate">{conversation.title || `Conversation ${conversation.id}`}</span>
                           </div>
                           <p className="text-[0.7rem] text-ink-400 mt-0.5">
-                            {conversation.message_count} messages · {formatDate(conversation.last_activity_at)}
+                            {conversation.message_count} message{conversation.message_count === 1 ? '' : 's'} · {formatDate(conversation.last_activity_at)}
                           </p>
                         </button>
                       )}

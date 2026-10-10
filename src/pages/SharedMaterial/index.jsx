@@ -22,7 +22,7 @@ function SharedCourse({ data }) {
         <h1 className="text-xl font-display font-semibold text-ink-800">{data.title}</h1>
         <p className="text-sm text-ink-500 mt-1">
           {DIFFICULTY_LABEL[data.difficulty] || data.difficulty}
-          {data.goal ? ` · Goal: ${data.goal}` : ''} · {data.moduleCount} modules · {data.lessonCount} lessons
+          {data.goal ? ` · Goal: ${data.goal}` : ''} · {data.moduleCount} module{data.moduleCount === 1 ? '' : 's'} · {data.lessonCount} lesson{data.lessonCount === 1 ? '' : 's'}
         </p>
         {data.hasAssessments && (
           <p className="text-xs text-ink-400 mt-1 inline-flex items-center gap-1">
@@ -69,7 +69,7 @@ function SharedQuiz({ data }) {
         </div>
         <h1 className="text-xl font-display font-semibold text-ink-800">{data.topic}</h1>
         <p className="text-sm text-ink-500 mt-1">
-          {DIFFICULTY_LABEL[data.difficulty] || data.difficulty} · {data.questionCount} questions
+          {DIFFICULTY_LABEL[data.difficulty] || data.difficulty} · {data.questionCount} question{data.questionCount === 1 ? '' : 's'}
         </p>
         <p className="text-xs text-ink-400 mt-1">Copy this quiz to your materials to take it and get graded.</p>
       </div>

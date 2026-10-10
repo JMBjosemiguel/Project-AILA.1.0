@@ -151,7 +151,7 @@ export default function FeedbackPage() {
                 ))}
               </div>
               <p className="text-xs text-ink-400 text-center leading-relaxed">
-                Based on {data.totalResponses} responses.
+                Based on {data.totalResponses} response{data.totalResponses === 1 ? '' : 's'}.
               </p>
             </>
           ) : (

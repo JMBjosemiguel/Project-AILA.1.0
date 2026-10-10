@@ -22,6 +22,7 @@ import { deleteQuizAttempt } from '../../../services/api/quizService';
 import { setResumeLesson } from '../../../utils/learningHubTarget';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
+import { buildWeekDays } from '../../../utils/weekActivity';
 
 // Dashboard stats come from the API as plain label/value pairs; map labels to icons here.
 const STAT_ICONS = {
@@ -133,7 +134,7 @@ export default function DashboardPage({ onNavigate }) {
         <QuickActionsCard onNavigate={onNavigate} />
         <ActivityCard activities={data?.activities ?? []} loading={loading} />
         <DeadlinesCard deadlines={data?.deadlines ?? []} loading={loading} onViewAll={() => onNavigate('planner')} />
-        <StreakCard streak={data?.streak} loading={loading} />
+        <StreakCard streak={data?.streak} weeklyActivity={data?.weeklyActivity} loading={loading} />
         <AchievementsPreviewCard summary={gamification} loading={gamificationLoading} onNavigate={onNavigate} />
       </div>
 
@@ -206,9 +207,12 @@ export default function DashboardPage({ onNavigate }) {
             <CardHeader title="This week's activity" />
             {data?.weeklyActivity?.length ? (
               <div className="flex items-end gap-3 h-24">
-                {data.weeklyActivity.map((day) => (
-                  <div key={day.day} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-                    <div className="w-full bg-primary-300 rounded-md" style={{ height: `${Math.max(8, Math.min(80, day.count * 8))}px` }} />
+                {buildWeekDays(data.weeklyActivity).map((day, index) => (
+                  <div key={`${day.day}-${index}`} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                    <div
+                      className="w-full bg-primary-300 rounded-md"
+                      style={{ height: day.count > 0 ? `${Math.max(8, Math.min(80, day.count * 8))}px` : 0 }}
+                    />
                     <span className="text-[0.65rem] text-ink-400 font-semibold">{day.day}</span>
                   </div>
                 ))}

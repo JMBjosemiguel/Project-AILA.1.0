@@ -143,7 +143,7 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-ink-800 truncate">{module.title}</div>
-                    <div className="text-xs text-ink-400">{module.topics_count ?? 0} topics</div>
+                    <div className="text-xs text-ink-400">{module.topics_count ?? 0} topic{(module.topics_count ?? 0) === 1 ? '' : 's'}</div>
                   </div>
                   <div className="w-20 flex-shrink-0">
                     <ProgressBar value={module.progress_percent ?? 0} color={color} />

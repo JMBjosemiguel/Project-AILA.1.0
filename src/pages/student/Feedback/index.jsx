@@ -117,7 +117,7 @@ export default function FeedbackPage() {
                         )}
                       </div>
                       {entry.comment && <p className="text-sm text-ink-600 mt-1.5">{entry.comment}</p>}
-                      <span className="text-xs text-ink-300 mt-1 block">{formatDateTime(entry.created_at)}</span>
+                      <span className="text-xs text-ink-400 mt-1 block">{formatDateTime(entry.created_at)}</span>
                     </div>
                     <button
                       onClick={() => handleDelete(entry)}

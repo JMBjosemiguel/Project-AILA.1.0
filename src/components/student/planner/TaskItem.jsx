@@ -38,12 +38,12 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit, onDuplicate
         {isDone && <Check size={12} className="text-white" strokeWidth={3} />}
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-medium truncate ${isDone ? 'text-ink-300 line-through' : 'text-ink-800'}`}>{task.title}</p>
+        <p className={`text-sm font-medium truncate ${isDone ? 'text-ink-400 line-through' : 'text-ink-800'}`}>{task.title}</p>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`text-xs ${task.is_overdue ? 'text-rose-500 font-semibold' : 'text-ink-400'}`}>
             Due {task.deadline ? formatDate(task.deadline) : 'not scheduled'}
           </span>
-          {task.subject_name && <span className="text-xs text-ink-300">- {task.subject_name}</span>}
+          {task.subject_name && <span className="text-xs text-ink-400">- {task.subject_name}</span>}
           {task.repeat_interval && task.repeat_interval !== 'none' && <Repeat size={11} className="text-ink-300" />}
           {task.remind_me && <Bell size={11} className="text-ink-300" />}
         </div>

@@ -53,7 +53,7 @@ export default function AchievementsPreviewCard({ summary, loading = false, onNa
           {recent.length === 0 && next.slice(0, 3).map((a) => <Row key={a.slug} achievement={a} muted />)}
           {recent.length > 0 && next.length > 0 && (
             <>
-              <p className="pt-1 text-[0.7rem] font-bold uppercase tracking-wider text-ink-300">Up next</p>
+              <p className="pt-1 text-[0.7rem] font-bold uppercase tracking-wider text-ink-400">Up next</p>
               {next.slice(0, 2).map((a) => <Row key={a.slug} achievement={a} muted />)}
             </>
           )}

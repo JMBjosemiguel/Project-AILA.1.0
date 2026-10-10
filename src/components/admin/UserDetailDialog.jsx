@@ -89,7 +89,7 @@ export default function UserDetailDialog({ userId, onClose }) {
                     {detail.recentActivity.map((item) => (
                       <div key={item.id} className="py-2 text-sm text-ink-600">
                         {item.description}
-                        <span className="block text-xs text-ink-300">{formatDateTime(item.created_at)}</span>
+                        <span className="block text-xs text-ink-400">{formatDateTime(item.created_at)}</span>
                       </div>
                     ))}
                   </div>
@@ -105,7 +105,7 @@ export default function UserDetailDialog({ userId, onClose }) {
                     {detail.recentConversations.map((item) => (
                       <div key={item.id} className="py-2 text-sm text-ink-600 flex items-center justify-between">
                         <span className="truncate min-w-0">{item.title || 'Untitled conversation'}</span>
-                        <span className="text-xs text-ink-300 flex-shrink-0 ml-2">{item.message_count} msg{item.message_count === 1 ? '' : 's'}</span>
+                        <span className="text-xs text-ink-400 flex-shrink-0 ml-2">{item.message_count} msg{item.message_count === 1 ? '' : 's'}</span>
                       </div>
                     ))}
                   </div>

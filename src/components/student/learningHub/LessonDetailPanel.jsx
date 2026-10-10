@@ -101,7 +101,7 @@ export default function LessonDetailPanel({ lessonId, onClose, onCompleted, onAs
       {loading && (
         <div className="flex flex-col items-center gap-1 text-sm text-ink-400 py-6 justify-center">
           <span className="flex items-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading lesson...</span>
-          <span className="text-xs text-ink-300">A new lesson can take up to a minute to generate.</span>
+          <span className="text-xs text-ink-400">A new lesson can take up to a minute to generate.</span>
         </div>
       )}
 

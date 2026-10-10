@@ -43,7 +43,7 @@ export default function AchievementBadge({ achievement, earned = false, earnedAt
             {achievement.name}
           </p>
           {achievement.xpReward > 0 && (
-            <span className={['flex-shrink-0 text-[0.7rem] font-semibold', earned ? 'text-primary' : 'text-ink-300'].join(' ')}>
+            <span className={['flex-shrink-0 text-[0.7rem] font-semibold', earned ? 'text-primary' : 'text-ink-400'].join(' ')}>
               +{achievement.xpReward} XP
             </span>
           )}

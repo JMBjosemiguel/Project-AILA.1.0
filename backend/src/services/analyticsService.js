@@ -2,6 +2,7 @@ const analyticsModel = require('../models/analyticsModel');
 const quizModel = require('../models/quizModel');
 const { query } = require('../config/database');
 const { weekdayLabel } = require('../utils/dateLabels');
+const { displayStreak } = require('../utils/gamification');
 
 const USAGE_COLORS = { text: '#2563EB', quiz: '#7C3AED', flashcards: '#059669' };
 const USAGE_LABELS = { text: 'Chat', quiz: 'Quizzes', flashcards: 'Flashcards' };
@@ -17,10 +18,12 @@ async function getProfileStats(userId) {
 
 async function getStreak(userId) {
   const rows = await query(
-    'SELECT current_streak, longest_streak FROM learning_streaks WHERE user_id = ? LIMIT 1',
+    'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
     [userId]
   );
-  return rows[0] || { current_streak: 0, longest_streak: 0 };
+  const row = rows[0];
+  if (!row) return { current_streak: 0, longest_streak: 0 };
+  return { current_streak: displayStreak(row), longest_streak: row.longest_streak };
 }
 
 async function getSummary(userId) {

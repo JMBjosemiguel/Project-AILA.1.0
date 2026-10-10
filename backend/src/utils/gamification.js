@@ -25,6 +25,28 @@ function xpProgress(xp) {
   };
 }
 
+function dateOnlyStr(value) {
+  if (!value) return null;
+  return typeof value === 'string' ? value.slice(0, 10) : appDateStr(value);
+}
+
+/**
+ * The streak as it should currently be DISPLAYED. `touchStreak` only updates
+ * `current_streak` when a qualifying activity happens — it never runs on a
+ * mere page view — so once more than a day (app-timezone) has passed since
+ * `last_active_date`, the stored number is stale: it still shows the old run
+ * instead of 0, until the student is active again and `touchStreak` either
+ * resets or continues it for real. This reports the stale case as broken (0)
+ * without writing to the row, purely for display.
+ */
+function displayStreak({ current_streak, last_active_date }, now = new Date()) {
+  const lastActiveStr = dateOnlyStr(last_active_date);
+  if (!lastActiveStr) return 0;
+  const todayStr = appDateStr(now);
+  const yesterdayStr = appYesterdayStr(now);
+  return lastActiveStr === todayStr || lastActiveStr === yesterdayStr ? current_streak : 0;
+}
+
 function runner(connection) {
   return connection
     ? (sql, params) => connection.execute(sql, params).then(([result]) => result)
@@ -141,4 +163,5 @@ module.exports = {
   awardXpOnce,
   touchStreak,
   logActivity,
+  displayStreak,
 };

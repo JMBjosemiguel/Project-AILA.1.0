@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { displayStreak } = require('../utils/gamification');
 
 // One row per opted-in student with BOTH XP totals precomputed:
 //   total_xp  — every ledger entry, legacy_balance included (all-time board)
@@ -32,10 +33,12 @@ async function leaderboardRows(weekStart) {
 
 async function getStreak(userId) {
   const rows = await query(
-    'SELECT current_streak, longest_streak FROM learning_streaks WHERE user_id = ? LIMIT 1',
+    'SELECT current_streak, longest_streak, last_active_date FROM learning_streaks WHERE user_id = ? LIMIT 1',
     [userId]
   );
-  return rows[0] || { current_streak: 0, longest_streak: 0 };
+  const row = rows[0];
+  if (!row) return { current_streak: 0, longest_streak: 0 };
+  return { current_streak: displayStreak(row), longest_streak: row.longest_streak };
 }
 
 async function getXpPoints(userId) {

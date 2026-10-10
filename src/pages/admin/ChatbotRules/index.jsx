@@ -11,6 +11,26 @@ function shortDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// The API only returns rows for days that actually have data (no zero-fill),
+// so a single active day in the window would otherwise render as one bar
+// stretched across the whole chart. Fill in the other days as zero, same
+// approach as the student Dashboard's weekly activity chart.
+function zeroFillDays(rows, days = 14) {
+  const countByDate = new Map((rows ?? []).map((r) => [dateKey(new Date(r.date)), r.count]));
+  const result = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    result.push({ day: shortDate(d), hours: countByDate.get(dateKey(d)) ?? 0 });
+  }
+  return result;
+}
+
 function ListCard({ title, subtitle, icon: Icon, items, empty, renderItem }) {
   return (
     <Card>
@@ -65,8 +85,8 @@ export default function AdminChatbotRulesPage() {
     );
   }
 
-  const registrations = data.registrations.map((r) => ({ day: shortDate(r.date), hours: r.count }));
-  const aiUsage = data.aiUsage.map((r) => ({ day: shortDate(r.date), hours: r.count }));
+  const registrations = zeroFillDays(data.registrations);
+  const aiUsage = zeroFillDays(data.aiUsage);
   const quizTrend = data.quizTrend.map((r) => ({ day: shortDate(r.date), hours: Number(r.avg_percent) }));
   const lessonCompletions = data.lessonCompletions.map((r) => ({ day: shortDate(r.date), hours: r.count }));
 
@@ -75,11 +95,11 @@ export default function AdminChatbotRulesPage() {
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="New registrations" subtitle="Last 14 days" />
-          {registrations.length ? <BarChart data={registrations} unit="" /> : <EmptyState title="No registrations yet" message="New student sign-ups will appear here." />}
+          {data.registrations.length ? <BarChart data={registrations} unit="" /> : <EmptyState title="No registrations yet" message="New student sign-ups will appear here." />}
         </Card>
         <Card>
           <CardHeader title="AI conversations" subtitle="Messages sent to AILA, last 14 days" />
-          {aiUsage.length ? <BarChart data={aiUsage} unit="" /> : <EmptyState title="No AI activity yet" message="Chat activity will appear here." />}
+          {data.aiUsage.length ? <BarChart data={aiUsage} unit="" /> : <EmptyState title="No AI activity yet" message="Chat activity will appear here." />}
         </Card>
         <Card>
           <CardHeader title="Average quiz score" subtitle="Platform-wide, last 14 days" />

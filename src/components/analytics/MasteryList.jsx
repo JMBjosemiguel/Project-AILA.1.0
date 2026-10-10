@@ -9,10 +9,12 @@ export default function MasteryList({ data }) {
   return (
     <div className="flex flex-col gap-3.5">
       {data.map((m) => (
-        <div key={m.subject} className="flex items-center gap-3">
-          <span className="text-sm font-medium text-ink-700 w-28 flex-shrink-0 truncate">{m.subject}</span>
-          <ProgressBar value={m.pct} color={m.color} className="flex-1" />
-          <span className="text-sm font-semibold text-ink-800 w-9 text-right flex-shrink-0">{m.pct}%</span>
+        <div key={m.subject} className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <span title={m.subject} className="text-sm font-medium text-ink-700 truncate min-w-0">{m.subject}</span>
+            <span className="text-sm font-semibold text-ink-800 flex-shrink-0">{m.pct}%</span>
+          </div>
+          <ProgressBar value={m.pct} color={m.color} />
         </div>
       ))}
     </div>

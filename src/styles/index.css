@@ -6,6 +6,13 @@
   * { @apply border-ink-100; }
   html { scroll-behavior: smooth; }
   body { -webkit-font-smoothing: antialiased; }
+  /* Reserve the vertical scrollbar's gutter on desktop (where the sidebar is
+     sticky and the document itself scrolls) so switching between a short and
+     a tall page never shifts centered content sideways. Skipped below lg:
+     the mobile drawer doesn't need a permanently reserved gutter. */
+  @media (min-width: 1024px) {
+    html { scrollbar-gutter: stable; }
+  }
   h1, h2, h3, h4 { @apply font-display tracking-tight; }
   :focus-visible {
     outline: 2px solid #2563EB;

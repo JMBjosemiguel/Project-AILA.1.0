@@ -1,5 +1,7 @@
 import { BarChart3, BookOpen, CalendarCheck2, Sparkles } from 'lucide-react';
 import AilaOrb from '../../components/common/AilaOrb';
+import ThemeToggle from '../../components/common/ThemeToggle';
+import { useTheme } from '../../hooks/useTheme';
 
 const FEATURES = [
   {
@@ -21,8 +23,10 @@ const FEATURES = [
 ];
 
 export default function AuthLayout({ title, subtitle, children }) {
+  const { theme, toggleTheme } = useTheme();
   return (
     <div className="min-h-screen flex bg-canvas">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} className="fixed top-4 right-4 z-20 bg-surface shadow-soft border border-ink-100" />
       <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-ink-900 flex-col justify-between p-12">
         <div
           className="absolute inset-0 opacity-70"

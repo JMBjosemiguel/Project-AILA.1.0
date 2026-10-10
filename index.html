@@ -8,6 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+    <script>
+      // Applied before first paint so there's no light-theme flash. Default
+      // is light; dark only if the device previously chose it.
+      try {
+        if (localStorage.getItem('aila.theme') === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body class="bg-canvas font-body text-ink-800 antialiased">
     <div id="root"></div>

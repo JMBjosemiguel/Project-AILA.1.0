@@ -2,7 +2,9 @@ import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ADMIN_NAV_GROUPS, ADMIN_ROUTES } from '../../app/routes/adminRoutes';
 import { useConfirm } from '../../components/common/ConfirmDialog';
+import ThemeToggle from '../../components/common/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../hooks/useTheme';
 
 const ADMIN_SEARCH_DESTINATIONS = ADMIN_NAV_GROUPS.flatMap((group) => group.items);
 
@@ -17,6 +19,7 @@ function routeMatches(route, query) {
 export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
   const confirm = useConfirm();
+  const { theme, toggleTheme } = useTheme();
   const route = ADMIN_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -251,6 +254,7 @@ export default function AdminTopbar({ active, sidebarOpen, onMenuClick, onNaviga
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <button className="w-9 h-9 rounded-full bg-ink-900 text-white flex items-center justify-center text-xs font-bold">
           {avatarLetter}
         </button>

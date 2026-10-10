@@ -1,38 +1,53 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
+        // Theme-aware tokens: values come from CSS variables defined in
+        // src/styles/index.css (:root for light, :root.dark for dark), so
+        // most of the app adapts to dark mode without per-component dark:
+        // classes. The rgb(var(...) / <alpha-value>) form keeps Tailwind's
+        // opacity modifiers (e.g. bg-ink-100/50) working.
         primary: {
-          50: '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#2563EB',
-          600: '#1D4ED8',
-          700: '#1E40AF',
-          DEFAULT: '#2563EB',
+          50: 'rgb(var(--primary-50) / <alpha-value>)',
+          100: 'rgb(var(--primary-100) / <alpha-value>)',
+          200: 'rgb(var(--primary-200) / <alpha-value>)',
+          300: 'rgb(var(--primary-300) / <alpha-value>)',
+          400: 'rgb(var(--primary-400) / <alpha-value>)',
+          500: 'rgb(var(--primary-500) / <alpha-value>)',
+          600: 'rgb(var(--primary-600) / <alpha-value>)',
+          700: 'rgb(var(--primary-700) / <alpha-value>)',
+          DEFAULT: 'rgb(var(--primary-500) / <alpha-value>)',
         },
         ink: {
-          50: '#F1F5F9',
-          100: '#E2E8F0',
-          200: '#CBD5E1',
-          300: '#94A3B8',
-          400: '#5B6B82',
-          500: '#475569',
-          600: '#334155',
-          700: '#1E293B',
-          800: '#0F172A',
+          50: 'rgb(var(--ink-50) / <alpha-value>)',
+          100: 'rgb(var(--ink-100) / <alpha-value>)',
+          200: 'rgb(var(--ink-200) / <alpha-value>)',
+          300: 'rgb(var(--ink-300) / <alpha-value>)',
+          400: 'rgb(var(--ink-400) / <alpha-value>)',
+          500: 'rgb(var(--ink-500) / <alpha-value>)',
+          600: 'rgb(var(--ink-600) / <alpha-value>)',
+          700: 'rgb(var(--ink-700) / <alpha-value>)',
+          800: 'rgb(var(--ink-800) / <alpha-value>)',
+          // 900 is intentionally fixed (not theme-aware): it's only used for
+          // always-dark chrome (modal backdrops, code blocks, the admin
+          // sidebar, which stays dark in both themes), never for body text.
           900: '#0B1120',
-          DEFAULT: '#0F172A',
+          DEFAULT: 'rgb(var(--ink-800) / <alpha-value>)',
         },
         accent: {
           DEFAULT: '#38BDF8',
           light: '#F0F9FF',
         },
-        canvas: '#F8FAFC',
+        canvas: 'rgb(var(--canvas) / <alpha-value>)',
+        // New surface tokens for things that were hardcoded bg-white: cards,
+        // panels, dropdowns, modals, inputs.
+        surface: {
+          DEFAULT: 'rgb(var(--surface) / <alpha-value>)',
+          raised: 'rgb(var(--surface-raised) / <alpha-value>)',
+        },
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'sans-serif'],

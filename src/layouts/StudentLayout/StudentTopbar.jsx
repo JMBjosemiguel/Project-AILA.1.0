@@ -2,8 +2,10 @@ import { Bell, LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STUDENT_NAV_GROUPS, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoutes';
 import { useConfirm } from '../../components/common/ConfirmDialog';
+import ThemeToggle from '../../components/common/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotificationsData } from '../../hooks/useNotificationsData';
+import { useTheme } from '../../hooks/useTheme';
 
 const STUDENT_SEARCH_DESTINATIONS = STUDENT_NAV_GROUPS.flatMap((group) => group.items);
 
@@ -18,6 +20,7 @@ function routeMatches(route, query) {
 export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
   const confirm = useConfirm();
+  const { theme, toggleTheme } = useTheme();
   const route = STUDENT_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
   const { data: notificationsData } = useNotificationsData(active);
@@ -254,6 +257,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <button
           onClick={() => onNavigate(STUDENT_ROUTE_IDS.NOTIFICATIONS)}
           aria-label="View notifications"
@@ -261,7 +265,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
         >
           <Bell size={17} />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-white" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-surface" />
           )}
         </button>
         <button onClick={() => onNavigate(STUDENT_ROUTE_IDS.PROFILE)} className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-xs font-bold">

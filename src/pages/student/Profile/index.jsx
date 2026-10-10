@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Pencil } from 'lucide-react';
+import { Eye, EyeOff, Pencil } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import Switch from '../../../components/common/Switch';
 import { useToast } from '../../../components/common/Toast';
 import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
+
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 72;
 
 export default function ProfilePage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -13,10 +17,18 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ program: '', year_level: '', bio: '' });
-  const [passwordForm, setPasswordForm] = useState({ current: '', next: '' });
-  const [passwordStatus, setPasswordStatus] = useState('');
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
+  const [showPassword, setShowPassword] = useState({ current: false, next: false, confirm: false });
+  const [changingPassword, setChangingPassword] = useState(false);
   const [leaderboardSaving, setLeaderboardSaving] = useState(false);
   const toast = useToast();
+
+  const passwordsMatch = passwordForm.next.length > 0 && passwordForm.next === passwordForm.confirm;
+  const passwordFormValid =
+    passwordForm.current.length > 0 &&
+    passwordForm.next.length >= PASSWORD_MIN &&
+    passwordForm.next.length <= PASSWORD_MAX &&
+    passwordsMatch;
 
   const user = data?.user;
   const profile = data?.profile;
@@ -56,9 +68,8 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLeaderboardToggle = async () => {
+  const handleLeaderboardToggle = async (next) => {
     if (!profile) return;
-    const next = !profile.leaderboard_opt_in;
     setLeaderboardSaving(true);
     try {
       await updateProfile({ leaderboard_opt_in: next });
@@ -73,13 +84,16 @@ export default function ProfilePage() {
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault();
-    setPasswordStatus('');
+    if (!passwordFormValid) return;
+    setChangingPassword(true);
     try {
       await changePassword(passwordForm.current, passwordForm.next);
-      setPasswordStatus('Password updated successfully.');
-      setPasswordForm({ current: '', next: '' });
+      setPasswordForm({ current: '', next: '', confirm: '' });
+      toast.success('Password updated successfully.');
     } catch (error) {
-      setPasswordStatus(error.message || 'Could not change your password.');
+      toast.error(error.message || 'Could not change your password.');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -125,6 +139,7 @@ export default function ProfilePage() {
                 editing={editing}
                 value={form.bio}
                 onChange={(value) => setForm((current) => ({ ...current, bio: value }))}
+                long
               />
               <InfoRow
                 label="Year level"
@@ -139,7 +154,7 @@ export default function ProfilePage() {
 
           <Card>
             <CardHeader title="Leaderboard" />
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-ink-800">Show me on the leaderboard</p>
                 <p className="mt-0.5 text-xs text-ink-400">
@@ -147,50 +162,44 @@ export default function ProfilePage() {
                   and scores are never shown.
                 </p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={Boolean(profile?.leaderboard_opt_in)}
-                aria-label="Show me on the leaderboard"
+              <Switch
+                checked={Boolean(profile?.leaderboard_opt_in)}
+                onChange={handleLeaderboardToggle}
                 disabled={leaderboardSaving || !profile}
-                onClick={handleLeaderboardToggle}
-                className={[
-                  'relative mt-0.5 h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50',
-                  profile?.leaderboard_opt_in ? 'bg-primary' : 'bg-ink-200',
-                ].join(' ')}
-              >
-                <span
-                  className={[
-                    'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-                    profile?.leaderboard_opt_in ? 'translate-x-[22px]' : 'translate-x-0.5',
-                  ].join(' ')}
-                />
-              </button>
+                ariaLabel="Show me on the leaderboard"
+              />
             </div>
           </Card>
 
           <Card>
             <CardHeader title="Change password" />
-            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-2.5">
-              <input
-                type="password"
-                required
-                placeholder="Current password"
+            <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
+              <PasswordField
+                label="Current password"
                 value={passwordForm.current}
-                onChange={(event) => setPasswordForm((current) => ({ ...current, current: event.target.value }))}
-                className="border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none"
+                onChange={(value) => setPasswordForm((current) => ({ ...current, current: value }))}
+                show={showPassword.current}
+                onToggleShow={() => setShowPassword((current) => ({ ...current, current: !current.current }))}
               />
-              <input
-                type="password"
-                required
-                minLength={8}
-                placeholder="New password (min. 8 characters)"
+              <PasswordField
+                label="New password"
                 value={passwordForm.next}
-                onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))}
-                className="border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none"
+                onChange={(value) => setPasswordForm((current) => ({ ...current, next: value }))}
+                show={showPassword.next}
+                onToggleShow={() => setShowPassword((current) => ({ ...current, next: !current.next }))}
+                hint={`${PASSWORD_MIN}–${PASSWORD_MAX} characters.`}
               />
-              {passwordStatus && <p className="text-xs text-ink-500">{passwordStatus}</p>}
-              <Button type="submit" size="sm" variant="outline">Update password</Button>
+              <PasswordField
+                label="Confirm new password"
+                value={passwordForm.confirm}
+                onChange={(value) => setPasswordForm((current) => ({ ...current, confirm: value }))}
+                show={showPassword.confirm}
+                onToggleShow={() => setShowPassword((current) => ({ ...current, confirm: !current.confirm }))}
+                error={passwordForm.confirm.length > 0 && !passwordsMatch ? 'Passwords do not match.' : null}
+              />
+              <Button type="submit" size="sm" variant="outline" disabled={!passwordFormValid || changingPassword}>
+                {changingPassword ? 'Updating...' : 'Update password'}
+              </Button>
             </form>
           </Card>
         </div>
@@ -227,7 +236,25 @@ function MiniStat({ val, label }) {
   );
 }
 
-function InfoRow({ label, value, editing, onChange, type = 'text', displayValue }) {
+function InfoRow({ label, value, editing, onChange, type = 'text', displayValue, long = false }) {
+  if (long) {
+    return (
+      <div className="flex flex-col gap-1 py-1.5 border-b border-ink-50 last:border-0">
+        <span className="text-ink-400 font-medium">{label}</span>
+        {editing && onChange ? (
+          <textarea
+            value={value ?? ''}
+            onChange={(event) => onChange(event.target.value)}
+            rows={3}
+            className="w-full border border-primary-200 rounded-lg px-2.5 py-1.5 text-sm outline-none resize-none focus-visible:ring-2 focus-visible:ring-primary-200"
+          />
+        ) : (
+          <span className="text-ink-800 font-medium text-left whitespace-pre-wrap break-words">{(displayValue ?? value) || 'Pending'}</span>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 border-b border-ink-50 last:border-0">
       <span className="text-ink-400 font-medium">{label}</span>
@@ -236,11 +263,41 @@ function InfoRow({ label, value, editing, onChange, type = 'text', displayValue 
           type={type}
           value={value ?? ''}
           onChange={(event) => onChange(event.target.value)}
-          className="text-right border border-primary-200 rounded-lg px-2 py-1 text-sm outline-none w-40"
+          className="text-right border border-primary-200 rounded-lg px-2 py-1 text-sm outline-none w-40 focus-visible:ring-2 focus-visible:ring-primary-200"
         />
       ) : (
         <span className="text-ink-800 font-medium text-right">{(displayValue ?? value) || 'Pending'}</span>
       )}
+    </div>
+  );
+}
+
+function PasswordField({ label, value, onChange, show, onToggleShow, hint, error }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-ink-700 mb-1 block">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          required
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full border border-ink-100 focus:border-primary-300 rounded-lg pl-3 pr-10 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          aria-label={show ? 'Hide password' : 'Show password'}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-primary"
+        >
+          {show ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+      </div>
+      {error ? (
+        <p className="mt-1 text-xs text-rose-600">{error}</p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-ink-400">{hint}</p>
+      ) : null}
     </div>
   );
 }

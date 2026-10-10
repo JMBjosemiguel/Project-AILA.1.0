@@ -8,6 +8,21 @@ const USAGE_COLORS = { text: '#2563EB', quiz: '#7C3AED', flashcards: '#059669' }
 const USAGE_LABELS = { text: 'Chat', quiz: 'Quizzes', flashcards: 'Flashcards' };
 const RESOURCE_TYPE_COLORS = { pdf: '#EF4444', doc: '#2563EB', pptx: '#F97316', video: '#8B5CF6', link: '#0EA5E9', image: '#0D9488' };
 
+// Splits one mastery-ranked topic list (highest pct first) into "strong" and
+// "weak" so the same topic can never appear in both — with only a handful of
+// in-progress topics, two independent top-3/bottom-3 queries return the SAME
+// rows. A topic already at 100% has nothing left to review, so it's excluded
+// from "weak" even if it's the lowest-ranked of what remains.
+function splitTopicMastery(rankedTopics) {
+  const strongTopics = rankedTopics.slice(0, 3);
+  const weakTopics = rankedTopics
+    .slice(3)
+    .filter((topic) => topic.pct < 100)
+    .slice(-3)
+    .reverse();
+  return { strongTopics, weakTopics };
+}
+
 async function getProfileStats(userId) {
   const rows = await query(
     'SELECT xp_points, level FROM user_profiles WHERE user_id = ? LIMIT 1',
@@ -33,8 +48,7 @@ async function getSummary(userId) {
     masteryRaw,
     usageRaw,
     trendRaw,
-    strongTopics,
-    weakTopics,
+    rankedTopics,
     quizAverage,
     profile,
     streak,
@@ -46,14 +60,15 @@ async function getSummary(userId) {
     analyticsModel.getMasteryBySubject(userId),
     analyticsModel.getChatUsageBreakdown(userId),
     analyticsModel.getQuizPerformanceTrend(userId),
-    analyticsModel.getTopicMasteryList(userId, 'desc'),
-    analyticsModel.getTopicMasteryList(userId, 'asc'),
+    analyticsModel.getTopicMasteryRanked(userId),
     quizModel.getQuizAverageScore(userId),
     getProfileStats(userId),
     getStreak(userId),
     analyticsModel.getXpOverTime(userId),
     analyticsModel.getResourceUsage(userId),
   ]);
+
+  const { strongTopics, weakTopics } = splitTopicMastery(rankedTopics);
 
   const kpis = [
     { label: 'Completed Lessons', value: String(completion.completed_lessons), trend: 'up' },
@@ -118,4 +133,5 @@ async function getSummary(userId) {
 
 module.exports = {
   getSummary,
+  splitTopicMastery,
 };

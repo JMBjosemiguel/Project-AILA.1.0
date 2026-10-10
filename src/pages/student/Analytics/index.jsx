@@ -77,6 +77,16 @@ export default function AnalyticsPage() {
           {chatbotUsage.length ? <DonutChart data={chatbotUsage} /> : <EmptyState icon={MessageCircle} title="No AILA usage yet" message="Chat with AILA to see how you're using it here." />}
         </Card>
 
+        <Card className="lg:col-span-2">
+          <CardHeader title="XP over time" />
+          {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
+        </Card>
+
+        <Card>
+          <CardHeader title="Resource usage" />
+          {resourceUsage.length ? <DonutChart data={resourceUsage} /> : <EmptyState title="No resource views" message="Open resources from the library to see usage here." />}
+        </Card>
+
         <Card>
           <CardHeader title="Strong topics" />
           {strongTopics.length ? (
@@ -103,16 +113,6 @@ export default function AnalyticsPage() {
               ))}
             </div>
           ) : <EmptyState title="No data yet" message="Weak topics will surface here once progress is tracked." />}
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader title="XP over time" />
-          {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
-        </Card>
-
-        <Card>
-          <CardHeader title="Resource usage" />
-          {resourceUsage.length ? <DonutChart data={resourceUsage} /> : <EmptyState title="No resource views" message="Open resources from the library to see usage here." />}
         </Card>
       </div>
     </div>

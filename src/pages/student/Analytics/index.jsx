@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, BarChart3, BookOpenCheck, Clock, Flame, MessageCircle, TrendingUp, Zap } from 'lucide-react';
+import { Award, BarChart3, BookOpenCheck, CheckCircle2, Clock, Flame, MessageCircle, TrendingUp, Zap } from 'lucide-react';
 import BarChart from '../../../components/analytics/BarChart';
 import DonutChart from '../../../components/analytics/DonutChart';
 import MasteryList from '../../../components/analytics/MasteryList';
@@ -112,7 +112,11 @@ export default function AnalyticsPage() {
                 </div>
               ))}
             </div>
-          ) : <EmptyState title="No data yet" message="Weak topics will surface here once progress is tracked." />}
+          ) : strongTopics.length ? (
+            <EmptyState icon={CheckCircle2} title="Nothing to review right now" message="Nice work — every tracked topic is in good shape." />
+          ) : (
+            <EmptyState title="No data yet" message="Weak topics will surface here once progress is tracked." />
+          )}
         </Card>
       </div>
     </div>

@@ -34,3 +34,31 @@ describe('AnalyticsPage — error vs empty', () => {
     expect(screen.getByText('Avg Score')).toBeInTheDocument();
   });
 });
+
+describe('AnalyticsPage — "Topics to review" empty state', () => {
+  it('says "No data yet" when there is no topic progress at all', () => {
+    state.data = { kpis: [], strongTopics: [], weakTopics: [] };
+    render(<AnalyticsPage />);
+    // "No data yet" also appears on the empty "Strong topics" card — assert via its own message instead.
+    expect(screen.getByText('Weak topics will surface here once progress is tracked.')).toBeInTheDocument();
+  });
+
+  it('says "Nothing to review right now" when strong topics exist but nothing is weak', () => {
+    state.data = { kpis: [], strongTopics: [{ topic: 'SELECT Queries', pct: 100 }], weakTopics: [] };
+    render(<AnalyticsPage />);
+    expect(screen.getByText('Nothing to review right now')).toBeInTheDocument();
+    expect(screen.getByText('Nice work — every tracked topic is in good shape.')).toBeInTheDocument();
+    expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
+  });
+
+  it('lists the weak topics when there are any, regardless of strong topics', () => {
+    state.data = {
+      kpis: [],
+      strongTopics: [{ topic: 'SELECT Queries', pct: 100 }],
+      weakTopics: [{ topic: 'Joins', pct: 40 }],
+    };
+    render(<AnalyticsPage />);
+    expect(screen.getByText('Joins')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing to review right now')).not.toBeInTheDocument();
+  });
+});

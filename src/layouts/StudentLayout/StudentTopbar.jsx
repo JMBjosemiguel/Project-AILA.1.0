@@ -38,7 +38,12 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       : STUDENT_SEARCH_DESTINATIONS;
   }, [query]);
 
+  // Consistent while any full-screen dialog is open (the lesson reader, quiz
+  // runner, confirm dialog, ...) — the palette would otherwise render behind
+  // it (lower z-index), so it simply doesn't open at all rather than opening
+  // invisibly.
   const openPalette = () => {
+    if (document.querySelector('[role="dialog"]')) return;
     setPaletteOpen(true);
   };
 

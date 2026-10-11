@@ -7,7 +7,7 @@ import { SkeletonGrid } from '../../../components/common/Skeleton';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
 import AddCourseWizard from '../../../components/student/learningHub/AddCourseWizard';
-import LessonDetailPanel from '../../../components/student/learningHub/LessonDetailPanel';
+import LessonReader from '../../../components/student/learningHub/LessonReader';
 import SubjectCard from '../../../components/student/learningHub/SubjectCard';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
 import { useLearningHubData } from '../../../hooks/useLearningHubData';
@@ -68,6 +68,23 @@ function collectMatchingLessons(subjects, query) {
   return matches;
 }
 
+// Every lesson id across every course, in course order — crossing topic and
+// module boundaries — so the reader's Previous/Next can walk the whole
+// catalog, not just one topic (same traversal shape as collectMatchingLessons).
+function flattenLessonIds(subjects) {
+  const ids = [];
+  for (const subject of subjects) {
+    for (const module_ of subject.modules ?? []) {
+      for (const topic of module_.topics ?? []) {
+        for (const lesson of topic.lessons ?? []) {
+          ids.push(lesson.id);
+        }
+      }
+    }
+  }
+  return ids;
+}
+
 const ASSESSMENT_KIND_LABEL = {
   module_checkpoint: 'Module Checkpoint',
   course_final: 'Course Final',
@@ -111,6 +128,13 @@ export default function LearningHubPage({ onNavigate }) {
   const matchingLessons = useMemo(() => (
     collectMatchingLessons(subjects, normalizedSearch)
   ), [subjects, normalizedSearch]);
+
+  const flatLessonIds = useMemo(() => flattenLessonIds(subjects), [subjects]);
+  const selectedLessonIndex = selectedLessonId != null ? flatLessonIds.indexOf(selectedLessonId) : -1;
+  const previousLessonId = selectedLessonIndex > 0 ? flatLessonIds[selectedLessonIndex - 1] : null;
+  const nextLessonId = (
+    selectedLessonIndex >= 0 && selectedLessonIndex < flatLessonIds.length - 1
+  ) ? flatLessonIds[selectedLessonIndex + 1] : null;
 
   // Courses and lessons are matched client-side against data already loaded for
   // this page. Quizzes and resources live elsewhere, so they're only fetched
@@ -338,12 +362,16 @@ export default function LearningHubPage({ onNavigate }) {
       )}
 
       {selectedLessonId && (
-        <LessonDetailPanel
+        <LessonReader
           lessonId={selectedLessonId}
           onClose={() => setSelectedLessonId(null)}
           onCompleted={() => setRefreshVersion((version) => version + 1)}
           onAskAila={handleAskAila}
           onGenerateQuiz={setQuizRequest}
+          hasPrevious={previousLessonId != null}
+          hasNext={nextLessonId != null}
+          onPrevious={() => previousLessonId != null && setSelectedLessonId(previousLessonId)}
+          onNext={() => nextLessonId != null && setSelectedLessonId(nextLessonId)}
         />
       )}
 

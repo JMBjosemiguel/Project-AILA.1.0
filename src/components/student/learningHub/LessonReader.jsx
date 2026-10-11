@@ -127,7 +127,9 @@ export default function LessonReader({
       }
       onCompleted?.();
     } catch (err) {
-      setError(err.message || 'Could not mark this lesson complete.');
+      // Toast only — `error` is the full-reader "couldn't load this lesson"
+      // state; setting it here replaced the lesson content with an error box
+      // even though the lesson was sitting right there, fully loaded.
       toast.error(err.message || 'Could not mark this lesson complete.');
     } finally {
       setCompleting(false);

@@ -208,6 +208,24 @@ describe('LessonReader', () => {
     expect(screen.getByRole('button', { name: 'Completed' })).toBeDisabled();
   });
 
+  it('a failed Mark Complete toasts the error but keeps showing the already-loaded lesson', async () => {
+    getLesson.mockResolvedValue(detailPayload());
+    completeLesson.mockRejectedValue(new Error('Network blip.'));
+    const user = userEvent.setup();
+    render(<LessonReader lessonId={10} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Plants make food.')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Mark Complete' }));
+    await waitFor(() => expect(completeLesson).toHaveBeenCalledWith(10));
+
+    // The lesson is still fully visible and the button is still "Mark
+    // Complete" (not stuck on "Completed") — the failure must not replace
+    // the reader's content with a "couldn't load this lesson" error box.
+    expect(screen.getByText('Plants make food.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeInTheDocument();
+    expect(screen.queryByText('Could not load lesson')).not.toBeInTheDocument();
+  });
+
   it('generates learning objectives on demand', async () => {
     getLesson.mockResolvedValue(detailPayload());
     getStudyToolObjectives.mockResolvedValue({ objectives: '- Objective one' });

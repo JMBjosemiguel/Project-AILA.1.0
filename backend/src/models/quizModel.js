@@ -40,6 +40,24 @@ async function createQuiz({
   return quizId;
 }
 
+// Looks up exactly one question (and confirms it belongs to this quiz via the
+// WHERE, instead of fetching every question in the quiz just to .find() one).
+// Used by the answer-autosave path, which only ever needs one question's
+// options to validate the submitted answer.
+async function getQuestionForQuiz(quizId, questionId, connection = null) {
+  const rows = await execute(
+    connection,
+    'SELECT id, question, options, correct_answer, explanation, order_index FROM quiz_questions WHERE id = ? AND quiz_id = ? LIMIT 1',
+    [questionId, quizId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    options: row.options ? (typeof row.options === 'string' ? JSON.parse(row.options) : row.options) : null,
+  };
+}
+
 async function getQuizWithQuestions(quizId, userId) {
   const quizRows = await query(
     `SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, created_at,
@@ -145,11 +163,26 @@ async function updateAttemptProgress(attemptId, currentIndex, connection = null)
   );
 }
 
-async function gradeAttemptAnswer(attemptId, questionId, isCorrect, connection = null) {
+// Submit-time equivalent of calling an upsert-then-grade pair once per
+// question in a loop: same two columns end up holding the same values, just
+// as one bulk multi-row statement (mirrors the VALUES-list pattern createQuiz
+// already uses) instead of 2*N sequential round-trips.
+async function bulkUpsertGradedAnswers(attemptId, gradedAnswers, connection = null) {
+  if (!gradedAnswers.length) return;
+  const placeholders = gradedAnswers.map(() => '(?, ?, ?, ?, CURRENT_TIMESTAMP)').join(', ');
+  const params = gradedAnswers.flatMap((answer) => [
+    attemptId,
+    answer.questionId,
+    answer.selectedAnswer || null,
+    answer.isCorrect ? 1 : 0,
+  ]);
   await execute(
     connection,
-    'UPDATE quiz_attempt_answers SET is_correct = ? WHERE attempt_id = ? AND question_id = ?',
-    [isCorrect ? 1 : 0, attemptId, questionId]
+    `INSERT INTO quiz_attempt_answers (attempt_id, question_id, selected_answer, is_correct, answered_at)
+     VALUES ${placeholders}
+     ON DUPLICATE KEY UPDATE
+       selected_answer = VALUES(selected_answer), is_correct = VALUES(is_correct), answered_at = VALUES(answered_at)`,
+    params
   );
 }
 
@@ -264,6 +297,7 @@ module.exports = {
   findQuizIdByChatMessage,
   searchQuizzesForUser,
   getQuizWithQuestions,
+  getQuestionForQuiz,
   findActiveAttempt,
   createInProgressAttempt,
   getAttemptById,
@@ -271,7 +305,7 @@ module.exports = {
   getSavedAnswers,
   upsertAttemptAnswer,
   updateAttemptProgress,
-  gradeAttemptAnswer,
+  bulkUpsertGradedAnswers,
   finalizeAttempt,
   listActiveAttemptsForUser,
   listAttemptsForUser,

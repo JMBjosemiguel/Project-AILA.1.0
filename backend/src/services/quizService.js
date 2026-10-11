@@ -758,8 +758,13 @@ async function saveAttemptAnswer(userId, attemptId, { questionId, selectedAnswer
     throw new ApiError(409, 'This attempt has already been submitted.');
   }
 
-  const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
-  const question = quiz.questions.find((item) => item.id === Number(questionId));
+  // Only the one answered question is needed here — not the whole quiz, which
+  // at a large item count would mean refetching and JSON-parsing every
+  // question on every autosave. attempt.total (captured once when the attempt
+  // was created, and never changes afterward — see the batched-generation
+  // invariant that an attempt can't start until generation is done) stands in
+  // for quiz.questions.length for the index bound below.
+  const question = await quizModel.getQuestionForQuiz(attempt.quiz_id, Number(questionId));
   if (!question) {
     throw new ApiError(400, 'That question is not part of this quiz.');
   }
@@ -772,7 +777,7 @@ async function saveAttemptAnswer(userId, attemptId, { questionId, selectedAnswer
     }
   }
 
-  const nextIndex = clampIndex(currentIndex, quiz.questions.length);
+  const nextIndex = clampIndex(currentIndex, attempt.total);
 
   await transaction(async (connection) => {
     await quizModel.upsertAttemptAnswer(attempt.id, question.id, value || null, connection);
@@ -865,11 +870,9 @@ async function submitAttempt(userId, attemptId) {
       throw new ApiError(409, 'This attempt has already been submitted.');
     }
 
-    // Make sure every question has a graded row, even the unanswered ones.
-    for (const answer of gradedAnswers) {
-      await quizModel.upsertAttemptAnswer(attempt.id, answer.questionId, answer.selectedAnswer || null, connection);
-      await quizModel.gradeAttemptAnswer(attempt.id, answer.questionId, answer.isCorrect, connection);
-    }
+    // One bulk upsert for every question (even unanswered ones get a graded
+    // row) instead of two sequential queries per question.
+    await quizModel.bulkUpsertGradedAnswers(attempt.id, gradedAnswers, connection);
 
     await quizModel.finalizeAttempt(
       { attemptId: attempt.id, score, total, currentIndex: Math.max(0, total - 1), passed },

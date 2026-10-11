@@ -68,21 +68,22 @@ function collectMatchingLessons(subjects, query) {
   return matches;
 }
 
-// Every lesson id across every course, in course order — crossing topic and
-// module boundaries — so the reader's Previous/Next can walk the whole
-// catalog, not just one topic (same traversal shape as collectMatchingLessons).
-function flattenLessonIds(subjects) {
-  const ids = [];
+// Every lesson (id + title) across every course, in course order — crossing
+// topic and module boundaries — so the reader's Previous/Next can walk the
+// whole catalog, not just one topic (same traversal shape as
+// collectMatchingLessons), and can show the target lesson's title.
+function flattenLessons(subjects) {
+  const lessons = [];
   for (const subject of subjects) {
     for (const module_ of subject.modules ?? []) {
       for (const topic of module_.topics ?? []) {
         for (const lesson of topic.lessons ?? []) {
-          ids.push(lesson.id);
+          lessons.push({ id: lesson.id, title: lesson.title });
         }
       }
     }
   }
-  return ids;
+  return lessons;
 }
 
 const ASSESSMENT_KIND_LABEL = {
@@ -129,12 +130,12 @@ export default function LearningHubPage({ onNavigate }) {
     collectMatchingLessons(subjects, normalizedSearch)
   ), [subjects, normalizedSearch]);
 
-  const flatLessonIds = useMemo(() => flattenLessonIds(subjects), [subjects]);
-  const selectedLessonIndex = selectedLessonId != null ? flatLessonIds.indexOf(selectedLessonId) : -1;
-  const previousLessonId = selectedLessonIndex > 0 ? flatLessonIds[selectedLessonIndex - 1] : null;
-  const nextLessonId = (
-    selectedLessonIndex >= 0 && selectedLessonIndex < flatLessonIds.length - 1
-  ) ? flatLessonIds[selectedLessonIndex + 1] : null;
+  const flatLessons = useMemo(() => flattenLessons(subjects), [subjects]);
+  const selectedLessonIndex = selectedLessonId != null ? flatLessons.findIndex((lesson) => lesson.id === selectedLessonId) : -1;
+  const previousLesson = selectedLessonIndex > 0 ? flatLessons[selectedLessonIndex - 1] : null;
+  const nextLesson = (
+    selectedLessonIndex >= 0 && selectedLessonIndex < flatLessons.length - 1
+  ) ? flatLessons[selectedLessonIndex + 1] : null;
 
   // Courses and lessons are matched client-side against data already loaded for
   // this page. Quizzes and resources live elsewhere, so they're only fetched
@@ -368,10 +369,12 @@ export default function LearningHubPage({ onNavigate }) {
           onCompleted={() => setRefreshVersion((version) => version + 1)}
           onAskAila={handleAskAila}
           onGenerateQuiz={setQuizRequest}
-          hasPrevious={previousLessonId != null}
-          hasNext={nextLessonId != null}
-          onPrevious={() => previousLessonId != null && setSelectedLessonId(previousLessonId)}
-          onNext={() => nextLessonId != null && setSelectedLessonId(nextLessonId)}
+          hasPrevious={previousLesson != null}
+          hasNext={nextLesson != null}
+          onPrevious={() => previousLesson != null && setSelectedLessonId(previousLesson.id)}
+          onNext={() => nextLesson != null && setSelectedLessonId(nextLesson.id)}
+          previousLessonTitle={previousLesson?.title}
+          nextLessonTitle={nextLesson?.title}
         />
       )}
 

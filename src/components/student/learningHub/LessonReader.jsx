@@ -24,6 +24,7 @@ const FOCUSABLE_SELECTOR = 'button:not(:disabled), [href], input:not(:disabled),
 export default function LessonReader({
   lessonId, onClose, onCompleted, onAskAila, onGenerateQuiz,
   hasPrevious = false, hasNext = false, onPrevious, onNext,
+  previousLessonTitle, nextLessonTitle,
 }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -159,7 +160,7 @@ export default function LessonReader({
         <div className="h-0.5 bg-ink-100 overflow-hidden">
           <div className="h-full bg-primary transition-all duration-150" style={{ width: `${scrollProgress}%` }} />
         </div>
-        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-3">
+        <div className="max-w-[760px] mx-auto flex items-start justify-between gap-3 px-4 sm:px-6 py-3">
           <div className="min-w-0">
             {detail && (
               <p className="text-xs text-ink-400 truncate">{detail.subject.name} / {detail.module.title} / {detail.topic.title}</p>
@@ -184,16 +185,20 @@ export default function LessonReader({
               onClick={onPrevious}
               disabled={!hasPrevious}
               aria-label="Previous lesson"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 disabled:opacity-30 disabled:pointer-events-none"
+              title={hasPrevious ? previousLessonTitle : undefined}
+              className="h-8 px-2 flex items-center justify-center gap-1 rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 disabled:opacity-30 disabled:pointer-events-none"
             >
               <ChevronLeft size={17} />
+              <span className="hidden lg:inline text-xs font-semibold">Previous</span>
             </button>
             <button
               onClick={onNext}
               disabled={!hasNext}
               aria-label="Next lesson"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 disabled:opacity-30 disabled:pointer-events-none"
+              title={hasNext ? nextLessonTitle : undefined}
+              className="h-8 px-2 flex items-center justify-center gap-1 rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800 disabled:opacity-30 disabled:pointer-events-none"
             >
+              <span className="hidden lg:inline text-xs font-semibold">Next</span>
               <ChevronRight size={17} />
             </button>
             <button
@@ -322,6 +327,7 @@ export default function LessonReader({
               icon={<CheckCircle2 size={14} />}
               onClick={handleComplete}
               disabled={detail.lesson.completed || completing}
+              className={detail.lesson.completed ? '!bg-emerald-50 !text-emerald-600 !opacity-100' : ''}
             >
               {detail.lesson.completed ? 'Completed' : completing ? 'Saving...' : 'Mark Complete'}
             </Button>

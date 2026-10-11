@@ -120,6 +120,47 @@ describe('LessonReader', () => {
     expect(onPrevious).not.toHaveBeenCalled();
   });
 
+  it('Previous/Next show the target lesson title as a tooltip, only when enabled', async () => {
+    getLesson.mockResolvedValue(detailPayload());
+    render(
+      <LessonReader
+        lessonId={10} onClose={vi.fn()}
+        hasPrevious hasNext
+        previousLessonTitle="Cell Structure" nextLessonTitle="Cellular Respiration"
+      />
+    );
+    await waitFor(() => expect(screen.getByText('Plants make food.')).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: 'Previous lesson' })).toHaveAttribute('title', 'Cell Structure');
+    expect(screen.getByRole('button', { name: 'Next lesson' })).toHaveAttribute('title', 'Cellular Respiration');
+  });
+
+  it('Previous/Next have no tooltip when disabled, even if a title is passed', async () => {
+    getLesson.mockResolvedValue(detailPayload());
+    render(
+      <LessonReader
+        lessonId={10} onClose={vi.fn()}
+        hasPrevious={false} hasNext={false}
+        previousLessonTitle="Cell Structure" nextLessonTitle="Cellular Respiration"
+      />
+    );
+    await waitFor(() => expect(screen.getByText('Plants make food.')).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: 'Previous lesson' })).not.toHaveAttribute('title');
+    expect(screen.getByRole('button', { name: 'Next lesson' })).not.toHaveAttribute('title');
+  });
+
+  it('the Completed button is still disabled but not faint — full-opacity readable colors', async () => {
+    getLesson.mockResolvedValue(detailPayload({ lesson: { ...detailPayload().lesson, completed: true } }));
+    render(<LessonReader lessonId={10} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument());
+
+    const completedButton = screen.getByRole('button', { name: 'Completed' });
+    expect(completedButton).toBeDisabled();
+    expect(completedButton.className).toMatch(/!opacity-100/);
+    expect(completedButton.className).toMatch(/!text-emerald-600/);
+  });
+
   it('switching to a different lessonId (Previous/Next) refetches and clears stale content', async () => {
     getLesson.mockResolvedValueOnce(detailPayload({ lesson: { ...detailPayload().lesson, title: 'Lesson A' } }));
     const { rerender } = render(<LessonReader lessonId={10} onClose={vi.fn()} />);

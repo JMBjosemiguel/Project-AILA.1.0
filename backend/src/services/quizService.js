@@ -753,9 +753,9 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
     existingKeys,
   });
 
-  const total = await quizModel.appendQuizQuestions(state.id, items);
+  const { total, saved } = await quizModel.appendQuizQuestions(state.id, items);
 
-  return { quizId: state.id, added: items.length, total, target: state.target };
+  return { quizId: state.id, added: saved, total, target: state.target };
 }
 
 async function finishQuizGeneration({ userId, quizId }) {

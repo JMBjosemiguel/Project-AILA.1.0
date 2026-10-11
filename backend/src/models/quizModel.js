@@ -106,24 +106,40 @@ async function getQuestionStemsForQuiz(quizId) {
 // transactions racing to append can never compute the same order_index —
 // the second one's lock acquisition blocks until the first commits, then it
 // re-reads MAX(order_index) and sees the first batch's rows.
+//
+// The lock is also what makes "never past target" actually hold under
+// concurrency: appendQuizBatch's own remaining/countToRequest estimate is
+// read BEFORE this lock, so several concurrent calls can each see the same
+// stale "remaining" and each generate a full batch — e.g. a 50-item quiz
+// (4 batches of 15/15/15/5) where all 4 happen to be in flight at once would
+// each think a full 15 is safe, saving 60 instead of 50. The target is
+// re-read fresh here, inside the lock, and items are clamped to whatever
+// room is ACTUALLY left at the moment of the write — the one point where
+// every concurrent caller is serialized and reality can't move out from
+// under the check.
 async function appendQuizQuestions(quizId, items) {
   return transaction(async (connection) => {
-    await execute(connection, 'SELECT id FROM quizzes WHERE id = ? FOR UPDATE', [quizId]);
+    const [quizRow] = await execute(connection, 'SELECT item_count FROM quizzes WHERE id = ? FOR UPDATE', [quizId]);
+    if (!quizRow) return { total: 0, saved: 0 };
+    const target = Number(quizRow.item_count);
 
-    if (items.length) {
-      const [{ nextIndex }] = await execute(
-        connection,
-        'SELECT COALESCE(MAX(order_index), -1) + 1 AS nextIndex FROM quiz_questions WHERE quiz_id = ?',
-        [quizId]
-      );
-      const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
-      const params = items.flatMap((item, index) => [
+    const [{ nextIndex }] = await execute(
+      connection,
+      'SELECT COALESCE(MAX(order_index), -1) + 1 AS nextIndex FROM quiz_questions WHERE quiz_id = ?',
+      [quizId]
+    );
+    const actualSoFar = Number(nextIndex);
+    const clamped = items.slice(0, Math.max(0, target - actualSoFar));
+
+    if (clamped.length) {
+      const placeholders = clamped.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      const params = clamped.flatMap((item, index) => [
         quizId,
         item.question,
         item.options?.length ? JSON.stringify(item.options) : null,
         item.correctAnswer,
         item.explanation || null,
-        Number(nextIndex) + index,
+        actualSoFar + index,
       ]);
       await execute(
         connection,
@@ -133,7 +149,7 @@ async function appendQuizQuestions(quizId, items) {
     }
 
     const [{ total }] = await execute(connection, 'SELECT COUNT(*) AS total FROM quiz_questions WHERE quiz_id = ?', [quizId]);
-    return Number(total);
+    return { total: Number(total), saved: clamped.length };
   });
 }
 

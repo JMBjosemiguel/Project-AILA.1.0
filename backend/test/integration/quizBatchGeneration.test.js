@@ -337,4 +337,37 @@ test('batched quiz generation', async (t) => {
     assert.equal(after.itemCount, 45);
     void itemCount;
   });
+
+  await t.test('NEVER PAST TARGET UNDER CONCURRENCY: a target not evenly divisible by the batch size is never overshot', async () => {
+    // Regression test for a real bug caught by live verification: with a
+    // 50-item target (batches of 15/15/15/5), every concurrent appendQuizBatch
+    // call read "remaining" from a snapshot taken BEFORE any sibling batch's
+    // rows were committed, so all 4 independently thought a full 15 was safe
+    // and together saved 60. appendQuizQuestions now re-checks the target
+    // fresh inside its row lock and clamps there, which is the only point
+    // where concurrent callers are actually serialized against reality.
+    const counter = { n: 0 };
+    responder = uniqueItemsResponder(counter);
+
+    const started = await quizService.startBatchedQuizGeneration({
+      userId: A.id, topic: `${TAG} overshoot`, quizType: 'multiple_choice', itemCount: 50, difficulty: 'medium',
+    });
+    assert.equal(started.subtopics.length, 4, 'ceil(50/15) = 4 batches (15/15/15/5)');
+
+    const results = await Promise.all(started.subtopics.map((subtopic) => (
+      quizService.appendQuizBatch({ userId: A.id, quizId: started.quizId, subtopic, requestedCount: 15 })
+    )));
+    const totalAdded = results.reduce((sum, r) => sum + r.added, 0);
+    assert.equal(totalAdded, 50, 'exactly the target is saved, never 60, regardless of how the 4 concurrent calls interleaved');
+    results.forEach((r) => assert.ok(r.added <= 15 && r.added >= 0));
+
+    const { actual } = await quizRowCounts(started.quizId);
+    assert.equal(actual, 50);
+
+    const rows = await db.query('SELECT order_index FROM quiz_questions WHERE quiz_id = ? ORDER BY order_index', [started.quizId]);
+    assert.deepEqual(rows.map((r) => r.order_index), Array.from({ length: 50 }, (_, i) => i));
+
+    const finished = await quizService.finishQuizGeneration({ userId: A.id, quizId: started.quizId });
+    assert.equal(finished.actual, 50);
+  });
 });

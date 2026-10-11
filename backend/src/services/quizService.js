@@ -142,10 +142,22 @@ const FLASHCARDS_SCHEMA = {
 // to a student. Gemini's responseSchema constrains the shape but not the
 // content — this is the actual guarantee against malformed, empty, answer-
 // less, or duplicated items reaching the frontend.
-function validateAndCleanQuizItems(items, quizType) {
+// Same normalization used to detect a duplicate/reworded question both
+// within one Gemini response AND, for batched generation, across every batch
+// already saved for a quiz (see questionDedupeKeysForQuiz in the batched
+// generation section below).
+function questionDedupeKey(question) {
+  return question.toLowerCase().replace(/\s+/g, ' ');
+}
+
+// `existingKeys` (already-saved question stems, see questionDedupeKey) lets a
+// batch's items be deduped against every question already persisted for the
+// quiz, not just against each other — the within-one-response dedup this
+// already did is the `existingKeys = []` default case, unchanged.
+function validateAndCleanQuizItems(items, quizType, existingKeys = []) {
   if (!Array.isArray(items)) return [];
 
-  const seenQuestions = new Set();
+  const seenQuestions = new Set(existingKeys);
   const cleaned = [];
 
   for (const item of items) {
@@ -156,7 +168,7 @@ function validateAndCleanQuizItems(items, quizType) {
     const explanation = typeof item.explanation === 'string' ? item.explanation.trim() : '';
     if (!question || !correctAnswer || !explanation) continue;
 
-    const dedupeKey = question.toLowerCase().replace(/\s+/g, ' ');
+    const dedupeKey = questionDedupeKey(question);
     if (seenQuestions.has(dedupeKey)) continue;
 
     let options = Array.isArray(item.options)
@@ -189,15 +201,15 @@ const DIFFICULTY_LABELS = {
   hard: 'advanced, challenging',
 };
 
+const QUIZ_TYPE_INSTRUCTIONS = {
+  multiple_choice: 'Each item must have exactly 4 plausible "options", and "correctAnswer" must exactly match one of the options.',
+  true_false: 'Each item must have "options": ["True", "False"], and "correctAnswer" must be exactly "True" or "False".',
+  identification: 'Each item must omit "options" (or leave it empty) and "correctAnswer" must be the short expected term or phrase.',
+};
+
 async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium', sourceText = null, personalizationText = '' }) {
   const typeLabel = QUIZ_TYPE_LABELS[quizType] || QUIZ_TYPE_LABELS.multiple_choice;
   const difficultyLabel = DIFFICULTY_LABELS[difficulty] || DIFFICULTY_LABELS.medium;
-
-  const instructions = {
-    multiple_choice: 'Each item must have exactly 4 plausible "options", and "correctAnswer" must exactly match one of the options.',
-    true_false: 'Each item must have "options": ["True", "False"], and "correctAnswer" must be exactly "True" or "False".',
-    identification: 'Each item must omit "options" (or leave it empty) and "correctAnswer" must be the short expected term or phrase.',
-  };
 
   const systemInstruction = personalizationText
     ? `${QUIZ_SYSTEM_RULES}\n\n${personalizationText}`
@@ -208,7 +220,7 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
       ? `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz based ONLY on the following document content. Base every question on facts actually present in the document.`
       : `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz for a college student on the topic below.`,
     personalizationService.delimitStudentText('topic', topic),
-    instructions[quizType] || instructions.multiple_choice,
+    QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
     'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
     'Do not include any text outside the JSON object.',
     sourceText ? `\n\nDocument content:\n${truncateForAi(sourceText, 10000)}` : '',
@@ -502,6 +514,263 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
   return formatQuizForTake(quiz);
 }
 
+// --- Batched generation (practice quizzes above SINGLE_CALL_MAX_ITEMS) -----
+//
+// Counts up to SINGLE_CALL_MAX_ITEMS keep using generateAndSaveQuiz above,
+// unchanged. Above that, up to BATCHED_MAX_ITEMS total: a "start" call plans
+// the quiz and creates an (empty) quiz row, then up to BATCH_MAX_ITEMS items
+// at a time are generated and appended per "batch" call — the frontend may
+// run a few of these concurrently, which is why appendQuizQuestions takes a
+// row lock rather than trusting the caller to serialize itself. No schema
+// change: the same quizzes/quiz_questions tables, just populated over several
+// requests instead of one.
+const BATCH_MAX_ITEMS = 15;
+const SINGLE_CALL_MAX_ITEMS = 20;
+const BATCHED_MAX_ITEMS = 150;
+// Mathematical minimum at 150/15 is 10 calls; this leaves headroom for a few
+// short batches (dedup-driven top-ups count as part of the SAME call, not an
+// extra one) without letting a runaway client hammer the endpoint forever.
+const MAX_BATCH_CALLS_PER_QUIZ = 20;
+
+// Process-local, best-effort only (see topicGroupingService's cache comment
+// for the same tradeoff) — a server restart resets every quiz's count to 0,
+// which only makes the cap MORE permissive after a restart, never less safe.
+const batchCallCounts = new Map();
+function claimBatchCall(quizId) {
+  const count = batchCallCounts.get(quizId) || 0;
+  if (count >= MAX_BATCH_CALLS_PER_QUIZ) return false;
+  batchCallCounts.set(quizId, count + 1);
+  return true;
+}
+
+const PLAN_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    subtopics: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['subtopics'],
+};
+
+// One subtopic per batch the generation will need, so each batch's Gemini
+// call is scoped to a slice of the topic instead of all of them independently
+// rolling the dice on the same broad prompt — the main defense against
+// cross-batch duplicate questions (the per-batch dedup pass is the backstop).
+// Never blocks generation: a failed/short plan call falls back to the raw
+// topic repeated for every batch, which still works, just without the extra
+// variety a good plan adds.
+async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, personalizationText }) {
+  const fallback = Array.from({ length: numBatches }, () => topic);
+  if (numBatches <= 1) return fallback;
+
+  const systemInstruction = personalizationText ? `${QUIZ_SYSTEM_RULES}\n\n${personalizationText}` : QUIZ_SYSTEM_RULES;
+  const prompt = [
+    `This quiz topic will be split into ${numBatches} batches of questions, generated separately. List exactly ${numBatches} distinct subtopics or angles of the topic below, one per batch, so each batch can focus on something different and the whole quiz ends up well-rounded instead of repetitive.`,
+    personalizationService.delimitStudentText('topic', topic),
+    'Keep each subtopic short (3-8 words). Respond with JSON only, matching the schema.',
+  ].join('\n');
+
+  try {
+    const payload = await callGemini({
+      systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 200 + numBatches * 20,
+        reasoningLevel: 'low',
+        responseMimeType: 'application/json',
+        responseSchema: PLAN_SCHEMA,
+      },
+      timeoutMs: Math.min(GEMINI_TIMEOUT_MS, 10000),
+    });
+    const { parsed, finishReason, usage } = readGeminiJson(payload);
+    const subtopics = Array.isArray(parsed?.subtopics)
+      ? parsed.subtopics.map((s) => String(s).trim()).filter(Boolean).slice(0, numBatches)
+      : [];
+    if (!subtopics.length) {
+      logTruncatedGeneration('quiz-subtopic-plan', finishReason, usage);
+      return fallback;
+    }
+    // Pad with the raw topic if Gemini returned fewer than asked for.
+    while (subtopics.length < numBatches) subtopics.push(topic);
+    return subtopics;
+  } catch (error) {
+    console.error(`[quizService] subtopic plan failed, falling back to the raw topic: ${error.message}`);
+    return fallback;
+  }
+}
+
+// Generates up to `count` validated, deduped items for one batch/subtopic,
+// with one top-up call if dedup/validation leaves it short — same
+// deadline/retry shape as generateQuiz, just parameterized per-batch.
+async function generateBatchItems({ topic, subtopic, quizType, difficulty, count, personalizationText, existingKeys }) {
+  const typeLabel = QUIZ_TYPE_LABELS[quizType] || QUIZ_TYPE_LABELS.multiple_choice;
+  const difficultyLabel = DIFFICULTY_LABELS[difficulty] || DIFFICULTY_LABELS.medium;
+  const systemInstruction = personalizationText ? `${QUIZ_SYSTEM_RULES}\n\n${personalizationText}` : QUIZ_SYSTEM_RULES;
+
+  function buildPrompt(targetCount, avoidKeys) {
+    return [
+      `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of "${topic}":`,
+      personalizationService.delimitStudentText('quiz_subtopic', subtopic),
+      QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
+      'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
+      avoidKeys.length
+        ? personalizationService.delimitStudentText('quiz_already_used_questions', avoidKeys.slice(0, 150).join(' | '))
+        : '',
+      avoidKeys.length ? 'Do not repeat or closely reword any question listed above as already used.' : '',
+      'Do not include any text outside the JSON object.',
+    ].filter(Boolean).join('\n');
+  }
+
+  const deadline = Date.now() + GEMINI_TIMEOUT_MS;
+
+  async function attempt(targetCount, avoidKeys) {
+    const payload = await callGemini({
+      systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: buildPrompt(targetCount, avoidKeys) }] }],
+      generationConfig: {
+        maxOutputTokens: quizOutputBudget(targetCount),
+        reasoningLevel: 'low',
+        responseMimeType: 'application/json',
+        responseSchema: QUIZ_SCHEMA,
+      },
+      timeoutMs: Math.max(1000, deadline - Date.now()),
+    });
+    const { parsed, finishReason, usage } = readGeminiJson(payload);
+    if (!parsed) {
+      logTruncatedGeneration('quiz-batch', finishReason, usage);
+      return [];
+    }
+    return validateAndCleanQuizItems(parsed.items, quizType, avoidKeys);
+  }
+
+  const usedKeys = [...existingKeys];
+  let items = await attempt(count, usedKeys);
+  items.forEach((item) => usedKeys.push(questionDedupeKey(item.question)));
+
+  // One retry on a truncated/empty FIRST attempt, same as generateQuiz.
+  if (!items.length && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
+    const retryItems = await attempt(count, usedKeys);
+    retryItems.forEach((item) => usedKeys.push(questionDedupeKey(item.question)));
+    items = items.concat(retryItems);
+  }
+
+  // One top-up call for whatever's still short (dedup against everything
+  // gathered so far, including this batch's own items) — never more than one,
+  // per the task's "do one top-up" scope.
+  if (items.length < count && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
+    const shortfall = count - items.length;
+    const topUp = await attempt(shortfall, usedKeys);
+    items = items.concat(topUp);
+  }
+
+  return items.slice(0, count);
+}
+
+async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, difficulty = 'medium', sourceType, sourceId }) {
+  const target = Math.max(1, Math.min(BATCHED_MAX_ITEMS, Math.trunc(Number(itemCount) || 0)));
+  const numBatches = Math.ceil(target / BATCH_MAX_ITEMS);
+
+  let context = null;
+  try {
+    const subjectId = await quizModel.getSubjectIdForSource(sourceType, sourceId).catch(() => null);
+    context = await personalizationService.buildPersonalizationContext(userId, {
+      subjectId, requestedDifficulty: difficulty, generationType: 'quiz',
+    });
+  } catch {
+    context = null;
+  }
+  const personalizationText = personalizationService.formatPersonalizationPrompt(context);
+
+  const subtopics = await buildSubtopicPlan({ topic, quizType, difficulty, numBatches, personalizationText });
+
+  const quizId = await quizModel.createQuizShell({
+    userId,
+    topic,
+    quizType,
+    difficulty,
+    sourceType,
+    sourceId,
+    targetCount: target,
+    personalizationContext: personalizationService.snapshotJson(context),
+  });
+
+  return {
+    quizId,
+    target,
+    batchSize: BATCH_MAX_ITEMS,
+    subtopics,
+  };
+}
+
+// Validates + sanitizes the client-echoed subtopic plan slice for one batch.
+// It is round-tripped data (see startBatchedQuizGeneration's response), never
+// trusted as instructions — delimitStudentText wraps it in a tagged block
+// when it reaches the prompt, exactly like any other student-influenced text
+// already going into these prompts.
+function sanitizeSubtopic(value, fallbackTopic) {
+  const text = typeof value === 'string' ? value.trim().slice(0, 200) : '';
+  return text || fallbackTopic;
+}
+
+async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
+  const state = await quizModel.getQuizGenerationState(Number(quizId), userId);
+  if (!state || !state.isOwner) {
+    // Opaque 404 — same ownership convention as the rest of this file (never
+    // reveal whether a quiz id exists for someone who doesn't own it).
+    throw new ApiError(404, 'Quiz not found.');
+  }
+  if (state.hasAttempt) {
+    throw new ApiError(409, 'This quiz has already been started and can no longer be extended.');
+  }
+  if (state.actual >= state.target) {
+    throw new ApiError(409, 'This quiz already has its full set of questions.');
+  }
+  if (!claimBatchCall(state.id)) {
+    throw new ApiError(429, 'Too many generation requests for this quiz. Please finish or start a new one.');
+  }
+
+  const remaining = state.target - state.actual;
+  const countToRequest = Math.min(BATCH_MAX_ITEMS, remaining, Math.max(1, Math.trunc(Number(requestedCount) || BATCH_MAX_ITEMS)));
+
+  let context = null;
+  try {
+    context = await personalizationService.buildPersonalizationContext(userId, {
+      requestedDifficulty: state.difficulty, generationType: 'quiz',
+    });
+  } catch {
+    context = null;
+  }
+
+  const existingStems = await quizModel.getQuestionStemsForQuiz(state.id);
+  const existingKeys = existingStems.map(questionDedupeKey);
+
+  const items = await generateBatchItems({
+    topic: state.topic,
+    subtopic: sanitizeSubtopic(subtopic, state.topic),
+    quizType: state.quiz_type,
+    difficulty: state.difficulty,
+    count: countToRequest,
+    personalizationText: personalizationService.formatPersonalizationPrompt(context),
+    existingKeys,
+  });
+
+  const total = await quizModel.appendQuizQuestions(state.id, items);
+
+  return { quizId: state.id, added: items.length, total, target: state.target };
+}
+
+async function finishQuizGeneration({ userId, quizId }) {
+  const state = await quizModel.getQuizGenerationState(Number(quizId), userId);
+  if (!state || !state.isOwner) {
+    throw new ApiError(404, 'Quiz not found.');
+  }
+  if (state.actual === 0) {
+    throw new ApiError(409, "AILA couldn't generate any questions for this quiz. Please try again.");
+  }
+  batchCallCounts.delete(state.id);
+  const { target, actual } = await quizModel.finalizeQuizItemCount(state.id);
+  return { quizId: state.id, target, actual };
+}
+
 async function getQuizForUser(userId, quizId) {
   const quiz = await quizModel.getQuizWithQuestions(Number(quizId), userId);
   if (!quiz) {
@@ -709,6 +978,20 @@ async function startAttempt(userId, quizId) {
   const quiz = await quizModel.getQuizWithQuestions(Number(quizId), userId);
   if (!quiz) {
     throw new ApiError(404, 'Quiz not found.');
+  }
+  if (!quiz.questions.length) {
+    // Batched generation (see startBatchedQuizGeneration) creates the quiz
+    // row before any questions exist — this is the "never startable" gate
+    // for a quiz with nothing generated yet (still in progress, or abandoned
+    // before a single batch landed).
+    throw new ApiError(409, "This quiz hasn't finished generating yet. Please try again in a moment.");
+  }
+  if (Number(quiz.item_count) !== quiz.questions.length) {
+    // Self-heal: a batched generation that finished (or was abandoned
+    // partway) without an explicit "finish" call — correct item_count to
+    // reality now, the first time anything tries to use it, rather than
+    // leaving a stale target around indefinitely.
+    await quizModel.finalizeQuizItemCount(quiz.id);
   }
 
   const existing = await quizModel.findActiveAttempt(userId, quiz.id);
@@ -1050,6 +1333,12 @@ module.exports = {
   generateQuiz,
   generateFlashcards,
   generateAndSaveQuiz,
+  startBatchedQuizGeneration,
+  appendQuizBatch,
+  finishQuizGeneration,
+  SINGLE_CALL_MAX_ITEMS,
+  BATCHED_MAX_ITEMS,
+  BATCH_MAX_ITEMS,
   getQuizForUser,
   saveQuizFromChatMessage,
   createAndSaveAssessment,
@@ -1074,4 +1363,7 @@ module.exports = {
   // exposed for unit tests only — not part of the intended public surface
   quizOutputBudget,
   readGeminiJson,
+  questionDedupeKey,
+  buildSubtopicPlan,
+  MAX_BATCH_CALLS_PER_QUIZ,
 };

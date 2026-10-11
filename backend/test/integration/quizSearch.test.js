@@ -24,9 +24,16 @@ test('quiz search — ownership and privacy', async (t) => {
   });
 
   await t.test("finds the authenticated user's own quiz by topic, case-insensitively", async () => {
-    await db.query(
+    const quiz = await db.query(
       "INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, item_count) VALUES (?, ?, 'multiple_choice', 'medium', 1)",
       [A.id, `${TAG} Cell Biology Quiz`]
+    );
+    // A real quiz always has its question(s) saved atomically with the quiz
+    // row — only a batched generation still in progress can have item_count
+    // without matching quiz_questions, and search deliberately excludes that.
+    await db.query(
+      "INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation, order_index) VALUES (?, 'Q?', ?, 'a', 'x', 0)",
+      [quiz.insertId, JSON.stringify(['a', 'b', 'c', 'd'])]
     );
 
     const res = await api('GET', searchUrl('cell BIOLOGY'), { token: A.token });

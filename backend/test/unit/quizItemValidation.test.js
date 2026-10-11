@@ -86,4 +86,20 @@ test('validateAndCleanQuizItems', async (t) => {
     assert.equal(items.length, 1);
     assert.equal(items[0].correctAnswer, '8');
   });
+
+  await t.test('existingKeys (cross-batch dedupe): drops items matching a stem already saved in an earlier batch', () => {
+    const existingKeys = ['what is 2+2?', 'some other already-saved question?'];
+    const items = validateAndCleanQuizItems([goodMc], 'multiple_choice', existingKeys);
+    assert.equal(items.length, 0, 'matches an existing key case/whitespace-insensitively, same as within-batch dedupe');
+  });
+
+  await t.test('existingKeys: items not matching any existing key are kept', () => {
+    const items = validateAndCleanQuizItems([goodMc], 'multiple_choice', ['an unrelated question?']);
+    assert.equal(items.length, 1);
+  });
+
+  await t.test('existingKeys defaults to [] — behavior is unchanged for both pre-existing call sites', () => {
+    const items = validateAndCleanQuizItems([goodMc], 'multiple_choice');
+    assert.equal(items.length, 1);
+  });
 });

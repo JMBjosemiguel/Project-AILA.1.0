@@ -2,9 +2,11 @@ const express = require('express');
 const quizController = require('../controllers/quizController');
 const { authenticate } = require('../middlewares/authenticate');
 const { validateRequest } = require('../middlewares/validateRequest');
-const { aiRateLimiter } = require('../middlewares/aiRateLimiter');
+const { aiRateLimiter, quizBatchRateLimiter } = require('../middlewares/aiRateLimiter');
 const {
   generateValidator,
+  batchStartValidator,
+  batchAppendValidator,
   quizIdParamValidator,
   attemptIdParamValidator,
   submitAttemptValidator,
@@ -16,6 +18,11 @@ const {
 const router = express.Router();
 
 router.post('/generate', authenticate, aiRateLimiter, generateValidator, validateRequest, quizController.generate);
+// Batched generation (practice quizzes above the single-request item count).
+// Registered ahead of the /:quizId catch-all routes below.
+router.post('/generate/batch-start', authenticate, aiRateLimiter, batchStartValidator, validateRequest, quizController.startBatchGeneration);
+router.post('/:quizId/generate/batch', authenticate, quizBatchRateLimiter, quizIdParamValidator, batchAppendValidator, validateRequest, quizController.appendBatch);
+router.post('/:quizId/generate/finish', authenticate, quizIdParamValidator, validateRequest, quizController.finishBatchGeneration);
 // Persist an informal chatbot mini-quiz as the student's own practice quiz. No
 // AI call, no aiRateLimiter — it copies already-generated questions.
 router.post('/from-chat-message/:messageId', authenticate, chatMessageIdParamValidator, validateRequest, quizController.saveFromChatMessage);

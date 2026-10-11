@@ -18,6 +18,28 @@ const generate = asyncHandler(async (req, res) => {
   sendSuccess(res, quiz, 201, 'Quiz generated.');
 });
 
+// Batched generation — practice quizzes above the single-request item count.
+const startBatchGeneration = asyncHandler(async (req, res) => {
+  const { topic, quizType = 'multiple_choice', itemCount, difficulty = 'medium', sourceType, sourceId } = req.body;
+  const result = await quizService.startBatchedQuizGeneration({
+    userId: req.auth.user.id, topic, quizType, itemCount, difficulty, sourceType, sourceId,
+  });
+  sendSuccess(res, result, 201, 'Quiz generation started.');
+});
+
+const appendBatch = asyncHandler(async (req, res) => {
+  const { subtopic, requestedCount } = req.body;
+  const result = await quizService.appendQuizBatch({
+    userId: req.auth.user.id, quizId: req.params.quizId, subtopic, requestedCount,
+  });
+  sendSuccess(res, result, 200, 'Batch added.');
+});
+
+const finishBatchGeneration = asyncHandler(async (req, res) => {
+  const result = await quizService.finishQuizGeneration({ userId: req.auth.user.id, quizId: req.params.quizId });
+  sendSuccess(res, result, 200, 'Quiz generation finished.');
+});
+
 const getQuiz = asyncHandler(async (req, res) => {
   const quiz = await quizService.getQuizForUser(req.auth.user.id, req.params.quizId);
   sendSuccess(res, quiz, 200, 'Quiz retrieved.');
@@ -88,6 +110,9 @@ const deleteAttempt = asyncHandler(async (req, res) => {
 
 module.exports = {
   generate,
+  startBatchGeneration,
+  appendBatch,
+  finishBatchGeneration,
   getQuiz,
   saveFromChatMessage,
   startAttempt,

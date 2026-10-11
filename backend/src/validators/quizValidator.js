@@ -9,6 +9,23 @@ const generateValidator = [
   body('sourceId').optional({ values: 'null' }).isInt({ min: 1 }),
 ];
 
+// Batched generation only (practice quizzes above the single-request item
+// count) — checkpoints, finals, and chat-requested quizzes are untouched and
+// keep their own existing ceilings.
+const batchStartValidator = [
+  body('topic').trim().notEmpty().withMessage('Please provide a topic.').isLength({ max: 200 }),
+  body('quizType').optional().trim().isIn(['multiple_choice', 'true_false', 'identification']),
+  body('itemCount').isInt({ min: 1, max: 150 }).withMessage('itemCount must be between 1 and 150.'),
+  body('difficulty').optional().trim().isIn(['easy', 'medium', 'hard']),
+  body('sourceType').optional().trim().isIn(['chat', 'lesson', 'topic', 'resource', 'manual']),
+  body('sourceId').optional({ values: 'null' }).isInt({ min: 1 }),
+];
+
+const batchAppendValidator = [
+  body('subtopic').optional({ values: 'null' }).isString().isLength({ max: 200 }),
+  body('requestedCount').optional().isInt({ min: 1, max: 15 }),
+];
+
 const quizIdParamValidator = [
   param('quizId').isInt({ min: 1 }).withMessage('Invalid quiz id.'),
 ];
@@ -42,6 +59,8 @@ const saveAnswerValidator = [
 
 module.exports = {
   generateValidator,
+  batchStartValidator,
+  batchAppendValidator,
   quizIdParamValidator,
   attemptIdParamValidator,
   chatMessageIdParamValidator,

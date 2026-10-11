@@ -25,23 +25,39 @@ async function listSubjects(userId) {
   return learningModel.listSubjectsForUser(userId);
 }
 
-async function generateCourse(userId, { courseName, difficulty, goal }) {
+async function generateCourse(userId, { courseName, difficulty, goal, purpose, length, focus }) {
+  const resolvedDifficulty = difficulty || 'beginner';
+  // Goal is now optional (was required) — mysql2 rejects `undefined` bind
+  // params outright (must be SQL NULL), so this must be coerced before it
+  // ever reaches a query, not left as whatever the request did or didn't send.
+  const resolvedGoal = goal || null;
+  // Explicitly chosen even at its default value (unlike legacy courses, which
+  // have no courseOptions at all) — see courseGenerationService for why that
+  // distinction matters for "existing courses generate exactly as before".
+  const courseOptions = {
+    purpose: purpose || 'from_scratch',
+    length: length || 'standard',
+    focus: Array.isArray(focus) ? [...new Set(focus)] : [],
+  };
+
   // The course does not exist yet, so performance signals are global (not
   // subject-scoped). Context building is best-effort — a failure here must not
   // block course generation.
   let context = null;
   try {
     context = await personalizationService.buildPersonalizationContext(userId, {
-      requestedDifficulty: difficulty,
+      requestedDifficulty: resolvedDifficulty,
       generationType: 'course',
-      knownSubject: { name: courseName, goal },
+      knownSubject: { name: courseName, goal: resolvedGoal },
     });
   } catch (error) {
     console.error(`[learningService] personalization context failed for user ${userId} (course generation): ${error.message}`);
     context = null;
   }
 
-  const subjectId = await courseGenerationService.generateRoadmap({ userId, courseName, difficulty, goal, context });
+  const subjectId = await courseGenerationService.generateRoadmap({
+    userId, courseName, difficulty: resolvedDifficulty, goal: resolvedGoal, context, courseOptions,
+  });
   return { subjectId, personalizationLevel: context?.personalizationLevel ?? 'basic' };
 }
 
@@ -64,6 +80,13 @@ async function getLesson(userId, lessonId) {
       context = null; // optional context failed — generate generically
     }
 
+    // The SAME course options chosen in "Add a course" (purpose/focus — length
+    // doesn't apply to a single lesson) shape every later lesson for that
+    // course, not just the initial roadmap. Absent for courses generated
+    // before this feature existed, which is exactly what keeps them
+    // generating identically to before.
+    const courseOptions = learningModel.parseCourseOptions(detail.subject.personalization_context);
+
     try {
       detail.lesson.content = await courseGenerationService.generateLessonContent({
         id: detail.lesson.id,
@@ -73,7 +96,7 @@ async function getLesson(userId, lessonId) {
         module_title: detail.module.title,
         subject_name: detail.subject.name,
         goal: detail.subject.goal,
-      }, context);
+      }, context, courseOptions);
       detail.lesson.personalizationLevel = context?.personalizationLevel ?? null;
     } catch (error) {
       // AI is unavailable right now — return the lesson shell so the page can
@@ -88,6 +111,7 @@ async function getLesson(userId, lessonId) {
   }
 
   delete detail.lesson.personalization_context; // never expose the raw snapshot to the client
+  delete detail.subject.personalization_context;
   return detail;
 }
 

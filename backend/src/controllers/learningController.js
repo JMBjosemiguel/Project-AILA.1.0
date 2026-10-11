@@ -8,8 +8,8 @@ const listSubjects = asyncHandler(async (req, res) => {
 });
 
 const generateCourse = asyncHandler(async (req, res) => {
-  const { courseName, difficulty, goal } = req.body;
-  const result = await learningService.generateCourse(req.auth.user.id, { courseName, difficulty, goal });
+  const { courseName, difficulty, goal, purpose, length, focus } = req.body;
+  const result = await learningService.generateCourse(req.auth.user.id, { courseName, difficulty, goal, purpose, length, focus });
   sendSuccess(res, result, 201, 'Course generated.');
 });
 

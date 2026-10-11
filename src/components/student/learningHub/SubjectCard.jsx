@@ -6,6 +6,7 @@ import ShareDialog from '../../common/ShareDialog';
 import { domainColor, domainTint } from '../../common/DomainChip';
 import ProgressBar from '../../common/ProgressBar';
 import CourseAssessments from './CourseAssessments';
+import { COURSE_PURPOSE_LABELS } from '../../../constants/ui';
 
 const DIFFICULTY_STYLE = {
   beginner: 'bg-emerald-50 text-emerald-600',
@@ -113,6 +114,11 @@ export default function SubjectCard({ subject, onSelectLesson, onDelete, onLaunc
         {subject.difficulty && (
           <span className={`text-[0.65rem] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full capitalize ${DIFFICULTY_STYLE[subject.difficulty] || 'bg-ink-50 text-ink-500'}`}>
             {subject.difficulty}
+          </span>
+        )}
+        {subject.purpose && COURSE_PURPOSE_LABELS[subject.purpose] && (
+          <span className="text-[0.65rem] font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary">
+            {COURSE_PURPOSE_LABELS[subject.purpose]}
           </span>
         )}
         <span className="text-[0.65rem] font-medium text-ink-400">{moduleCount} module{moduleCount !== 1 ? 's' : ''}</span>

@@ -2,7 +2,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { readRoadmapAttempt, readLessonAttempt, ROADMAP_MAX_OUTPUT_TOKENS, LESSON_MAX_OUTPUT_TOKENS } = require('../../src/services/courseGenerationService');
+const {
+  readRoadmapAttempt, readLessonAttempt, ROADMAP_MAX_OUTPUT_TOKENS, LESSON_MAX_OUTPUT_TOKENS,
+  courseOptionsRules, buildStoredSubjectContext, roadmapOutputBudget,
+} = require('../../src/services/courseGenerationService');
 
 function geminiPayload({ finishReason = 'STOP', text = '', usage = {} } = {}) {
   return {
@@ -85,5 +88,84 @@ test('readLessonAttempt', async (t) => {
 
   await t.test('no candidates never throws', () => {
     assert.equal(readLessonAttempt({ candidates: [] }), '');
+  });
+});
+
+test('courseOptionsRules', async (t) => {
+  await t.test('null/undefined courseOptions produces no rules at all — existing courses are unaffected', () => {
+    assert.equal(courseOptionsRules(null), '');
+    assert.equal(courseOptionsRules(undefined), '');
+    assert.equal(courseOptionsRules(null, { includeLength: true }), '');
+  });
+
+  await t.test('a known purpose adds its specific guidance', () => {
+    const rules = courseOptionsRules({ purpose: 'board_exam', length: 'standard', focus: [] });
+    assert.match(rules, /board.exam/i);
+    assert.match(rules, /NLE/);
+  });
+
+  await t.test('length is only included for the roadmap (includeLength: true), and only when non-standard', () => {
+    const forLesson = courseOptionsRules({ purpose: 'from_scratch', length: 'in_depth', focus: [] });
+    assert.doesNotMatch(forLesson, /5-6 modules/);
+
+    const standardRoadmap = courseOptionsRules({ purpose: 'from_scratch', length: 'standard', focus: [] }, { includeLength: true });
+    assert.doesNotMatch(standardRoadmap, /modules total/, 'standard keeps the base "2-4 modules" rule untouched — no override line');
+
+    const shortRoadmap = courseOptionsRules({ purpose: 'from_scratch', length: 'short', focus: [] }, { includeLength: true });
+    assert.match(shortRoadmap, /2-3 modules total/);
+
+    const inDepthRoadmap = courseOptionsRules({ purpose: 'from_scratch', length: 'in_depth', focus: [] }, { includeLength: true });
+    assert.match(inDepthRoadmap, /5-6 modules total/);
+  });
+
+  await t.test('focus areas are combined into one sentence, unknown keys are silently dropped', () => {
+    const rules = courseOptionsRules({ purpose: 'from_scratch', length: 'standard', focus: ['case_scenarios', 'summaries_tables', 'not_a_real_key'] });
+    assert.match(rules, /case scenarios|patient cases/i);
+    assert.match(rules, /summary tables|comparison tables/i);
+  });
+
+  await t.test('an empty focus array adds nothing', () => {
+    const withEmptyFocus = courseOptionsRules({ purpose: 'from_scratch', length: 'standard', focus: [] });
+    const withNoFocusKey = courseOptionsRules({ purpose: 'from_scratch', length: 'standard' });
+    assert.equal(withEmptyFocus, withNoFocusKey);
+  });
+});
+
+test('roadmapOutputBudget', async (t) => {
+  await t.test('an unspecified or "standard" length keeps the exact original flat budget', () => {
+    assert.equal(roadmapOutputBudget(undefined), ROADMAP_MAX_OUTPUT_TOKENS);
+    assert.equal(roadmapOutputBudget('standard'), ROADMAP_MAX_OUTPUT_TOKENS);
+  });
+
+  await t.test('in_depth gets a larger budget than standard, short gets a smaller one', () => {
+    assert.ok(roadmapOutputBudget('in_depth') > ROADMAP_MAX_OUTPUT_TOKENS);
+    assert.ok(roadmapOutputBudget('short') < ROADMAP_MAX_OUTPUT_TOKENS);
+  });
+
+  await t.test('an unknown length value falls back to the original budget, never throws', () => {
+    assert.equal(roadmapOutputBudget('nonsense'), ROADMAP_MAX_OUTPUT_TOKENS);
+  });
+});
+
+test('buildStoredSubjectContext', async (t) => {
+  await t.test('no context and no courseOptions stores null — unchanged from before this feature', () => {
+    assert.equal(buildStoredSubjectContext(null, null), null);
+  });
+
+  await t.test('courseOptions alone (no personalization context) is still stored', () => {
+    const stored = buildStoredSubjectContext(null, { purpose: 'mastery', length: 'short', focus: [] });
+    assert.deepEqual(JSON.parse(stored), { courseOptions: { purpose: 'mastery', length: 'short', focus: [] } });
+  });
+
+  await t.test('courseOptions and a personalization context merge into one object, never overwriting each other', () => {
+    const context = {
+      generationType: 'course', personalizationLevel: 'basic',
+      profile: { program: 'BS Nursing', yearLevel: 2 },
+      preferences: {}, course: {}, performance: { weakTopics: [], strongerTopics: [] }, engagement: {},
+    };
+    const stored = buildStoredSubjectContext(context, { purpose: 'board_exam', length: 'standard', focus: ['case_scenarios'] });
+    const parsed = JSON.parse(stored);
+    assert.equal(parsed.program, 'BS Nursing');
+    assert.deepEqual(parsed.courseOptions, { purpose: 'board_exam', length: 'standard', focus: ['case_scenarios'] });
   });
 });

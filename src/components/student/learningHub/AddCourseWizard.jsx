@@ -1,25 +1,41 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
 import { useToast } from '../../common/Toast';
+import { COURSE_FOCUSES, COURSE_LENGTHS, COURSE_PURPOSES } from '../../../constants/ui';
 import { generateCourse } from '../../../services/api/learningService';
 
 const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
 
+function pillClass(active) {
+  return [
+    'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+    active ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+  ].join(' ');
+}
+
 export default function AddCourseWizard({ onClose, onGenerated }) {
   const [courseName, setCourseName] = useState('');
+  const [purpose, setPurpose] = useState('from_scratch');
   const [difficulty, setDifficulty] = useState('beginner');
+  const [length, setLength] = useState('standard');
+  const [focus, setFocus] = useState([]);
   const [goal, setGoal] = useState('');
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const submittingRef = useRef(false);
   const toast = useToast();
 
+  const toggleFocus = (value) => {
+    setFocus((current) => (current.includes(value) ? current.filter((v) => v !== value) : [...current, value]));
+  };
+
   const handleGenerate = async () => {
     if (submittingRef.current) return;
-    if (!courseName.trim() || !goal.trim()) {
-      setError('Please fill in the course name and your learning goal.');
+    if (!courseName.trim()) {
+      setError('Please fill in the course name.');
       return;
     }
 
@@ -27,7 +43,9 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
     setLoading(true);
     setError('');
     try {
-      const result = await generateCourse({ courseName: courseName.trim(), difficulty, goal: goal.trim() });
+      const result = await generateCourse({
+        courseName: courseName.trim(), difficulty, goal: goal.trim(), purpose, length, focus,
+      });
       toast.success(
         result.personalizationLevel === 'performance_aware'
           ? 'Course generated. AILA tuned the roadmap to your recent progress.'
@@ -82,35 +100,98 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Difficulty</span>
-                  <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Difficulty">
-                    {DIFFICULTIES.map((option) => (
+                  <span className="text-xs font-semibold text-ink-600 mb-1.5 block">What's this course for?</span>
+                  <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="What's this course for?">
+                    {COURSE_PURPOSES.map((option) => (
                       <button
-                        key={option}
-                        onClick={() => setDifficulty(option)}
+                        key={option.value}
+                        onClick={() => setPurpose(option.value)}
                         role="radio"
-                        aria-checked={difficulty === option}
-                        className={[
-                          'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
-                          difficulty === option ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
-                        ].join(' ')}
+                        aria-checked={purpose === option.value}
+                        className={pillClass(purpose === option.value)}
                       >
-                        {option}
+                        {option.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div>
-                  <label htmlFor="course-goal" className="text-xs font-semibold text-ink-600 mb-1.5 block">Learning goal</label>
-                  <input
-                    id="course-goal"
-                    value={goal}
-                    onChange={(event) => setGoal(event.target.value)}
-                    placeholder="e.g. Prepare for midterm, Understand the basics, Master the topic..."
-                    className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreOptions((current) => !current)}
+                  aria-expanded={showMoreOptions}
+                  className="self-start flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-600"
+                >
+                  {showMoreOptions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  More options
+                </button>
+
+                {showMoreOptions && (
+                  <div className="flex flex-col gap-4 -mt-1">
+                    <div>
+                      <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Difficulty</span>
+                      <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Difficulty">
+                        {DIFFICULTIES.map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => setDifficulty(option)}
+                            role="radio"
+                            aria-checked={difficulty === option}
+                            className={pillClass(difficulty === option)}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Course length</span>
+                      <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Course length">
+                        {COURSE_LENGTHS.map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={() => setLength(option.value)}
+                            role="radio"
+                            aria-checked={length === option.value}
+                            title={option.description}
+                            className={pillClass(length === option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Focus on</span>
+                      <div className="flex gap-2 flex-wrap" role="group" aria-label="Focus on">
+                        {COURSE_FOCUSES.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => toggleFocus(option.value)}
+                            aria-pressed={focus.includes(option.value)}
+                            className={pillClass(focus.includes(option.value))}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="course-goal" className="text-xs font-semibold text-ink-600 mb-1.5 block">Learning goal (optional)</label>
+                      <input
+                        id="course-goal"
+                        value={goal}
+                        onChange={(event) => setGoal(event.target.value)}
+                        placeholder="e.g. Prepare for midterm, Understand the basics, Master the topic..."
+                        className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

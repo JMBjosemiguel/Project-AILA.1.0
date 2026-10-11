@@ -4,6 +4,9 @@ const { transaction } = require('../config/database');
 const { query } = require('../config/database');
 const { notifyUser } = require('../utils/notify');
 const personalizationService = require('./personalizationService');
+const {
+  COURSE_PURPOSE_GUIDANCE, COURSE_LENGTH_ROADMAP_RULE, COURSE_FOCUS_GUIDANCE,
+} = require('../constants/courseOptions');
 
 const DIFFICULTY_TO_LESSON_DIFFICULTY = {
   beginner: 'easy',
@@ -18,6 +21,49 @@ const DIFFICULTY_TO_LESSON_DIFFICULTY = {
 // its full intended output — a roadmap's JSON or a 9-section lesson.
 const ROADMAP_MAX_OUTPUT_TOKENS = 4096;
 const LESSON_MAX_OUTPUT_TOKENS = 6144;
+
+// An in-depth roadmap (5-6 modules) produces a noticeably larger JSON
+// response than the 2-4 module default — without more headroom here, a
+// truncated response (finishReason: MAX_TOKENS) would burn a retry inside
+// the shared 60s deadline. 'standard' (and no courseOptions at all, i.e.
+// every course generated before this feature existed) keeps the exact
+// original budget.
+const ROADMAP_MAX_OUTPUT_TOKENS_BY_LENGTH = { short: 3072, standard: ROADMAP_MAX_OUTPUT_TOKENS, in_depth: 6144 };
+function roadmapOutputBudget(length) {
+  return ROADMAP_MAX_OUTPUT_TOKENS_BY_LENGTH[length] || ROADMAP_MAX_OUTPUT_TOKENS;
+}
+
+// Turns the student's "Add a course" choices (purpose always; length only
+// for the roadmap, which is the only place module/topic COUNT is decided;
+// focus) into explicit prompt rules. Returns '' when courseOptions is
+// null/undefined — exactly the case for every course generated before this
+// feature existed, so their prompts are completely unchanged.
+function courseOptionsRules(courseOptions, { includeLength = false } = {}) {
+  if (!courseOptions) return '';
+  const lines = [];
+  if (courseOptions.purpose && COURSE_PURPOSE_GUIDANCE[courseOptions.purpose]) {
+    lines.push(COURSE_PURPOSE_GUIDANCE[courseOptions.purpose]);
+  }
+  if (includeLength && courseOptions.length && COURSE_LENGTH_ROADMAP_RULE[courseOptions.length]) {
+    lines.push(COURSE_LENGTH_ROADMAP_RULE[courseOptions.length]);
+  }
+  if (Array.isArray(courseOptions.focus) && courseOptions.focus.length) {
+    const asks = courseOptions.focus.map((key) => COURSE_FOCUS_GUIDANCE[key]).filter(Boolean);
+    if (asks.length) lines.push(`Throughout, ${asks.join('; ')}.`);
+  }
+  return lines.join(' ');
+}
+
+// Merges the existing personalization snapshot with the course's chosen
+// options into ONE object stored in subjects.personalization_context — no
+// schema change, that JSON column (migration 003) already existed. `null`
+// only when there is truly nothing to store (matches the pre-existing
+// behavior for a context-less, options-less call).
+function buildStoredSubjectContext(context, courseOptions) {
+  const snapshot = personalizationService.buildContextSnapshot(context);
+  if (!snapshot && !courseOptions) return null;
+  return JSON.stringify({ ...(snapshot || {}), ...(courseOptions ? { courseOptions } : {}) });
+}
 
 // A second Gemini call (retry) shares the FIRST call's overall deadline
 // rather than getting its own fresh budget, so a request can never take two
@@ -116,11 +162,10 @@ function readRoadmapAttempt(payload) {
   return modules;
 }
 
-async function generateRoadmap({ userId, courseName, difficulty, goal, context = null }) {
+async function generateRoadmap({ userId, courseName, difficulty, goal, context = null, courseOptions = null }) {
   const personalization = personalizationService.formatPersonalizationPrompt(context);
-  const systemInstruction = personalization
-    ? `${ROADMAP_SYSTEM_RULES}\n\n${personalization}`
-    : ROADMAP_SYSTEM_RULES;
+  const optionsRules = courseOptionsRules(courseOptions, { includeLength: true });
+  const systemInstruction = [ROADMAP_SYSTEM_RULES, optionsRules, personalization].filter(Boolean).join('\n\n');
 
   const userPrompt = [
     `Generate a course roadmap at ${difficulty} level for the course named below.`,
@@ -129,7 +174,7 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
   ].filter(Boolean).join('\n\n');
 
   const generationConfig = {
-    maxOutputTokens: ROADMAP_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: roadmapOutputBudget(courseOptions?.length),
     reasoningLevel: 'medium',
     responseMimeType: 'application/json',
     responseSchema: ROADMAP_SCHEMA,
@@ -161,12 +206,12 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
   }
 
   const lessonDifficulty = DIFFICULTY_TO_LESSON_DIFFICULTY[difficulty] || 'medium';
-  const snapshot = personalizationService.snapshotJson(context);
+  const storedContext = buildStoredSubjectContext(context, courseOptions);
 
   const subjectId = await transaction(async (connection) => {
     const [subjectResult] = await connection.execute(
       'INSERT INTO subjects (created_by, name, difficulty, goal, is_ai_generated, personalization_context) VALUES (?, ?, ?, ?, 1, ?)',
-      [userId, courseName, difficulty, goal, snapshot]
+      [userId, courseName, difficulty, goal, storedContext]
     );
     const newSubjectId = subjectResult.insertId;
 
@@ -255,16 +300,17 @@ function readLessonAttempt(payload) {
 // nothing partial is ever stored.
 const lessonGenerationInFlight = new Map();
 
-async function runLessonGeneration(lesson, context) {
+async function runLessonGeneration(lesson, context, courseOptions = null) {
   const existing = await query('SELECT content FROM lessons WHERE id = ? LIMIT 1', [lesson.id]);
   if (existing[0]?.content) {
     return existing[0].content;
   }
 
   const personalization = personalizationService.formatPersonalizationPrompt(context);
-  const systemInstruction = personalization
-    ? `${LESSON_SYSTEM_RULES}\n\n${personalization}`
-    : LESSON_SYSTEM_RULES;
+  // Length doesn't apply here — it only decides the roadmap's module/topic
+  // count (generateRoadmap, includeLength: true).
+  const optionsRules = courseOptionsRules(courseOptions);
+  const systemInstruction = [LESSON_SYSTEM_RULES, optionsRules, personalization].filter(Boolean).join('\n\n');
 
   const userPrompt = [
     `Write a complete lesson titled "${lesson.title}" for the topic "${lesson.topic_title}" in the module "${lesson.module_title}" of the course "${lesson.subject_name}".`,
@@ -309,13 +355,13 @@ async function runLessonGeneration(lesson, context) {
   return stored[0]?.content || content;
 }
 
-async function generateLessonContent(lesson, context = null) {
+async function generateLessonContent(lesson, context = null, courseOptions = null) {
   const key = String(lesson.id);
   if (lessonGenerationInFlight.has(key)) {
     return lessonGenerationInFlight.get(key);
   }
 
-  const task = runLessonGeneration(lesson, context);
+  const task = runLessonGeneration(lesson, context, courseOptions);
   lessonGenerationInFlight.set(key, task);
   try {
     return await task;
@@ -330,6 +376,9 @@ module.exports = {
   // exposed for unit tests only — not part of the intended public surface
   readRoadmapAttempt,
   readLessonAttempt,
+  courseOptionsRules,
+  buildStoredSubjectContext,
+  roadmapOutputBudget,
   ROADMAP_MAX_OUTPUT_TOKENS,
   LESSON_MAX_OUTPUT_TOKENS,
 };

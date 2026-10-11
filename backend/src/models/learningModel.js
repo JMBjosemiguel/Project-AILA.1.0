@@ -1,6 +1,23 @@
 const { query, execute } = require('../config/database');
 const { colorForId } = require('../utils/palette');
 
+// subjects.personalization_context (migration 003) holds BOTH the existing
+// personalization snapshot and, for courses created with the "Add a course"
+// options, a sibling `courseOptions` key — see courseGenerationService. A
+// legacy/pre-feature row's snapshot (or a NULL column) simply has no
+// `courseOptions` key, so this returns null for it — the one signal the rest
+// of this feature uses to tell "existing course, generate exactly as before"
+// apart from "new course, apply its chosen options".
+function parseCourseOptions(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parsed?.courseOptions ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function buildSubjectTree(rows) {
   const subjects = new Map();
 
@@ -17,6 +34,9 @@ function buildSubjectTree(rows) {
         goal: row.subject_goal,
         visibility: row.subject_visibility ?? 'private',
         copied_from_subject_id: row.subject_copied_from ?? null,
+        // Just the purpose key for the course-card badge — never the raw
+        // snapshot/options object (length/focus aren't shown here).
+        purpose: parseCourseOptions(row.subject_personalization_context)?.purpose ?? null,
         color,
         tint,
         modules: new Map(),
@@ -92,6 +112,7 @@ async function listSubjectsForUser(userId) {
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
         s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
+        s.personalization_context AS subject_personalization_context,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,
         l.id AS lesson_id, l.title AS lesson_title, l.difficulty AS lesson_difficulty, l.estimated_minutes AS lesson_estimated_minutes,
@@ -118,6 +139,7 @@ async function getSubjectTreeById(subjectId, userId) {
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
         s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
+        s.personalization_context AS subject_personalization_context,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,
         l.id AS lesson_id, l.title AS lesson_title, l.difficulty AS lesson_difficulty, l.estimated_minutes AS lesson_estimated_minutes,
@@ -176,7 +198,7 @@ async function getLessonDetail(lessonId, userId) {
         l.personalization_context,
         t.title AS topic_title, t.module_id,
         m.title AS module_title, m.subject_id,
-        s.name AS subject_name, s.goal AS subject_goal,
+        s.name AS subject_name, s.goal AS subject_goal, s.personalization_context AS subject_personalization_context,
         lpr.completed_at
       FROM lessons l
       INNER JOIN topics t ON t.id = l.topic_id
@@ -244,7 +266,10 @@ async function getLessonDetail(lessonId, userId) {
     },
     topic: { id: lesson.topic_id, title: lesson.topic_title },
     module: { id: lesson.module_id, title: lesson.module_title },
-    subject: { id: lesson.subject_id, name: lesson.subject_name, goal: lesson.subject_goal },
+    subject: {
+      id: lesson.subject_id, name: lesson.subject_name, goal: lesson.subject_goal,
+      personalization_context: lesson.subject_personalization_context,
+    },
     definitions,
     examples,
     relatedResources: resources,
@@ -385,6 +410,7 @@ async function deleteSubjectCascade(subjectId, userId, connection) {
 }
 
 module.exports = {
+  parseCourseOptions,
   listSubjectsForUser,
   getSubjectTreeById,
   getLessonBasic,

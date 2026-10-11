@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Award, BarChart3, BookOpenCheck, CheckCircle2, Clock, Flame, MessageCircle, TrendingUp, Zap } from 'lucide-react';
-import BarChart from '../../../components/analytics/BarChart';
+import { Award, BarChart3, BookOpenCheck, CheckCircle2, Flame, MessageCircle, TrendingUp, Zap } from 'lucide-react';
 import DonutChart from '../../../components/analytics/DonutChart';
 import MasteryList from '../../../components/analytics/MasteryList';
 import TrendLine from '../../../components/analytics/TrendLine';
@@ -24,7 +23,6 @@ export default function AnalyticsPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useAnalyticsData(refreshVersion);
   const kpis = data?.kpis ?? [];
-  const studyHours = data?.studyHours ?? [];
   const chatbotUsage = data?.chatbotUsage ?? [];
   const performanceTrend = data?.performanceTrend ?? [];
   const strongTopics = data?.strongTopics ?? [];
@@ -58,8 +56,8 @@ export default function AnalyticsPage() {
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
-          <CardHeader title="Study hours this week" />
-          {studyHours.length ? <BarChart data={studyHours} /> : <EmptyState icon={Clock} title="No study hours logged" message="Study session tracking isn't available yet, so this chart stays empty for now." />}
+          <CardHeader title="Weekly performance trend" />
+          {performanceTrend.length ? <TrendLine points={performanceTrend} maxValue={100} /> : <EmptyState icon={TrendingUp} title="No trend data" message="Take a few quizzes to see your performance trend over time." />}
         </Card>
 
         <Card>
@@ -68,23 +66,13 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="Weekly performance trend" />
-          {performanceTrend.length ? <TrendLine points={performanceTrend} maxValue={100} /> : <EmptyState icon={TrendingUp} title="No trend data" message="Take a few quizzes to see your performance trend over time." />}
-        </Card>
-
-        <Card>
-          <CardHeader title="AILA usage breakdown" />
-          {chatbotUsage.length ? <DonutChart data={chatbotUsage} /> : <EmptyState icon={MessageCircle} title="No AILA usage yet" message="Chat with AILA to see how you're using it here." />}
-        </Card>
-
-        <Card className="lg:col-span-2">
           <CardHeader title="XP over time" />
           {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
         </Card>
 
         <Card>
-          <CardHeader title="Resource usage" />
-          {resourceUsage.length ? <DonutChart data={resourceUsage} /> : <EmptyState title="No resource views" message="Open resources from the library to see usage here." />}
+          <CardHeader title="AILA usage breakdown" />
+          {chatbotUsage.length ? <DonutChart data={chatbotUsage} /> : <EmptyState icon={MessageCircle} title="No AILA usage yet" message="Chat with AILA to see how you're using it here." />}
         </Card>
 
         <Card>
@@ -117,6 +105,11 @@ export default function AnalyticsPage() {
           ) : (
             <EmptyState title="No data yet" message="Weak topics will surface here once progress is tracked." />
           )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Resource usage" />
+          {resourceUsage.length ? <DonutChart data={resourceUsage} /> : <EmptyState title="No resource views" message="Open resources from the library to see usage here." />}
         </Card>
       </div>
     </div>

@@ -59,6 +59,12 @@ const SAVE_LABEL = {
   error: "Couldn't save",
 };
 
+// Taking/reviewing a long quiz gets paging, a navigator, and collapsed
+// explanations; an informal chatbot mini-quiz (capped at 20 items by
+// chatIntent.js) never does — it must look/behave exactly as it always has.
+const PAGE_SIZE = 10;
+const EXPLANATION_COLLAPSE_THRESHOLD = 20;
+
 export default function QuizCard({
   quiz,
   onSubmit,
@@ -75,24 +81,51 @@ export default function QuizCard({
   saveAsQuizState = 'idle',
 }) {
   const items = quiz?.items ?? [];
+  // MessageBubble always passes onSaveAsQuiz for a real chat quiz card (see
+  // AIAssistant's isChatbotQuiz); QuizRunner never passes it at all — the one
+  // reliable signal to keep every long-quiz addition below out of chat.
+  const isChatQuiz = Boolean(onSaveAsQuiz);
   const [answers, setAnswers] = useState(() => {
     if (localState?.answers) return localState.answers;
     return presetReview ? seedAnswers(items, presetReview.answers) : seedAnswers(items, initialAnswers);
   });
   const [review, setReview] = useState(() => localState?.review ?? presetReview?.graded ?? null);
   const [submitting, setSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(() => Math.floor(initialIndex / PAGE_SIZE));
+  const [focusedIndex, setFocusedIndex] = useState(initialIndex);
+  const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
+  const [resultFilter, setResultFilter] = useState('all');
+  const [expandedExplanations, setExpandedExplanations] = useState(() => new Set());
   const submitted = review !== null;
   const itemRefs = useRef([]);
+  const didMountRef = useRef(false);
 
-  // On resume, scroll the student back to roughly where they left off.
+  // On resume/jump, scroll to the focused question. On mount, this mirrors
+  // the original resume behavior exactly — only scrolls if resuming past the
+  // first question; any later change (navigator tap, "Go to first
+  // unanswered") always scrolls, including back to question 1.
   useEffect(() => {
-    if (initialIndex > 0 && itemRefs.current[initialIndex]) {
-      itemRefs.current[initialIndex].scrollIntoView({ block: 'center' });
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      if (initialIndex > 0) itemRefs.current[focusedIndex]?.scrollIntoView({ block: 'center' });
+      return;
     }
+    itemRefs.current[focusedIndex]?.scrollIntoView({ block: 'center' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [focusedIndex, currentPage]);
 
   const score = submitted ? review.filter((row) => row.isCorrect).length : 0;
+  const unansweredIndexes = items.map((_, i) => i).filter((i) => !answers[i]);
+  const isPaginated = !isChatQuiz && !submitted && items.length > PAGE_SIZE;
+  const totalPages = isPaginated ? Math.ceil(items.length / PAGE_SIZE) : 1;
+  const pageStart = isPaginated ? currentPage * PAGE_SIZE : 0;
+  const pageEnd = isPaginated ? Math.min(pageStart + PAGE_SIZE, items.length) : items.length;
+  const collapseExplanationsByDefault = !isChatQuiz && items.length > EXPLANATION_COLLAPSE_THRESHOLD;
+  const reviewIndexes = items.map((_, i) => i).filter((i) => resultFilter === 'all' || !review?.[i]?.isCorrect);
+  const takeIndexes = isPaginated
+    ? Array.from({ length: pageEnd - pageStart }, (_, i) => pageStart + i)
+    : items.map((_, i) => i);
+  const renderIndexes = submitted ? reviewIndexes : takeIndexes;
 
   if (!items.length) {
     return (
@@ -136,6 +169,43 @@ export default function QuizCard({
     onLocalStateChange?.({ answers, review: graded });
   };
 
+  const jumpToQuestion = (index) => {
+    setCurrentPage(Math.floor(index / PAGE_SIZE));
+    setFocusedIndex(index);
+  };
+
+  const handleCheckClick = () => {
+    if (!isChatQuiz && unansweredIndexes.length > 0) {
+      setShowUnansweredWarning(true);
+      return;
+    }
+    handleSubmit();
+  };
+
+  const handleGoToFirstUnanswered = () => {
+    setShowUnansweredWarning(false);
+    if (unansweredIndexes.length) jumpToQuestion(unansweredIndexes[0]);
+  };
+
+  const handleSubmitAnyway = () => {
+    setShowUnansweredWarning(false);
+    handleSubmit();
+  };
+
+  const toggleExplanation = (index) => {
+    setExpandedExplanations((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
+
+  const toggleAllExplanations = () => {
+    setExpandedExplanations((current) => (
+      current.size === items.length ? new Set() : new Set(items.map((_, i) => i))
+    ));
+  };
+
   const showSaveStatus = !submitted && typeof onAnswerChange === 'function' && saveState !== 'idle';
 
   return (
@@ -152,8 +222,46 @@ export default function QuizCard({
       />
 
       {submitted && (
-        <div className="mb-4 px-3 py-2 rounded-xl bg-primary-50 text-primary text-sm font-semibold">
-          You scored {score} / {items.length}
+        <div className="mb-4">
+          <div className="px-3 py-2 rounded-xl bg-primary-50 text-primary text-sm font-semibold">
+            You scored {score} / {items.length}
+            {items.length > 0 ? ` (${Math.round((score / items.length) * 100)}%)` : ''}
+          </div>
+          {!isChatQuiz && (
+            <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex gap-1.5" role="radiogroup" aria-label="Result filter">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={resultFilter === 'all'}
+                  onClick={() => setResultFilter('all')}
+                  className={[
+                    'text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                    resultFilter === 'all' ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+                  ].join(' ')}
+                >
+                  All ({items.length})
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={resultFilter === 'wrong'}
+                  onClick={() => setResultFilter('wrong')}
+                  className={[
+                    'text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors',
+                    resultFilter === 'wrong' ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+                  ].join(' ')}
+                >
+                  Wrong only ({items.length - score})
+                </button>
+              </div>
+              {collapseExplanationsByDefault && (
+                <button type="button" onClick={toggleAllExplanations} className="text-xs font-semibold text-primary hover:underline">
+                  {expandedExplanations.size === items.length ? 'Collapse all' : 'Expand all'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -175,8 +283,47 @@ export default function QuizCard({
         </div>
       )}
 
+      {isPaginated && (
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-ink-600 mb-2">
+            Questions {pageStart + 1}–{pageEnd} of {items.length}
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-3" role="group" aria-label="Question navigator">
+            {items.map((_, i) => {
+              const answered = Boolean(answers[i]);
+              const current = i === focusedIndex;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => jumpToQuestion(i)}
+                  aria-label={`Question ${i + 1}${answered ? ', answered' : ', unanswered'}${current ? ', current' : ''}`}
+                  className={[
+                    'w-7 h-7 flex items-center justify-center rounded-md text-[0.7rem] font-semibold border transition-colors',
+                    answered ? 'bg-primary-50 border-primary-200 text-primary' : 'bg-surface border-ink-100 text-ink-400',
+                    current ? 'ring-2 ring-primary ring-offset-1' : '',
+                  ].join(' ')}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <Button size="sm" variant="outline" disabled={currentPage === 0} onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}>
+              Previous
+            </Button>
+            <span className="text-ink-400">Page {currentPage + 1} of {totalPages}</span>
+            <Button size="sm" variant="outline" disabled={currentPage === totalPages - 1} onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
-        {items.map((item, index) => {
+        {renderIndexes.map((index) => {
+          const item = items[index];
           const graded = submitted ? review[index] : null;
           const isCorrect = Boolean(graded?.isCorrect);
 
@@ -184,7 +331,10 @@ export default function QuizCard({
             <div
               key={index}
               ref={(node) => { itemRefs.current[index] = node; }}
-              className="border border-ink-100 rounded-xl p-3.5"
+              className={[
+                'border rounded-xl p-3.5',
+                !submitted && isPaginated && index === focusedIndex ? 'border-primary-300 ring-1 ring-primary-200' : 'border-ink-100',
+              ].join(' ')}
             >
               <p className="text-sm font-medium text-ink-800 mb-2.5">
                 {index + 1}. {item.question}
@@ -242,12 +392,27 @@ export default function QuizCard({
                   ) : (
                     <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
                   )}
-                  <span className="text-ink-500">
-                    {!isCorrect && graded?.correctAnswer && (
-                      <span className="font-medium text-ink-700">Correct answer: {graded.correctAnswer}. </span>
-                    )}
-                    {graded?.explanation}
-                  </span>
+                  {collapseExplanationsByDefault && !expandedExplanations.has(index) ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleExplanation(index)}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {isCorrect ? 'Correct' : 'Incorrect'} — Show explanation
+                    </button>
+                  ) : (
+                    <span className="text-ink-500">
+                      {!isCorrect && graded?.correctAnswer && (
+                        <span className="font-medium text-ink-700">Correct answer: {graded.correctAnswer}. </span>
+                      )}
+                      {graded?.explanation}
+                      {collapseExplanationsByDefault && (
+                        <button type="button" onClick={() => toggleExplanation(index)} className="ml-1.5 font-semibold text-primary hover:underline">
+                          Hide
+                        </button>
+                      )}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -255,8 +420,17 @@ export default function QuizCard({
         })}
       </div>
 
-      {!submitted && (
-        <Button className="mt-4" full onClick={handleSubmit} disabled={submitting}>
+      {!submitted && showUnansweredWarning && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          <p className="font-medium">{unansweredIndexes.length} unanswered.</p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" variant="outline" onClick={handleGoToFirstUnanswered}>Go to first unanswered</Button>
+            <Button size="sm" onClick={handleSubmitAnyway}>Submit anyway</Button>
+          </div>
+        </div>
+      )}
+      {!submitted && !showUnansweredWarning && (
+        <Button className="mt-4" full onClick={handleCheckClick} disabled={submitting}>
           {submitting ? <><Loader2 size={14} className="animate-spin" /> Checking...</> : 'Check answers'}
         </Button>
       )}

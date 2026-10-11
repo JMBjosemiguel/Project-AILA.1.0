@@ -132,7 +132,9 @@ describe('QuizRunner — resumable formal quiz', () => {
 
     render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
     await waitFor(() => screen.getByText(/Capital of France?/));
+    // One of two items is unanswered — the pre-submit warning gates the submit.
     await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await user.click(screen.getByRole('button', { name: /Submit anyway/i }));
     await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
 
     saveAttemptAnswer.mockClear();
@@ -184,7 +186,9 @@ describe('QuizRunner — resumable formal quiz', () => {
     expect(screen.getByText('Module Checkpoint')).toBeInTheDocument();
     expect(screen.getByText(/Passing 70%/)).toBeInTheDocument();
 
+    // Neither item is answered — the pre-submit warning gates the submit.
     await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await user.click(screen.getByRole('button', { name: /Submit anyway/i }));
     await waitFor(() => expect(screen.getByText(/Not passed — 40% \(passing 70%\)/)).toBeInTheDocument());
     expect(screen.getByText(/Review the "Indexes" module/)).toBeInTheDocument();
   });

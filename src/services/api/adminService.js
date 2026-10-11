@@ -164,6 +164,14 @@ export function getAdminAnalytics() {
   return apiClient.get(API_ENDPOINTS.admin.analytics);
 }
 
+export function getAdminTopicGroups() {
+  return apiClient.get(API_ENDPOINTS.admin.topicGroups);
+}
+
+export function regroupAdminTopicGroups() {
+  return apiClient.post(API_ENDPOINTS.admin.topicGroupsRegroup);
+}
+
 // Audit log
 export function listAuditLog(params) {
   return apiClient.get(`${API_ENDPOINTS.admin.auditLog}?${toQueryString(params)}`);

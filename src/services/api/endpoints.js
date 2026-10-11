@@ -122,5 +122,7 @@ export const API_ENDPOINTS = {
     learningArchive: (id) => `/admin/learning/${id}/archive`,
     learningUnarchive: (id) => `/admin/learning/${id}/unarchive`,
     analytics: '/admin/analytics',
+    topicGroups: '/admin/analytics/topic-groups',
+    topicGroupsRegroup: '/admin/analytics/topic-groups/regroup',
   },
 };

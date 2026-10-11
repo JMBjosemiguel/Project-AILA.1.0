@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Award, BookOpen, FolderOpen, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, FolderOpen } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonList } from '../../../components/common/Skeleton';
 import BarChart from '../../../components/analytics/BarChart';
+import TopicGroupsSection from '../../../components/admin/TopicGroups';
 import { getAdminAnalytics } from '../../../services/api/adminService';
 
 function shortDate(iso) {
@@ -150,34 +151,7 @@ export default function AdminChatbotRulesPage() {
         />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <ListCard
-          title="Strongest topics" subtitle="Highest average progress across students" icon={TrendingUp}
-          items={data.strongTopics} empty="No topic progress yet"
-          renderItem={(t) => (
-            <div key={`${t.subject}-${t.topic}`} className="flex items-center justify-between py-2 text-sm">
-              <div className="min-w-0">
-                <span className="text-ink-700 truncate block">{t.topic}</span>
-                <span className="text-xs text-ink-400">{t.subject}</span>
-              </div>
-              <span className="text-emerald-600 font-semibold flex-shrink-0 ml-2">{t.avg_percent}%</span>
-            </div>
-          )}
-        />
-        <ListCard
-          title="Weakest topics" subtitle="Lowest average progress across students" icon={TrendingDown}
-          items={data.weakTopics} empty="No topic progress yet"
-          renderItem={(t) => (
-            <div key={`${t.subject}-${t.topic}`} className="flex items-center justify-between py-2 text-sm">
-              <div className="min-w-0">
-                <span className="text-ink-700 truncate block">{t.topic}</span>
-                <span className="text-xs text-ink-400">{t.subject}</span>
-              </div>
-              <span className="text-rose-500 font-semibold flex-shrink-0 ml-2">{t.avg_percent}%</span>
-            </div>
-          )}
-        />
-      </div>
+      <TopicGroupsSection />
     </div>
   );
 }

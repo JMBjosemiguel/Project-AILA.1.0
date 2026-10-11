@@ -121,12 +121,45 @@ As of v1.1 every student page is wired to a real backend endpoint (personalized
 course/lesson/quiz generation, resumable assessments, course checkpoints + final,
 material sharing, gamification, chatbot "Save as Quiz"). A page shows a proper empty
 state when the API succeeds with no data, and a retry-able error (`components/common/LoadError`)
-when the request fails. Generated quizzes (Resource Library, Learning Hub, chat) are
-capped at 20 items per quiz.
+when the request fails. A quiz requested through chat is capped at 20 items; the Learning
+Hub and Resource Library's own "Generate Quiz" can go up to 150 (see below).
 
 The admin Audit Log also records student activity (login, registration, email
 verification, resource uploads, quiz submissions), not just admin actions. Admins can
 promote a verified, active student with no personal uploads to admin from the Users page.
+
+From the Learning Hub or Resource Library, practice quizzes can go up to 150 items.
+Anything over 15 items generates in batches (the UI shows live progress); batches append
+to the same quiz under a row lock, so concurrent batch requests can never push a quiz
+past its requested item count. Lessons open in a full-screen reader (not an inline
+panel), with Previous/Next across the whole course and the reading progress bar synced
+to scroll position.
+
+Creating a course accepts optional choices beyond name/difficulty/goal — why the course
+is for (from scratch, exam review, board exam review, catching up, clinical skills,
+mastery), its length (short/standard/in-depth), and what to focus on (worked examples,
+case scenarios, key terms, in-lesson practice questions, summaries, real-world
+application). These are validated against a fixed list server-side and folded into the
+roadmap/lesson prompts as rules, not inserted as free text; they're stored on the
+course's existing JSON snapshot column, so no schema change was needed. Courses created
+before this feature keep generating exactly as before.
+
+The chat composer can attach a file (upload or pick from the Resource Library) so
+replies are grounded in that document; the attachment persists on the conversation,
+shows as a chip when the conversation is reopened, and can be explicitly detached.
+
+Announcements can target Everyone, a specific student, or a role — "specific course" and
+"year level" targeting were removed for new announcements (existing announcements sent
+that way still display correctly).
+
+The admin dashboard surfaces counts that need attention (feedback awaiting a reply,
+accounts unverified 24h+, students who may need a nudge), a short list of students with
+no recent activity or a weak recent quiz average, and a 7-day active-students chart.
+Admin Analytics can also group near-duplicate topics across different students' AI-
+generated courses (e.g. "Infant Growth" and "Infant Measurements" into one group) so an
+instructor sees one entry instead of many worded-differently near-duplicates.
+
+Both portals support light/dark mode (a manual toggle, remembered per browser).
 
 ## Database
 

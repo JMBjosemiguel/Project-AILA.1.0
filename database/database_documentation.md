@@ -188,10 +188,15 @@ Purpose: Represents one chat session/thread for a user.
 | --- | --- | --- |
 | id | BIGINT UNSIGNED | Primary key. |
 | user_id | BIGINT UNSIGNED | Foreign key to `users.id`. |
+| resource_id | BIGINT UNSIGNED | Optional foreign key to `resources.id` — the file currently attached to this conversation, used to ground AI replies. `NULL` means nothing is attached. Set to `NULL` when the student removes the attachment chip (an explicit detach, distinct from simply not sending the field, which leaves it unchanged). |
+| pending_intent | JSON | Optional in-progress chatbot intent state (e.g. a quiz request AILA is still clarifying). |
+| title | VARCHAR(120) | Optional conversation title. |
 | started_at | TIMESTAMP | Conversation start time. |
 | ended_at | TIMESTAMP | Optional end time. |
+| is_archived | TINYINT(1) | Whether the student archived this conversation. |
+| deleted_at | TIMESTAMP | Soft-delete timestamp. |
 
-Relationships: belongs to a user and contains many chat messages.
+Relationships: belongs to a user, optionally references one attached resource, and contains many chat messages.
 
 ## chat_messages
 
@@ -247,6 +252,7 @@ Purpose: Top-level academic subjects.
 | name | VARCHAR(150) | Subject name. |
 | code | VARCHAR(20) | Optional unique subject code. |
 | description | TEXT | Subject description. |
+| personalization_context | JSON | Snapshot of the student context (and, for AI-generated courses, the chosen purpose/length/focus options) used to generate this course — an audit trail, not read back into the UI directly. `NULL` for courses with nothing recorded. Cleared on course copy. |
 | created_at | TIMESTAMP | Creation timestamp. |
 | updated_at | TIMESTAMP | Update timestamp. |
 | deleted_at | TIMESTAMP | Soft-delete timestamp. |
@@ -528,6 +534,9 @@ Purpose: Stores shared notification content.
 | type | ENUM | `announcement`, `reminder`, `assignment_alert`, or `system`. |
 | title | VARCHAR(200) | Notification title. |
 | body | TEXT | Notification body. |
+| is_archived | TINYINT(1) | Whether an admin archived this announcement. |
+| target_type | ENUM | `all`, `user`, `course`, `year_level`, or `role` — who an announcement was sent to. The application only allows `all`/`user`/`role` for NEW announcements (`course`/`year_level` targeting was removed); the column itself still permits all five values unchanged so older rows keep displaying correctly. |
+| target_value | VARCHAR(100) | The specific id/value for `target_type` (e.g. a user id or role name), or `NULL` for `all`. |
 | created_at | TIMESTAMP | Creation timestamp. |
 | updated_at | TIMESTAMP | Update timestamp. |
 

@@ -201,14 +201,40 @@ CORS_ORIGINS=https://aila.pages.dev,https://preview-branch.aila.pages.dev
 
 Do not use `*` with authenticated requests.
 
-## 10. Gemini API Configuration
+## 10. Rate Limiting and Trust Proxy
+
+The backend sits behind Render's own reverse proxy, so `app.set('trust proxy', 1)` is
+already set in `server.js` — this tells Express to trust exactly one hop of
+`X-Forwarded-For` so `req.ip` (and everything keyed on it, including rate limiting)
+resolves to the real client IP instead of Render's proxy. No action is needed on Render
+for this; it only matters if another reverse proxy or CDN is ever added in front of
+Render, in which case this value must match the real number of trusted hops or rate
+limiting will either misidentify every client as the same IP or can be bypassed by a
+spoofed `X-Forwarded-For` header.
+
+Built-in limits (all return HTTP 429 with a friendly message when exceeded):
+
+| Scope | Limit | Key |
+| --- | --- | --- |
+| Every `/api` request | 300 per 15 minutes | client IP |
+| AI requests (chat, quiz/course/lesson generation) | 30 per 5 minutes | authenticated user (falls back to IP if unauthenticated) |
+| Batched quiz generation follow-up calls | 40 per 5 minutes | authenticated user |
+| Resend verification email | 3 per 15 minutes | the email address typed in, not IP |
+
+These are in-memory per-process limits with no shared store, so they reset on every
+deploy/restart and are tracked independently if Render ever runs more than one instance.
+If students hit the global 300/15-minutes limit during normal use (or during a heavy
+local testing session), restarting the service clears it; there is currently no
+persistent/shared rate-limit store configured.
+
+## 11. Gemini API Configuration
 
 - The Gemini key belongs only in the backend environment.
 - The frontend must never contain `GEMINI_API_KEY`.
 - Confirm AI features fail gracefully if quota is exhausted.
 - Use Render logs to inspect Gemini errors without exposing the key.
 
-## 11. QA Account Creation
+## 12. QA Account Creation
 
 Create a dedicated QA student account after the production database is ready.
 
@@ -223,7 +249,7 @@ Do not commit the QA password or password hash.
 
 Use the admin reset progress action when the QA account needs to be reused.
 
-## 12. Guest Access Behavior
+## 13. Guest Access Behavior
 
 AILA does not currently have a true guest role.
 
@@ -234,7 +260,7 @@ Public access should be limited to:
 
 Student features, admin features, uploaded files, chats, courses, planner tasks, quizzes, and learning progress must require authentication.
 
-## 13. Production Testing
+## 14. Production Testing
 
 Run these checks before sharing the public URL:
 
@@ -255,14 +281,18 @@ Run these checks before sharing the public URL:
 15. File object is stored in R2, not Render local disk.
 16. Resource delete removes or hides the database row and deletes the storage object.
 17. Gemini chat works from the deployed backend.
-18. Course generation works.
-19. Planner create/update/delete works.
-20. Quiz generation and submission works.
-21. Admin account can list users/resources/courses.
-22. Admin can open/download a student resource.
-23. No secrets appear in browser devtools bundled JavaScript.
+18. Course generation works, including with "More options" (purpose/length/focus) set.
+19. A lesson opens in the full-screen reader and Mark Complete works.
+20. Planner create/update/delete works.
+21. Quiz generation and submission works, including a quiz large enough to batch (16+ items).
+22. Admin account can list users/resources/courses.
+23. Admin can open/download a student resource.
+24. Admin dashboard shows the "needs attention" counts and the active-students chart.
+25. Admin Analytics "Regroup" produces topic groups (not an error state).
+26. Dark mode toggle works and persists after a reload.
+27. No secrets appear in browser devtools bundled JavaScript.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 - `CORS` error: verify `APP_URL` and `CORS_ORIGINS` exactly match the frontend origin.
 - `Unable to reach server`: verify `VITE_API_URL` includes `/api`.
@@ -279,3 +309,6 @@ Run these checks before sharing the public URL:
   bare `https://<account-id>.r2.cloudflarestorage.com` origin — no path or bucket.
 - Refresh returns 404 on frontend routes: verify `_redirects` exists in Cloudflare Pages build output.
 - Gemini returns 503/429: verify API key, quota, model, and billing/free-tier limits.
+- AILA's own API returns 429 ("too many requests") for everyone, or `req.ip` looks wrong
+  in logs: see section 10 — `trust proxy` is likely mismatched with the actual number of
+  reverse-proxy hops in front of the backend.

@@ -3,11 +3,13 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/http');
 
 const createChatResponse = asyncHandler(async (req, res) => {
+  // resource_id is passed through AS SENT — undefined (omitted) vs null
+  // (explicit) are deliberately different signals, see generateChatResponse.
   const result = await aiService.generateChatResponse({
     userId: req.auth.user.id,
     message: req.body.message,
     conversationId: req.body.conversation_id || null,
-    resourceId: req.body.resource_id || null,
+    resourceId: req.body.resource_id,
   });
 
   sendSuccess(res, result, 200, 'AILA response generated.');

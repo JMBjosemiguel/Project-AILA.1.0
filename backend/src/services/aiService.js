@@ -255,6 +255,14 @@ async function persistExchange({
   });
 }
 
+// `resourceId` carries three distinct states, preserved all the way from the
+// JSON body through to here (see chatController — no `|| null` coercion):
+//   - undefined: not specified, no change to whatever the conversation already has.
+//   - null: an EXPLICIT detach — the student just removed the attachment chip.
+//   - a number: attach/switch to that resource (checked for access below).
+// Collapsing undefined and null together (as an earlier version of this did)
+// is exactly the bug this fixes: it made "no change" indistinguishable from
+// "detach", so a removed chip could never actually stop grounding.
 async function generateChatResponse({ userId, message, conversationId, resourceId }) {
   const prompt = normalizePrompt(message);
 
@@ -262,9 +270,16 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
     throw new ApiError(400, 'Please enter a message for AILA.');
   }
 
+  if (typeof resourceId === 'number') {
+    const resource = await resourceModel.getResourceById(resourceId, userId);
+    if (!resource) {
+      throw new ApiError(404, "That resource could not be found or you don't have access to it.");
+    }
+  }
+
   let priorMessages = [];
   let existingConversationId = null;
-  let effectiveResourceId = conversationId ? null : resourceId || null;
+  let effectiveResourceId = conversationId ? null : (resourceId ?? null);
   let updateConversationResource = false;
   let pendingIntent = null;
 
@@ -274,14 +289,18 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
       throw new ApiError(404, 'Conversation not found.');
     }
     existingConversationId = conversation.id;
-    // A resource explicitly sent with THIS message (the chat paperclip
-    // attaching a file mid-conversation) takes priority over whatever the
-    // conversation already had attached, and — unlike that initial
-    // attachment — can change over the conversation's lifetime.
-    effectiveResourceId = resourceId || conversation.resource_id;
-    updateConversationResource = Boolean(resourceId) && resourceId !== conversation.resource_id;
     pendingIntent = conversation.pending_intent;
     priorMessages = await chatModel.getMessagesForConversation(existingConversationId);
+
+    if (resourceId === null) {
+      effectiveResourceId = null;
+      updateConversationResource = conversation.resource_id !== null;
+    } else if (typeof resourceId === 'number') {
+      effectiveResourceId = resourceId;
+      updateConversationResource = resourceId !== conversation.resource_id;
+    } else {
+      effectiveResourceId = conversation.resource_id;
+    }
   }
 
   const { messageType, data, responseText, nextPendingIntent } = await generateReply(
@@ -376,10 +395,18 @@ async function getConversation(userId, conversationId) {
     throw new ApiError(404, 'Conversation not found.');
   }
 
+  // Re-checked at read time, not just trusted from the stored id — a resource
+  // attached earlier may since have been deleted or had its access revoked.
+  let resource = null;
+  if (conversation.resource_id) {
+    const found = await resourceModel.getResourceById(conversation.resource_id, userId);
+    if (found) resource = { id: found.id, title: found.title };
+  }
+
   const messages = await chatModel.getMessagesForConversation(conversation.id);
 
   return {
-    conversation,
+    conversation: { ...conversation, resource },
     messages: messages.map((row) => ({
       id: row.id,
       sender: row.sender,

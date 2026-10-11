@@ -14,12 +14,20 @@ export async function getChatbotWorkspace() {
   };
 }
 
-export function sendChatMessage(messageText, conversationId, resourceId) {
-  return apiClient.post(API_ENDPOINTS.chatbot.messages, {
-    message: messageText,
-    conversation_id: conversationId ?? null,
-    resource_id: resourceId ?? null,
-  });
+// resourceId is only ever sent on the ONE message where the attachment
+// actually changed — omitted entirely otherwise, so the backend's own
+// "undefined = no change" default keeps grounding on whatever it already
+// has. Pass `clearResource: true` for the one message that detaches it
+// (sends an EXPLICIT resource_id: null, which the backend treats as
+// distinct from the field being absent).
+export function sendChatMessage(messageText, conversationId, resourceId, { clearResource = false } = {}) {
+  const body = { message: messageText, conversation_id: conversationId ?? null };
+  if (clearResource) {
+    body.resource_id = null;
+  } else if (resourceId != null) {
+    body.resource_id = resourceId;
+  }
+  return apiClient.post(API_ENDPOINTS.chatbot.messages, body);
 }
 
 export function getConversationMessages(conversationId) {

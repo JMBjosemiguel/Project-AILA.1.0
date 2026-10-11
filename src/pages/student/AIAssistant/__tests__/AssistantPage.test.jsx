@@ -265,7 +265,7 @@ describe('AssistantPage — conversation-scoped thinking / message state', () =>
     // start on the fresh "new chat" view (no conversation selected)
     await typeAndSend(user, 'brand new question');
     expect(thinkingVisible()).toBe(true);
-    expect(sendChatMessage).toHaveBeenCalledWith('brand new question', null, null);
+    expect(sendChatMessage).toHaveBeenCalledWith('brand new question', null, undefined, { clearResource: false });
 
     d.resolve({ conversationId: 99, messageType: 'text', response: 'reply to the new chat' });
     await waitFor(() => expect(screen.getByText('reply to the new chat')).toBeInTheDocument());
@@ -527,7 +527,7 @@ describe('AssistantPage — chat attachments', () => {
     await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
     await typeAndSend(user, 'please summarize this');
 
-    expect(sendChatMessage).toHaveBeenCalledWith('please summarize this', null, 9);
+    expect(sendChatMessage).toHaveBeenCalledWith('please summarize this', null, 9, { clearResource: false });
     await waitFor(() => expect(screen.getByText('Here is a summary.')).toBeInTheDocument());
 
     const openButton = screen.getByRole('button', { name: /Open in Resource Library/i });
@@ -536,7 +536,7 @@ describe('AssistantPage — chat attachments', () => {
     expect(onNavigate).toHaveBeenCalledWith('resources');
   });
 
-  it('a follow-up message in the same conversation keeps resending the attached resourceId', async () => {
+  it('a follow-up message in the same conversation omits resourceId — the backend already has it stored', async () => {
     const user = userEvent.setup();
     uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
     sendChatMessage.mockResolvedValue({ conversationId: 77, messageType: 'text', response: 'ok' });
@@ -545,13 +545,70 @@ describe('AssistantPage — chat attachments', () => {
     await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
     await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
     await typeAndSend(user, 'first question');
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('first question', null, 9));
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('first question', null, 9, { clearResource: false }));
 
     await typeAndSend(user, 'second question');
-    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('second question', 77, 9));
+    // No change since the first message — resourceId is omitted (undefined),
+    // not resent, and the chip is still shown (still attached, just not re-sent).
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('second question', 77, undefined, { clearResource: false }));
+    // Still attached (the compose-area chip, not a sent-message chip) — just not re-sent.
+    expect(screen.getByRole('button', { name: 'Remove attachment' })).toBeInTheDocument();
   });
 
-  it('switching to a different conversation clears the attachment', async () => {
+  it('removing the attachment sends an explicit clear on the next message, then stops being sent again', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    sendChatMessage.mockResolvedValue({ conversationId: 77, messageType: 'text', response: 'ok' });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+    await typeAndSend(user, 'first question');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('first question', null, 9, { clearResource: false }));
+
+    await user.click(screen.getByRole('button', { name: 'Remove attachment' }));
+    // The compose-area chip is gone (the sent message's own chip, from the
+    // first question, legitimately still shows "My Notes" in history).
+    expect(screen.queryByRole('button', { name: 'Remove attachment' })).not.toBeInTheDocument();
+
+    await typeAndSend(user, 'forget the file');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('forget the file', 77, undefined, { clearResource: true }));
+
+    await typeAndSend(user, 'one more thing');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('one more thing', 77, undefined, { clearResource: false }));
+  });
+
+  it('removing an attachment before ever sending it still reports a (harmless) explicit clear on the next message', async () => {
+    // The backend never had this attachment stored in the first place (the
+    // conversation doesn't even exist yet), so an explicit resource_id: null
+    // here is a no-op server-side — simpler than tracking "was this specific
+    // attachment ever actually sent" just to skip a harmless redundant clear.
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Remove attachment' }));
+
+    sendChatMessage.mockResolvedValue({ conversationId: 77, messageType: 'text', response: 'ok' });
+    await typeAndSend(user, 'a plain question');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('a plain question', null, undefined, { clearResource: true }));
+  });
+
+  it('reopening a conversation shows its attached file as a chip', async () => {
+    const user = userEvent.setup();
+    getConversationMessages.mockImplementation((id) => Promise.resolve(id === 1
+      ? { conversation: { id: 1, resource: { id: 3, title: 'Course Syllabus' } }, messages: historyFor[1].messages }
+      : historyFor[id]));
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await openChat(user, 'Chat A');
+    await waitFor(() => expect(screen.getByText(/hi from A/)).toBeInTheDocument());
+    expect(screen.getByText('Course Syllabus')).toBeInTheDocument();
+  });
+
+  it('switching to a conversation with no attachment clears the chip', async () => {
     const user = userEvent.setup();
     uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
     render(<AssistantPage onNavigate={vi.fn()} />);
@@ -562,5 +619,20 @@ describe('AssistantPage — chat attachments', () => {
     await openChat(user, 'Chat A');
     await waitFor(() => expect(screen.getByText(/hi from A/)).toBeInTheDocument());
     expect(screen.queryByText('My Notes')).not.toBeInTheDocument();
+  });
+
+  it('attaching a resource the student can no longer access shows a clear error', async () => {
+    const user = userEvent.setup();
+    getResourceLibraryData.mockResolvedValue({ resources: [{ id: 5, title: 'Old Shared Notes', type: 'pdf' }] });
+    sendChatMessage.mockRejectedValue(Object.assign(new Error("That resource could not be found or you don't have access to it."), { status: 404 }));
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /Attach a file/i }));
+    await user.click(screen.getByRole('menuitem', { name: /Choose from Resource Library/i }));
+    await waitFor(() => expect(screen.getByText('Old Shared Notes')).toBeInTheDocument());
+    await user.click(screen.getByText('Old Shared Notes'));
+
+    await typeAndSend(user, 'summarize this');
+    await waitFor(() => expect(screen.getByText(/could not be found or you don.t have access/i)).toBeInTheDocument());
   });
 });

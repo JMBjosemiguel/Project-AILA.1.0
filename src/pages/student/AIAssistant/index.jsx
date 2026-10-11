@@ -69,12 +69,12 @@ export default function AssistantPage({ onNavigate }) {
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   // Per-message "Save as Quiz" status, keyed by messageKey(message).
   const [saveQuizStates, setSaveQuizStates] = useState({});
-  // The resource currently attached to the compose box — frontend-session
-  // state only (see chatAttachment design notes in the final report): it
-  // keeps grounding on the same file across follow-ups in this conversation,
-  // but doesn't try to survive a hard page reload or reappear when reopening
-  // a past conversation from history (chat_messages has no column for that).
-  const [attachedResource, setAttachedResource] = useState(null); // { id, title, type }
+  // The resource currently attached to the compose box. Reflects the
+  // conversation's actual stored attachment (chat_conversations.resource_id)
+  // — hydrated from the server on reopen (handleSelectChat), and updated
+  // optimistically on attach/detach. The chip itself doesn't need frontend
+  // session tricks anymore: it's just a view of real, persisted state.
+  const [attachedResource, setAttachedResource] = useState(null); // { id, title }
   const [attachUpload, setAttachUpload] = useState(null); // { fileName, progress }
   const [attachError, setAttachError] = useState('');
   const [showAttachPicker, setShowAttachPicker] = useState(false);
@@ -82,14 +82,36 @@ export default function AssistantPage({ onNavigate }) {
   const scrollRef = useRef(null);
   const sendingRef = useRef(false);
   const pendingResourceIdRef = useRef(null);
+  // True once the attachment has changed (attached/switched/detached) since
+  // the last message — the NEXT send reports exactly that one change to the
+  // backend (a specific resourceId, or an explicit clear); every other send
+  // omits resource_id entirely so the backend's own stored value keeps
+  // grounding follow-ups without this needing to resend anything.
+  const pendingAttachChangeRef = useRef(false);
   const activeChatRef = useRef(null);
   const pendingChatRef = useRef(null);
   const deletedChatsRef = useRef(new Set());
   const uploadTokenRef = useRef(0);
   const avatarLetter = user?.first_name?.[0] ?? 'A';
 
-  const clearAttachment = () => {
+  // Full reset for switching context entirely (new chat / a different past
+  // conversation) — nothing pending to report, since we're not acting on
+  // whatever conversation we're leaving. `next` seeds the conversation we're
+  // moving TO, if it already has a known attachment (e.g. from history).
+  const resetAttachmentState = (next = null) => {
     uploadTokenRef.current += 1; // invalidates any upload still in flight
+    pendingAttachChangeRef.current = false;
+    setAttachUpload(null);
+    setAttachedResource(next);
+    setAttachError('');
+  };
+
+  // The chip's own remove (x) — detaches from the ACTIVE conversation. Marks
+  // a pending change only if there was actually something attached, so the
+  // next message sends an explicit resourceId: null (never a no-op clear).
+  const handleRemoveAttachment = () => {
+    if (attachedResource) pendingAttachChangeRef.current = true;
+    uploadTokenRef.current += 1;
     setAttachUpload(null);
     setAttachedResource(null);
     setAttachError('');
@@ -162,13 +184,23 @@ export default function AssistantPage({ onNavigate }) {
     startPending(reqChat);
 
     // A fresh "Ask AILA" handoff from the Resource Library (one-shot) takes
-    // priority; otherwise resend whatever is currently attached so follow-ups
-    // in this conversation keep grounding on it (see attachedResource above).
-    const resourceId = pendingResourceIdRef.current ?? attachedResource?.id ?? null;
+    // priority; otherwise report the attachment ONLY if it just changed —
+    // omitted entirely otherwise, so the backend's own stored value keeps
+    // grounding follow-ups without this needing to resend anything.
+    let resourceId = pendingResourceIdRef.current ?? undefined;
+    let clearResource = false;
+    if (resourceId === undefined && pendingAttachChangeRef.current) {
+      if (attachedResource) {
+        resourceId = attachedResource.id;
+      } else {
+        clearResource = true;
+      }
+    }
     pendingResourceIdRef.current = null;
+    pendingAttachChangeRef.current = false;
 
     try {
-      const result = await sendChatMessage(value, activeChat, resourceId);
+      const result = await sendChatMessage(value, activeChat, resourceId, { clearResource });
       const resolvedId = result.conversationId ?? null;
 
       if (deletedChatsRef.current.has(reqChat) || (resolvedId && deletedChatsRef.current.has(resolvedId))) {
@@ -206,7 +238,7 @@ export default function AssistantPage({ onNavigate }) {
     setMessages([]);
     setActiveChat(null);
     pendingResourceIdRef.current = null;
-    clearAttachment();
+    resetAttachmentState();
     setChatSidebarOpen(false);
   };
 
@@ -233,6 +265,7 @@ export default function AssistantPage({ onNavigate }) {
       if (uploadTokenRef.current !== token) return; // removed while the upload was in flight
       setAttachUpload(null);
       setAttachedResource({ id: resource.id, title: resource.title });
+      pendingAttachChangeRef.current = true;
     } catch (uploadError) {
       if (uploadTokenRef.current !== token) return;
       setAttachUpload(null);
@@ -246,6 +279,7 @@ export default function AssistantPage({ onNavigate }) {
     uploadTokenRef.current += 1; // invalidates any upload still in flight
     setAttachUpload(null);
     setAttachedResource(resource);
+    pendingAttachChangeRef.current = true;
   };
 
   const handleOpenAttachment = (attachment) => {
@@ -341,7 +375,7 @@ export default function AssistantPage({ onNavigate }) {
     if (id === activeChat) return;
 
     setError('');
-    clearAttachment();
+    resetAttachmentState();
     setActiveChat(id);
     activeChatRef.current = id;
     setLoadingChat(true);
@@ -350,6 +384,8 @@ export default function AssistantPage({ onNavigate }) {
       const result = await getConversationMessages(id);
       if (activeChatRef.current === id) {
         setMessages(mapHistoryMessages(result.messages));
+        const resource = result.conversation?.resource;
+        setAttachedResource(resource ? { id: resource.id, title: resource.title } : null);
       }
     } catch (chatError) {
       if (activeChatRef.current === id) {
@@ -445,7 +481,7 @@ export default function AssistantPage({ onNavigate }) {
           attachError={attachError}
           onFileSelected={handleFileSelected}
           onPickFromLibrary={() => setShowAttachPicker(true)}
-          onRemoveAttachment={clearAttachment}
+          onRemoveAttachment={handleRemoveAttachment}
         />
       </div>
 

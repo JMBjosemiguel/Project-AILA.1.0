@@ -121,13 +121,79 @@ test('chat attachments (resource grounding)', async (t) => {
     assert.equal(await conversationResourceId(conversationId), resourceA2, 'unchanged — no new resourceId was sent');
   });
 
-  await t.test('another student\'s resourceId never grounds a reply, and never throws', async () => {
+  await t.test('attaching another student\'s resourceId is rejected with a clear message, nothing is sent', async () => {
+    const { aiService, calls } = installGeminiStub('should never be used');
+    await assert.rejects(
+      () => aiService.generateChatResponse({
+        userId: A.id, message: 'Summarize the attached file for me.', conversationId: null, resourceId: resourceB,
+      }),
+      (err) => err.statusCode === 404 && /could not be found|access/i.test(err.message)
+    );
+    assert.equal(calls.length, 0, 'rejected before any Gemini call — no wasted work, no accidental grounding');
+  });
+
+  await t.test('removing the attachment (explicit null) detaches it and stops grounding, owner only', async () => {
+    const started = await installGeminiStub('ok').aiService.generateChatResponse({
+      userId: A.id, message: 'Start a notes conversation.', conversationId: null, resourceId: resourceA,
+    });
+    assert.equal(await conversationResourceId(started.conversationId), resourceA);
+
+    // Another student can't clear A's conversation (ownership-scoped lookup).
+    await assert.rejects(
+      () => installGeminiStub('n/a').aiService.generateChatResponse({
+        userId: B.id, message: 'hi', conversationId: started.conversationId, resourceId: null,
+      }),
+      (err) => err.statusCode === 404
+    );
+    assert.equal(await conversationResourceId(started.conversationId), resourceA, 'untouched by the rejected attempt');
+
     const { aiService, calls } = installGeminiStub('A plain, ungrounded reply.');
     const result = await aiService.generateChatResponse({
-      userId: A.id, message: 'Summarize the attached file for me.', conversationId: null, resourceId: resourceB,
+      userId: A.id, message: 'Never mind, forget the file.', conversationId: started.conversationId, resourceId: null,
     });
 
     assert.equal(result.messageType, 'text');
-    assert.doesNotMatch(systemInstructionOf(calls), /This belongs only to B/);
+    assert.doesNotMatch(systemInstructionOf(calls), /Subnets divide a network/);
+    assert.equal(await conversationResourceId(started.conversationId), null, 'detached — explicit null, not just "not sent"');
+
+    // A further follow-up with no resourceId field at all stays detached —
+    // "undefined" (not sent) must never be confused with "null" (detach).
+    const { aiService: aiService2, calls: calls2 } = installGeminiStub('Still ungrounded.');
+    await aiService2.generateChatResponse({ userId: A.id, message: 'One more thing.', conversationId: started.conversationId });
+    assert.doesNotMatch(systemInstructionOf(calls2), /Subnets divide a network/);
+    assert.equal(await conversationResourceId(started.conversationId), null);
+  });
+
+  await t.test('reopening a conversation (getConversation) shows its attached file, only while still accessible', async () => {
+    const started = await installGeminiStub('ok').aiService.generateChatResponse({
+      userId: A.id, message: 'Start another notes conversation.', conversationId: null, resourceId: resourceA2,
+    });
+
+    const { aiService } = installGeminiStub();
+    const reopened = await aiService.getConversation(A.id, started.conversationId);
+    assert.deepEqual(reopened.conversation.resource, { id: resourceA2, title: 'A\'s OS Notes' });
+
+    // Another student can't read A's conversation at all (opaque 404).
+    await assert.rejects(() => aiService.getConversation(B.id, started.conversationId), (err) => err.statusCode === 404);
+  });
+
+  await t.test('a conversation created via a resourceId on the first message (the "Ask AILA" path) shows its file too', async () => {
+    const started = await installGeminiStub('ok').aiService.generateChatResponse({
+      userId: A.id, message: 'Can you help me understand this?', conversationId: null, resourceId: resourceA,
+    });
+
+    const { aiService } = installGeminiStub();
+    const reopened = await aiService.getConversation(A.id, started.conversationId);
+    assert.deepEqual(reopened.conversation.resource, { id: resourceA, title: 'A\'s Networking Notes' });
+  });
+
+  await t.test('a conversation with no attachment reports resource: null', async () => {
+    const started = await installGeminiStub('ok').aiService.generateChatResponse({
+      userId: A.id, message: 'Just a plain question, nothing attached.', conversationId: null,
+    });
+
+    const { aiService } = installGeminiStub();
+    const reopened = await aiService.getConversation(A.id, started.conversationId);
+    assert.equal(reopened.conversation.resource, null);
   });
 });

@@ -13,6 +13,31 @@ export function getQuiz(quizId) {
   return apiClient.get(API_ENDPOINTS.quizzes.quiz(quizId));
 }
 
+// --- Batched generation (practice quizzes above the single-request item count) ---
+
+// Creates the quiz row + a subtopic plan. Returns { quizId, target, batchSize, subtopics }.
+export function startBatchQuizGeneration({ topic, quizType = 'multiple_choice', itemCount, difficulty = 'medium', sourceType, sourceId }) {
+  return apiClient.post(
+    API_ENDPOINTS.quizzes.batchStart,
+    { topic, quizType, itemCount, difficulty, sourceType, sourceId },
+    { timeout: AI_GENERATION_REQUEST_TIMEOUT_MS }
+  );
+}
+
+// Generates + appends up to one batch's worth of items. Returns { quizId, added, total, target }.
+export function appendQuizBatch(quizId, { subtopic, requestedCount } = {}) {
+  return apiClient.post(
+    API_ENDPOINTS.quizzes.batch(quizId),
+    { subtopic, requestedCount },
+    { timeout: AI_GENERATION_REQUEST_TIMEOUT_MS }
+  );
+}
+
+// Corrects item_count to the real saved count. Returns { quizId, target, actual }.
+export function finishQuizGeneration(quizId) {
+  return apiClient.post(API_ENDPOINTS.quizzes.batchFinish(quizId));
+}
+
 // Used by the Learning Hub search box. Returns { quizzes: [] } for a blank term.
 export function searchQuizzes(term) {
   const params = new URLSearchParams({ search: term || '' });

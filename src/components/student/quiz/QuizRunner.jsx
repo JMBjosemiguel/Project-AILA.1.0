@@ -5,7 +5,10 @@ import Button from '../../common/Button';
 import ShareDialog from '../../common/ShareDialog';
 import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
-import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt } from '../../../services/api/quizService';
+import {
+  generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt,
+  startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration,
+} from '../../../services/api/quizService';
 
 const QUIZ_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
@@ -21,7 +24,14 @@ const ASSESSMENT_LABEL = {
 };
 
 const MIN_ITEM_COUNT = 1;
-const MAX_ITEM_COUNT = 20;
+const MAX_ITEM_COUNT = 150;
+const PRESET_COUNTS = [5, 10, 15, 20];
+// Mirrors backend quizService's SINGLE_CALL_MAX_ITEMS / BATCH_MAX_ITEMS — a
+// count at or below this still uses the plain one-request generateQuiz path;
+// above it, the client drives the start/batch/finish flow instead.
+const SINGLE_CALL_MAX_ITEMS = 20;
+const BATCH_MAX_ITEMS = 15;
+const BATCH_CONCURRENCY = 3;
 
 // itemCount is kept as a STRING in state so the field can be genuinely empty
 // while the student is typing (Number('') === 0 in JS, which is why binding
@@ -34,10 +44,35 @@ function clampItemCount(value) {
   return Math.min(Math.max(n, MIN_ITEM_COUNT), MAX_ITEM_COUNT);
 }
 
+// Runs `jobs` (one appendQuizBatch call each) with up to BATCH_CONCURRENCY
+// in flight at once, matching the server's row-lock-based concurrency-safe
+// ordering. `cancelledRef.current` is checked before each NEW job starts —
+// an in-flight request is always allowed to finish, only the next pickup is
+// skipped, so "Cancel" stops future batches without aborting one in progress.
+async function runBatchJobs(quizId, jobs, cancelledRef, onBatchSettled) {
+  let index = 0;
+  async function worker() {
+    while (index < jobs.length) {
+      if (cancelledRef.current) return;
+      const job = jobs[index];
+      index += 1;
+      try {
+        const res = await appendQuizBatch(quizId, job);
+        onBatchSettled(res, null);
+      } catch (err) {
+        onBatchSettled(null, err);
+      }
+    }
+  }
+  const workerCount = Math.min(BATCH_CONCURRENCY, jobs.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
 export default function QuizRunner({ request, resumeQuizId = null, reviewAttemptId = null, onClose }) {
   const [quizType, setQuizType] = useState('multiple_choice');
   const [difficulty, setDifficulty] = useState('medium');
   const [itemCount, setItemCount] = useState('5');
+  const [showCustomCount, setShowCustomCount] = useState(false);
   const [step, setStep] = useState(reviewAttemptId ? 'starting' : resumeQuizId ? 'starting' : 'setup');
   const [quiz, setQuiz] = useState(null);
   const [attempt, setAttempt] = useState(null);
@@ -47,7 +82,11 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
   const [result, setResult] = useState(null);
   const [saveState, setSaveState] = useState('idle');
   const [sharing, setSharing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null);
+  const [shortResult, setShortResult] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
   const submittingRef = useRef(false);
+  const batchCancelledRef = useRef(false);
   const toast = useToast();
 
   const attemptIdRef = useRef(null);
@@ -133,14 +172,59 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeQuizId, reviewAttemptId]);
 
+  // Once generation finishes (or is cancelled), corrects item_count to the
+  // real saved count and either jumps straight into the quiz (target met) or
+  // shows the short-result choice (target not met).
+  const settleBatchedGeneration = useCallback(async (quizId) => {
+    const finished = await finishQuizGeneration(quizId);
+    if (finished.actual >= finished.target) {
+      await beginAttempt(quizId);
+    } else {
+      setShortResult({ quizId, target: finished.target, actual: finished.actual });
+      setStep('batch-short-result');
+    }
+  }, [beginAttempt]);
+
+  const handleBatchedGenerate = useCallback(async (count) => {
+    batchCancelledRef.current = false;
+    setCancelling(false);
+    setStep('batch-generating');
+    setError('');
+    setBatchProgress({ target: count, completed: 0 });
+    try {
+      const started = await startBatchQuizGeneration({
+        topic: request.topic, quizType, itemCount: count, difficulty,
+        sourceType: request.sourceType, sourceId: request.sourceId,
+      });
+      setBatchProgress({ target: started.target, completed: 0 });
+      const jobs = started.subtopics.map((subtopic) => ({ subtopic }));
+      await runBatchJobs(started.quizId, jobs, batchCancelledRef, (res) => {
+        if (res) setBatchProgress((prev) => (prev ? { ...prev, completed: Math.max(prev.completed, res.total) } : prev));
+      });
+      await settleBatchedGeneration(started.quizId);
+    } catch (err) {
+      setStep('setup');
+      setError(err.message || 'Could not generate a quiz right now.');
+      toast.error(err.message || 'Could not generate a quiz right now.');
+    } finally {
+      submittingRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request, quizType, difficulty, settleBatchedGeneration]);
+
   const handleGenerate = async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
+    const count = clampItemCount(itemCount);
+    if (count > SINGLE_CALL_MAX_ITEMS) {
+      await handleBatchedGenerate(count);
+      return;
+    }
     setStep('loading');
     setError('');
     try {
       const generated = await generateQuiz({
-        topic: request.topic, quizType, itemCount: clampItemCount(itemCount), difficulty,
+        topic: request.topic, quizType, itemCount: count, difficulty,
         sourceType: request.sourceType, sourceId: request.sourceId,
       });
       await beginAttempt(generated.id);
@@ -150,6 +234,38 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
       toast.error(err.message || 'Could not generate a quiz right now.');
     } finally {
       submittingRef.current = false;
+    }
+  };
+
+  const handleCancelBatches = () => {
+    batchCancelledRef.current = true;
+    setCancelling(true);
+  };
+
+  const handleUseShortResult = async () => {
+    if (!shortResult) return;
+    await beginAttempt(shortResult.quizId);
+  };
+
+  const handleTopUp = async () => {
+    if (!shortResult) return;
+    const { quizId, target, actual } = shortResult;
+    batchCancelledRef.current = false;
+    setCancelling(false);
+    setStep('batch-generating');
+    setBatchProgress({ target, completed: actual });
+    const remaining = target - actual;
+    const numBatches = Math.max(1, Math.ceil(remaining / BATCH_MAX_ITEMS));
+    const jobs = Array.from({ length: numBatches }, () => ({}));
+    try {
+      await runBatchJobs(quizId, jobs, batchCancelledRef, (res) => {
+        if (res) setBatchProgress((prev) => (prev ? { ...prev, completed: Math.max(prev.completed, res.total) } : prev));
+      });
+      await settleBatchedGeneration(quizId);
+    } catch (err) {
+      toast.error(err.message || 'Could not add more questions right now.');
+      setShortResult({ quizId, target, actual });
+      setStep('batch-short-result');
     }
   };
 
@@ -254,16 +370,59 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
                 </div>
 
                 <div>
-                  <label htmlFor="quiz-item-count" className="text-xs font-semibold text-ink-600 mb-1.5 block">Number of items</label>
-                  <input
-                    id="quiz-item-count"
-                    type="number"
-                    min={MIN_ITEM_COUNT}
-                    max={MAX_ITEM_COUNT}
-                    value={itemCount}
-                    onChange={(event) => setItemCount(event.target.value)}
-                    className="w-24 border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
-                  />
+                  <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Number of items</span>
+                  <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Number of items">
+                    {PRESET_COUNTS.map((n) => {
+                      const active = !showCustomCount && itemCount === String(n);
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => { setShowCustomCount(false); setItemCount(String(n)); }}
+                          role="radio"
+                          aria-checked={active}
+                          className={[
+                            'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+                            active ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+                          ].join(' ')}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomCount(true)}
+                      role="radio"
+                      aria-checked={showCustomCount}
+                      className={[
+                        'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+                        showCustomCount ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+                      ].join(' ')}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {showCustomCount && (
+                    <label className="block mt-2">
+                      <span className="sr-only">Custom number of items</span>
+                      <input
+                        id="quiz-item-count"
+                        type="number"
+                        min={MIN_ITEM_COUNT}
+                        max={MAX_ITEM_COUNT}
+                        value={itemCount}
+                        onChange={(event) => setItemCount(event.target.value)}
+                        placeholder="1-150"
+                        className="w-24 border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                      />
+                    </label>
+                  )}
+                  {clampItemCount(itemCount) > SINGLE_CALL_MAX_ITEMS && (
+                    <p className="text-xs text-ink-400 mt-1.5">
+                      Quizzes above {SINGLE_CALL_MAX_ITEMS} items are generated in batches — this can take a minute or two.
+                    </p>
+                  )}
                 </div>
               </div>
             </>
@@ -273,6 +432,44 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
               <Loader2 size={16} className="animate-spin" />
               {step === 'loading' ? 'AILA is generating your assessment...' : 'Opening...'}
+            </div>
+          )}
+
+          {step === 'batch-generating' && (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <Loader2 size={20} className="animate-spin text-primary" />
+              <p className="text-sm text-ink-700 font-medium">
+                Generating questions… {batchProgress?.completed ?? 0} of {batchProgress?.target ?? 0}
+              </p>
+              <div
+                className="w-full max-w-xs h-2 rounded-full bg-ink-100 overflow-hidden"
+                role="progressbar"
+                aria-valuenow={batchProgress?.completed ?? 0}
+                aria-valuemin={0}
+                aria-valuemax={batchProgress?.target ?? 0}
+              >
+                <div
+                  className="h-full bg-primary rounded-full transition-all"
+                  style={{ width: `${batchProgress?.target ? Math.min(100, (batchProgress.completed / batchProgress.target) * 100) : 0}%` }}
+                />
+              </div>
+              <p className="text-xs text-ink-400">This can take a minute or two for large quizzes.</p>
+              <Button size="sm" variant="outline" onClick={handleCancelBatches} disabled={cancelling}>
+                {cancelling ? 'Finishing up…' : 'Cancel'}
+              </Button>
+            </div>
+          )}
+
+          {step === 'batch-short-result' && shortResult && (
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <AlertTriangle size={20} className="text-amber-500" />
+              <p className="text-sm text-ink-700 font-medium">
+                AILA made {shortResult.actual} of {shortResult.target} questions.
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleUseShortResult}>Use these {shortResult.actual}</Button>
+                <Button size="sm" variant="outline" onClick={handleTopUp}>Try to add the rest</Button>
+              </div>
             </div>
           )}
 

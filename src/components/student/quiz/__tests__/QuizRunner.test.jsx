@@ -8,13 +8,19 @@ vi.mock('../../../../services/api/quizService', () => ({
   saveAttemptAnswer: vi.fn(),
   submitAttempt: vi.fn(),
   getQuizAttempt: vi.fn(),
+  startBatchQuizGeneration: vi.fn(),
+  appendQuizBatch: vi.fn(),
+  finishQuizGeneration: vi.fn(),
 }));
 vi.mock('../../../common/Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 
 import QuizRunner from '../QuizRunner.jsx';
-import { generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt } from '../../../../services/api/quizService';
+import {
+  generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt,
+  startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration,
+} from '../../../../services/api/quizService';
 
 const ITEMS = [
   { id: 10, question: 'Capital of France?', options: ['Paris', 'Berlin'], orderIndex: 0 },
@@ -203,50 +209,204 @@ describe('QuizRunner — resumable formal quiz', () => {
   });
 });
 
-describe('QuizRunner — item count input', () => {
-  it('lets the field go genuinely empty while typing, instead of getting stuck on "0"', async () => {
-    const user = userEvent.setup();
+describe('QuizRunner — count picker (presets + custom)', () => {
+  it('defaults to the 5 preset, with no custom box shown', async () => {
     render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
-    const input = screen.getByLabelText(/Number of items/i);
-    expect(input).toHaveValue(5);
-    await user.clear(input);
-    expect(input).toHaveValue(null);
+    expect(screen.getByRole('radio', { name: '5' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByLabelText(/Custom number of items/i)).not.toBeInTheDocument();
   });
 
-  it('typing "10" right after clearing produces 10, not "010"', async () => {
-    const user = userEvent.setup();
-    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
-    const input = screen.getByLabelText(/Number of items/i);
-    await user.clear(input);
-    await user.type(input, '10');
-    expect(input).toHaveValue(10);
-  });
-
-  it('clamps an empty field to the minimum (1) only when the quiz is actually generated', async () => {
+  it('clicking a preset generates with that exact count, no custom box involved', async () => {
     const user = userEvent.setup();
     generateQuiz.mockResolvedValue({ id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS });
     startQuizAttempt.mockResolvedValue(startPayload());
 
     render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
-    const input = screen.getByLabelText(/Number of items/i);
+    await user.click(screen.getByRole('radio', { name: '15' }));
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+
+    await waitFor(() => expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 15 })));
+  });
+
+  it('"Custom" reveals a 1-150 box; the field can go genuinely empty while typing', async () => {
+    const user = userEvent.setup();
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+
+    const input = screen.getByLabelText(/Custom number of items/i);
+    expect(input).toHaveAttribute('max', '150');
+    expect(input).toHaveValue(5);
     await user.clear(input);
-    expect(input).toHaveValue(null); // still empty right up until generation — nothing silently fills it in
+    expect(input).toHaveValue(null);
+    await user.type(input, '10');
+    expect(input).toHaveValue(10); // not "010" — Number('') never gets bound back into the input
+  });
+
+  it('clamps an empty custom field to the minimum (1) only when the quiz is actually generated', async () => {
+    const user = userEvent.setup();
+    generateQuiz.mockResolvedValue({ id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS });
+    startQuizAttempt.mockResolvedValue(startPayload());
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    expect(input).toHaveValue(null);
 
     await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
     await waitFor(() => expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 1 })));
   });
 
-  it('clamps an out-of-range value to the current max (20) when generating', async () => {
+  it('clamps a custom value over 150 down to 150 when generating', async () => {
+    const user = userEvent.setup();
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 9, target: 150, batchSize: 15, subtopics: ['A', 'B'] });
+    appendQuizBatch.mockResolvedValue({ quizId: 9, added: 15, total: 15, target: 150 });
+    finishQuizGeneration.mockResolvedValue({ quizId: 9, target: 150, actual: 15 });
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '9999');
+
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(startBatchQuizGeneration).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 150 })));
+  });
+});
+
+describe('QuizRunner — batched generation (counts above 20)', () => {
+  it('a count of 20 or below never calls the batched endpoints', async () => {
     const user = userEvent.setup();
     generateQuiz.mockResolvedValue({ id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS });
     startQuizAttempt.mockResolvedValue(startPayload());
 
     render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
-    const input = screen.getByLabelText(/Number of items/i);
-    await user.clear(input);
-    await user.type(input, '999');
-
+    await user.click(screen.getByRole('radio', { name: '20' }));
     await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
-    await waitFor(() => expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 20 })));
+
+    await waitFor(() => expect(generateQuiz).toHaveBeenCalled());
+    expect(startBatchQuizGeneration).not.toHaveBeenCalled();
+  });
+
+  it('a count above 20 drives start -> batches -> finish and shows progress, then opens the quiz once the target is met', async () => {
+    const user = userEvent.setup();
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 42, target: 30, batchSize: 15, subtopics: ['Part 1', 'Part 2'] });
+    // Part 2 is held open so the intermediate progress state is observable
+    // before the flow proceeds to finish — otherwise two instantly-resolving
+    // batches can settle before the test ever gets to inspect that state.
+    let resolvePart2;
+    appendQuizBatch.mockImplementation(async (_quizId, { subtopic }) => {
+      if (subtopic === 'Part 1') return { quizId: 42, added: 15, total: 15, target: 30 };
+      return new Promise((resolve) => { resolvePart2 = resolve; });
+    });
+    finishQuizGeneration.mockResolvedValue({ quizId: 42, target: 30, actual: 30 });
+    startQuizAttempt.mockResolvedValue(startPayload());
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '30');
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+
+    await waitFor(() => expect(screen.getByText(/15 of 30/)).toBeInTheDocument());
+    resolvePart2({ quizId: 42, added: 15, total: 30, target: 30 });
+
+    await waitFor(() => expect(finishQuizGeneration).toHaveBeenCalledWith(42));
+    expect(appendQuizBatch).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+    expect(startQuizAttempt).toHaveBeenCalledWith(42);
+  });
+
+  it('a short result shows "Use these N" / "Try to add the rest" instead of opening the quiz', async () => {
+    const user = userEvent.setup();
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 7, target: 50, batchSize: 15, subtopics: ['A', 'B', 'C', 'D'] });
+    appendQuizBatch.mockResolvedValue({ quizId: 7, added: 10, total: 32, target: 50 });
+    finishQuizGeneration.mockResolvedValue({ quizId: 7, target: 50, actual: 32 });
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '50');
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+
+    await waitFor(() => expect(screen.getByText('AILA made 32 of 50 questions.')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Use these 32' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try to add the rest/i })).toBeInTheDocument();
+  });
+
+  it('"Use these N" opens the quiz with the partial count, without requesting more batches', async () => {
+    const user = userEvent.setup();
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 7, target: 50, batchSize: 15, subtopics: ['A', 'B', 'C', 'D'] });
+    appendQuizBatch.mockResolvedValue({ quizId: 7, added: 10, total: 32, target: 50 });
+    finishQuizGeneration.mockResolvedValue({ quizId: 7, target: 50, actual: 32 });
+    startQuizAttempt.mockResolvedValue(startPayload());
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '50');
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(screen.getByText('AILA made 32 of 50 questions.')).toBeInTheDocument());
+
+    appendQuizBatch.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Use these 32' }));
+    await waitFor(() => expect(startQuizAttempt).toHaveBeenCalledWith(7));
+    expect(appendQuizBatch).not.toHaveBeenCalled();
+  });
+
+  it('"Try to add the rest" requests more batches for the shortfall, then re-finishes', async () => {
+    const user = userEvent.setup();
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 7, target: 50, batchSize: 15, subtopics: ['A', 'B', 'C', 'D'] });
+    appendQuizBatch.mockResolvedValue({ quizId: 7, added: 10, total: 32, target: 50 });
+    finishQuizGeneration.mockResolvedValueOnce({ quizId: 7, target: 50, actual: 32 });
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '50');
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(screen.getByText('AILA made 32 of 50 questions.')).toBeInTheDocument());
+
+    appendQuizBatch.mockClear();
+    finishQuizGeneration.mockResolvedValueOnce({ quizId: 7, target: 50, actual: 50 });
+    startQuizAttempt.mockResolvedValue(startPayload());
+    await user.click(screen.getByRole('button', { name: /Try to add the rest/i }));
+
+    await waitFor(() => expect(appendQuizBatch).toHaveBeenCalled());
+    await waitFor(() => expect(startQuizAttempt).toHaveBeenCalledWith(7));
+  });
+
+  it('Cancel stops new batches from being sent; the flow still settles into a short result', async () => {
+    const user = userEvent.setup();
+    // 5 subtopics but only 3 concurrent slots — "D" and "E" stay queued behind
+    // "A"/"B"/"C". None of A/B/C resolve until the test says so, so there is
+    // no race where a freed worker could grab "D" before Cancel is clicked.
+    startBatchQuizGeneration.mockResolvedValue({ quizId: 11, target: 75, batchSize: 15, subtopics: ['A', 'B', 'C', 'D', 'E'] });
+    const resolvers = {};
+    appendQuizBatch.mockImplementation(async (_quizId, { subtopic }) => (
+      new Promise((resolve) => { resolvers[subtopic] = resolve; })
+    ));
+    finishQuizGeneration.mockResolvedValue({ quizId: 11, target: 75, actual: 45 });
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: 'Custom' }));
+    const input = screen.getByLabelText(/Custom number of items/i);
+    await user.clear(input);
+    await user.type(input, '75');
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+
+    await waitFor(() => expect(appendQuizBatch).toHaveBeenCalledTimes(3)); // A, B, C dispatched up front (concurrency 3)
+    await user.click(screen.getByRole('button', { name: /Cancel/i }));
+    resolvers.A({ quizId: 11, added: 15, total: 15, target: 75 });
+    resolvers.B({ quizId: 11, added: 15, total: 30, target: 75 });
+    resolvers.C({ quizId: 11, added: 15, total: 45, target: 75 });
+
+    await waitFor(() => expect(screen.getByText('AILA made 45 of 75 questions.')).toBeInTheDocument());
+    // "D" and "E" were never dispatched because Cancel stopped new pickups.
+    expect(appendQuizBatch).toHaveBeenCalledTimes(3);
   });
 });

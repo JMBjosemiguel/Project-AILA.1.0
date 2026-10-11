@@ -202,3 +202,51 @@ describe('QuizRunner — resumable formal quiz', () => {
     expect(startQuizAttempt).not.toHaveBeenCalled();
   });
 });
+
+describe('QuizRunner — item count input', () => {
+  it('lets the field go genuinely empty while typing, instead of getting stuck on "0"', async () => {
+    const user = userEvent.setup();
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    const input = screen.getByLabelText(/Number of items/i);
+    expect(input).toHaveValue(5);
+    await user.clear(input);
+    expect(input).toHaveValue(null);
+  });
+
+  it('typing "10" right after clearing produces 10, not "010"', async () => {
+    const user = userEvent.setup();
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    const input = screen.getByLabelText(/Number of items/i);
+    await user.clear(input);
+    await user.type(input, '10');
+    expect(input).toHaveValue(10);
+  });
+
+  it('clamps an empty field to the minimum (1) only when the quiz is actually generated', async () => {
+    const user = userEvent.setup();
+    generateQuiz.mockResolvedValue({ id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS });
+    startQuizAttempt.mockResolvedValue(startPayload());
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    const input = screen.getByLabelText(/Number of items/i);
+    await user.clear(input);
+    expect(input).toHaveValue(null); // still empty right up until generation — nothing silently fills it in
+
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 1 })));
+  });
+
+  it('clamps an out-of-range value to the current max (20) when generating', async () => {
+    const user = userEvent.setup();
+    generateQuiz.mockResolvedValue({ id: 5, topic: 'Geography', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS });
+    startQuizAttempt.mockResolvedValue(startPayload());
+
+    render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);
+    const input = screen.getByLabelText(/Number of items/i);
+    await user.clear(input);
+    await user.type(input, '999');
+
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ itemCount: 20 })));
+  });
+});

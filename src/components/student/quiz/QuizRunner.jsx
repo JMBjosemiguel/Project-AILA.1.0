@@ -20,10 +20,24 @@ const ASSESSMENT_LABEL = {
   course_final: 'Course Final Assessment',
 };
 
+const MIN_ITEM_COUNT = 1;
+const MAX_ITEM_COUNT = 20;
+
+// itemCount is kept as a STRING in state so the field can be genuinely empty
+// while the student is typing (Number('') === 0 in JS, which is why binding
+// a number input straight to a numeric state produces a stuck "0" that can't
+// be deleted, and later keystrokes land after it — "010" instead of "10").
+// Only the value actually sent to the server gets parsed/clamped, here.
+function clampItemCount(value) {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n)) return MIN_ITEM_COUNT;
+  return Math.min(Math.max(n, MIN_ITEM_COUNT), MAX_ITEM_COUNT);
+}
+
 export default function QuizRunner({ request, resumeQuizId = null, reviewAttemptId = null, onClose }) {
   const [quizType, setQuizType] = useState('multiple_choice');
   const [difficulty, setDifficulty] = useState('medium');
-  const [itemCount, setItemCount] = useState(5);
+  const [itemCount, setItemCount] = useState('5');
   const [step, setStep] = useState(reviewAttemptId ? 'starting' : resumeQuizId ? 'starting' : 'setup');
   const [quiz, setQuiz] = useState(null);
   const [attempt, setAttempt] = useState(null);
@@ -126,7 +140,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
     setError('');
     try {
       const generated = await generateQuiz({
-        topic: request.topic, quizType, itemCount, difficulty,
+        topic: request.topic, quizType, itemCount: clampItemCount(itemCount), difficulty,
         sourceType: request.sourceType, sourceId: request.sourceId,
       });
       await beginAttempt(generated.id);
@@ -244,10 +258,10 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
                   <input
                     id="quiz-item-count"
                     type="number"
-                    min={1}
-                    max={20}
+                    min={MIN_ITEM_COUNT}
+                    max={MAX_ITEM_COUNT}
                     value={itemCount}
-                    onChange={(event) => setItemCount(Number(event.target.value))}
+                    onChange={(event) => setItemCount(event.target.value)}
                     className="w-24 border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
                   />
                 </div>

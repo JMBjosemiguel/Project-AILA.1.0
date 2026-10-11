@@ -608,7 +608,8 @@ async function generateBatchItems({ topic, subtopic, quizType, difficulty, count
 
   function buildPrompt(targetCount, avoidKeys) {
     return [
-      `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of "${topic}":`,
+      `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of the topic below:`,
+      personalizationService.delimitStudentText('topic', topic),
       personalizationService.delimitStudentText('quiz_subtopic', subtopic),
       QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
       'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',

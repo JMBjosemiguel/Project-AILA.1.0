@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Copy, RotateCcw } from 'lucide-react';
+import { Check, Copy, FileText, RotateCcw } from 'lucide-react';
 import AilaOrb from '../common/AilaOrb';
 import MarkdownRenderer from './MarkdownRenderer';
 import QuizCard from './QuizCard';
@@ -19,6 +19,10 @@ export default function MessageBubble({
   onQuizLocalStateChange,
   onSaveAsQuiz,
   saveAsQuizState = 'idle',
+  // The resource a message was sent with, if any — frontend-session-only
+  // (see AssistantPage), so this only shows for messages sent THIS session.
+  attachment = null,
+  onOpenAttachment,
 }) {
   const isUser = role === 'user';
   const isRichContent = !isUser && (type === 'quiz' || type === 'flashcards');
@@ -59,15 +63,31 @@ export default function MessageBubble({
             {type === 'flashcards' && <FlashcardDeck flashcards={data} />}
           </div>
         ) : (
-          <div
-            className={[
-              'px-4 py-3 rounded-2xl leading-relaxed',
-              isUser
-                ? 'bg-primary text-white rounded-tr-sm text-[0.9rem] whitespace-pre-wrap'
-                : 'bg-surface border border-ink-100 text-ink-800 rounded-tl-sm',
-            ].join(' ')}
-          >
-            {isUser ? text : <MarkdownRenderer text={text} />}
+          <div className={`flex flex-col gap-1.5 min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
+            {attachment && (
+              <button
+                type="button"
+                onClick={() => onOpenAttachment?.(attachment)}
+                className={[
+                  'flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 border transition-colors max-w-full',
+                  isUser ? 'bg-white/15 border-white/25 text-white hover:bg-white/25' : 'bg-primary-50 border-primary-100 text-primary hover:bg-primary-100',
+                ].join(' ')}
+              >
+                <FileText size={12} className="flex-shrink-0" />
+                <span className="truncate">{attachment.title}</span>
+                <span className="opacity-80 flex-shrink-0">· Open in Resource Library</span>
+              </button>
+            )}
+            <div
+              className={[
+                'px-4 py-3 rounded-2xl leading-relaxed',
+                isUser
+                  ? 'bg-primary text-white rounded-tr-sm text-[0.9rem] whitespace-pre-wrap'
+                  : 'bg-surface border border-ink-100 text-ink-800 rounded-tl-sm',
+              ].join(' ')}
+            >
+              {isUser ? text : <MarkdownRenderer text={text} />}
+            </div>
           </div>
         )}
       </div>

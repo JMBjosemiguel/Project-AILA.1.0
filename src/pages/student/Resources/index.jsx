@@ -11,22 +11,13 @@ import { useToast } from '../../../components/common/Toast';
 import ResourceCard from '../../../components/student/resources/ResourceCard';
 import EditResourceDialog from '../../../components/student/resources/EditResourceDialog';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
-import { RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
+import { ACCEPTED_RESOURCE_FILE_TYPES, RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
 import { useResourceLibraryData } from '../../../hooks/useResourceLibraryData';
 import { addLinkResource, deleteResource, downloadResource, logResourceView, openResourceFile, uploadResource } from '../../../services/api/resourceService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
 import { consumeResourceSearchTarget } from '../../../utils/resourceSearchTarget';
 
-const ACCEPTED_FILE_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.ms-powerpoint',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-].join(',');
+const ACCEPTED_FILE_TYPES = ACCEPTED_RESOURCE_FILE_TYPES.join(',');
 
 export default function ResourcesPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);

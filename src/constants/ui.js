@@ -18,6 +18,22 @@ export const RESOURCE_TYPE_LABELS = {
   link: 'Link',
 };
 
+// Must match the backend's uploadResourceFile middleware exactly (resources
+// upload limits — both the Resource Library's own uploader and the chat
+// attachment picker go through the same /resources/upload endpoint).
+export const ACCEPTED_RESOURCE_FILE_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+];
+
+export const MAX_RESOURCE_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+
 export const TASK_STATUS = {
   PENDING: 'pending',
   IN_PROGRESS: 'in_progress',

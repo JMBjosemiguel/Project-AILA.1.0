@@ -53,6 +53,24 @@ async function updateMessage(messageId, messageText, messageType) {
   );
 }
 
+// Attaches (or switches) a resource on an EXISTING conversation — e.g. the
+// chat paperclip attaching a file mid-conversation. Unlike the title (set
+// once), the resource is deliberately mutable: a later message can attach a
+// different file, and every subsequent message grounds on whichever is
+// current. No schema change — chat_conversations.resource_id already exists
+// and already supports this; only a new conversation lacked a way to update it.
+async function setConversationResource(conversationId, resourceId, connection = null) {
+  const sql = 'UPDATE chat_conversations SET resource_id = ? WHERE id = ?';
+  const params = [resourceId, conversationId];
+
+  if (connection) {
+    await connection.execute(sql, params);
+    return;
+  }
+
+  await query(sql, params);
+}
+
 async function setConversationTitleIfMissing(conversationId, title, connection = null) {
   const sql = 'UPDATE chat_conversations SET title = ? WHERE id = ? AND title IS NULL';
   const params = [title, conversationId];
@@ -257,6 +275,7 @@ module.exports = {
   createConversation,
   appendMessages,
   updateMessage,
+  setConversationResource,
   setConversationTitleIfMissing,
   renameConversation,
   deleteConversationForUser,

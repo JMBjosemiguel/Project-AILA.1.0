@@ -10,12 +10,16 @@ export function logResourceView(resourceId) {
   return apiClient.post(API_ENDPOINTS.resources.view(resourceId));
 }
 
-export function uploadResource(file, subjectId) {
+export function uploadResource(file, subjectId, { onUploadProgress } = {}) {
   const formData = new FormData();
   formData.append('file', file);
   if (subjectId) formData.append('subject_id', subjectId);
 
-  return apiClient.post(API_ENDPOINTS.resources.upload, formData);
+  return apiClient.post(API_ENDPOINTS.resources.upload, formData, {
+    onUploadProgress: onUploadProgress
+      ? (event) => onUploadProgress(event.total ? Math.round((event.loaded / event.total) * 100) : 0)
+      : undefined,
+  });
 }
 
 export function addLinkResource(url, title, subjectId) {

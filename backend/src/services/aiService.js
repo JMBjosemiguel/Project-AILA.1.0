@@ -232,11 +232,17 @@ async function generateReply(prompt, priorMessages, userId, resourceId, pendingI
   return { messageType: 'text', data: null, responseText, nextPendingIntent: null };
 }
 
-async function persistExchange({ userId, conversationId, isFirstMessage, prompt, responseText, messageType, resourceId, nextPendingIntent }) {
+async function persistExchange({
+  userId, conversationId, isFirstMessage, prompt, responseText, messageType, resourceId, updateConversationResource, nextPendingIntent,
+}) {
   const title = isFirstMessage ? await generateConversationTitle(prompt) : null;
 
   return transaction(async (connection) => {
     const resolvedId = conversationId || (await chatModel.createConversation(userId, connection, resourceId));
+
+    if (updateConversationResource) {
+      await chatModel.setConversationResource(resolvedId, resourceId, connection);
+    }
 
     const { botMessageId } = await chatModel.appendMessages(resolvedId, prompt, responseText, messageType, connection);
     await chatModel.setPendingIntent(resolvedId, nextPendingIntent, connection);
@@ -259,6 +265,7 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
   let priorMessages = [];
   let existingConversationId = null;
   let effectiveResourceId = conversationId ? null : resourceId || null;
+  let updateConversationResource = false;
   let pendingIntent = null;
 
   if (conversationId) {
@@ -267,7 +274,12 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
       throw new ApiError(404, 'Conversation not found.');
     }
     existingConversationId = conversation.id;
-    effectiveResourceId = conversation.resource_id;
+    // A resource explicitly sent with THIS message (the chat paperclip
+    // attaching a file mid-conversation) takes priority over whatever the
+    // conversation already had attached, and — unlike that initial
+    // attachment — can change over the conversation's lifetime.
+    effectiveResourceId = resourceId || conversation.resource_id;
+    updateConversationResource = Boolean(resourceId) && resourceId !== conversation.resource_id;
     pendingIntent = conversation.pending_intent;
     priorMessages = await chatModel.getMessagesForConversation(existingConversationId);
   }
@@ -284,6 +296,7 @@ async function generateChatResponse({ userId, message, conversationId, resourceI
     responseText,
     messageType,
     resourceId: effectiveResourceId,
+    updateConversationResource,
     nextPendingIntent,
   });
 

@@ -5,7 +5,9 @@ import { MoreVertical } from 'lucide-react';
 const VIEWPORT_PADDING = 8;
 const ESTIMATED_MENU_WIDTH = 152; // matches min-w-[9.5rem], used only until the real size is measured
 
-export default function ActionMenu({ items, label = 'Open actions menu' }) {
+const DEFAULT_TRIGGER_CLASSNAME = 'w-7 h-7 flex items-center justify-center rounded-lg text-ink-400 hover:text-ink-800 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 transition-colors';
+
+export default function ActionMenu({ items, label = 'Open actions menu', icon, triggerClassName }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState(null);
   const triggerRef = useRef(null);
@@ -93,9 +95,9 @@ export default function ActionMenu({ items, label = 'Open actions menu' }) {
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-400 hover:text-ink-800 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 transition-colors"
+        className={triggerClassName ?? DEFAULT_TRIGGER_CLASSNAME}
       >
-        <MoreVertical size={15} />
+        {icon ?? <MoreVertical size={15} />}
       </button>
 
       {open && position && createPortal(

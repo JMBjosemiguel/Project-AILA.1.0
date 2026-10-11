@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // ---- mocks ---------------------------------------------------------------
@@ -29,6 +29,14 @@ vi.mock('../../../../services/api/quizService', () => ({
 }));
 const setResumeQuiz = vi.fn();
 vi.mock('../../../../utils/quizResumeTarget', () => ({ setResumeQuiz: (id) => setResumeQuiz(id) }));
+const setResourceSearchTarget = vi.fn();
+vi.mock('../../../../utils/resourceSearchTarget', () => ({ setResourceSearchTarget: (term) => setResourceSearchTarget(term) }));
+const uploadResource = vi.fn();
+const getResourceLibraryData = vi.fn();
+vi.mock('../../../../services/api/resourceService', () => ({
+  uploadResource: (...args) => uploadResource(...args),
+  getResourceLibraryData: (...args) => getResourceLibraryData(...args),
+}));
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 vi.mock('../../../../components/common/Toast', () => ({
@@ -74,16 +82,35 @@ async function typeAndSend(user, text) {
   const box = screen.getByPlaceholderText(/Ask AILA/i);
   await user.click(box);
   await user.keyboard(text);
-  // the send button is the only enabled submit-style button near the input
-  const sendBtn = box.closest('div').querySelector('button:last-of-type');
-  await user.click(sendBtn);
+  await user.click(screen.getByRole('button', { name: 'Send message' }));
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   _resetChatbotQuizState();
   getConversationMessages.mockImplementation((id) => Promise.resolve(historyFor[id]));
+  getResourceLibraryData.mockResolvedValue({ resources: [] });
 });
+
+function makeFile(name, type, size = 1024) {
+  const file = new File(['x'.repeat(size)], name, { type });
+  Object.defineProperty(file, 'size', { value: size });
+  return file;
+}
+
+async function selectFile(user, file) {
+  const input = document.querySelector('input[type="file"]');
+  await user.upload(input, file);
+}
+
+// user-event's upload() enforces the input's own `accept` filter (mimicking
+// the native file picker), so an unsupported type never reaches onChange
+// that way — fireEvent bypasses it, exercising the component's own
+// server-mimicking fallback validation for a file that slipped through.
+function selectFileRaw(file) {
+  const input = document.querySelector('input[type="file"]');
+  fireEvent.change(input, { target: { files: [file] } });
+}
 
 describe('AssistantPage — conversation-scoped thinking / message state', () => {
   it('Scenario A: sending in a chat shows the thinking indicator in that chat', async () => {
@@ -381,5 +408,159 @@ describe('AssistantPage — mobile conversation-list drawer', () => {
     expect(document.body.style.overflow).toBe('hidden');
     await user.click(screen.getByRole('button', { name: /close conversation list/i }));
     expect(document.body.style.overflow).not.toBe('hidden');
+  });
+});
+
+describe('AssistantPage — chat attachments', () => {
+  it('the paperclip opens a menu with both attach options', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /Attach a file/i }));
+    expect(screen.getByRole('menuitem', { name: /Upload a file/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Choose from Resource Library/i })).toBeInTheDocument();
+  });
+
+  it('uploading a file shows a progress chip, then the attached title', async () => {
+    const user = userEvent.setup();
+    let resolveUpload;
+    let progressCb;
+    uploadResource.mockImplementation((file, subjectId, { onUploadProgress } = {}) => {
+      progressCb = onUploadProgress;
+      return new Promise((resolve) => { resolveUpload = resolve; });
+    });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    expect(screen.getByText(/Uploading "notes.pdf"/)).toBeInTheDocument();
+
+    progressCb(42);
+    await waitFor(() => expect(screen.getByText(/42%/)).toBeInTheDocument());
+
+    resolveUpload({ id: 9, title: 'My Notes' });
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+    expect(screen.queryByText(/Uploading/)).not.toBeInTheDocument();
+  });
+
+  it('rejects an unsupported file type client-side, without calling the upload endpoint', async () => {
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    selectFileRaw(makeFile('archive.zip', 'application/zip'));
+    await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
+    expect(uploadResource).not.toHaveBeenCalled();
+  });
+
+  it('rejects a file over 200MB client-side, without calling the upload endpoint', async () => {
+    const user = userEvent.setup();
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('huge.pdf', 'application/pdf', 200 * 1024 * 1024 + 1));
+    expect(screen.getByText(/too large/i)).toBeInTheDocument();
+    expect(uploadResource).not.toHaveBeenCalled();
+  });
+
+  it('shows a clear error when the upload fails, and keeps what was typed', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockRejectedValue(new Error('Could not upload that file.'));
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    const box = screen.getByPlaceholderText(/Ask AILA/i);
+    await user.click(box);
+    await user.keyboard('please look at this');
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+
+    await waitFor(() => expect(screen.getByText('Could not upload that file.')).toBeInTheDocument());
+    expect(box).toHaveValue('please look at this');
+  });
+
+  it('the Send button is disabled while an upload is in flight, and re-enabled once it finishes', async () => {
+    const user = userEvent.setup();
+    let resolveUpload;
+    uploadResource.mockImplementation(() => new Promise((resolve) => { resolveUpload = resolve; }));
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    const box = screen.getByPlaceholderText(/Ask AILA/i);
+    await user.click(box);
+    await user.keyboard('a question');
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    resolveUpload({ id: 9, title: 'My Notes' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled());
+  });
+
+  it('removing the attachment clears the chip', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Remove attachment' }));
+    expect(screen.queryByText('My Notes')).not.toBeInTheDocument();
+  });
+
+  it('"Choose from Resource Library" picks a resource and attaches it', async () => {
+    const user = userEvent.setup();
+    getResourceLibraryData.mockResolvedValue({ resources: [{ id: 5, title: 'Shared Syllabus', type: 'pdf' }] });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /Attach a file/i }));
+    await user.click(screen.getByRole('menuitem', { name: /Choose from Resource Library/i }));
+    await waitFor(() => expect(screen.getByText('Shared Syllabus')).toBeInTheDocument());
+    await user.click(screen.getByText('Shared Syllabus'));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(uploadResource).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getAllByText('Shared Syllabus').length).toBeGreaterThan(0));
+  });
+
+  it('a sent message carrying an attachment shows a chip that opens the Resource Library', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    sendChatMessage.mockResolvedValue({ conversationId: 77, messageType: 'text', response: 'Here is a summary.' });
+    const onNavigate = vi.fn();
+    render(<AssistantPage onNavigate={onNavigate} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+    await typeAndSend(user, 'please summarize this');
+
+    expect(sendChatMessage).toHaveBeenCalledWith('please summarize this', null, 9);
+    await waitFor(() => expect(screen.getByText('Here is a summary.')).toBeInTheDocument());
+
+    const openButton = screen.getByRole('button', { name: /Open in Resource Library/i });
+    await user.click(openButton);
+    expect(setResourceSearchTarget).toHaveBeenCalledWith('My Notes');
+    expect(onNavigate).toHaveBeenCalledWith('resources');
+  });
+
+  it('a follow-up message in the same conversation keeps resending the attached resourceId', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    sendChatMessage.mockResolvedValue({ conversationId: 77, messageType: 'text', response: 'ok' });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+    await typeAndSend(user, 'first question');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('first question', null, 9));
+
+    await typeAndSend(user, 'second question');
+    await waitFor(() => expect(sendChatMessage).toHaveBeenCalledWith('second question', 77, 9));
+  });
+
+  it('switching to a different conversation clears the attachment', async () => {
+    const user = userEvent.setup();
+    uploadResource.mockResolvedValue({ id: 9, title: 'My Notes' });
+    render(<AssistantPage onNavigate={vi.fn()} />);
+
+    await selectFile(user, makeFile('notes.pdf', 'application/pdf'));
+    await waitFor(() => expect(screen.getByText('My Notes')).toBeInTheDocument());
+
+    await openChat(user, 'Chat A');
+    await waitFor(() => expect(screen.getByText(/hi from A/)).toBeInTheDocument());
+    expect(screen.queryByText('My Notes')).not.toBeInTheDocument();
   });
 });

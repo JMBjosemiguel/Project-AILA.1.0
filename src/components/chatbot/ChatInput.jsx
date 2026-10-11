@@ -1,8 +1,17 @@
 import { useRef } from 'react';
-import { ArrowUp, ClipboardList, Layers, Paperclip } from 'lucide-react';
+import { ArrowUp, ClipboardList, FileText, FolderOpen, Layers, Loader2, Paperclip, Upload, X } from 'lucide-react';
+import ActionMenu from '../common/ActionMenu';
+import { ACCEPTED_RESOURCE_FILE_TYPES } from '../../constants/ui';
 
-export default function ChatInput({ value, onChange, onSend, disabled }) {
+const ATTACH_TRIGGER_CLASSNAME = 'w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300';
+
+export default function ChatInput({
+  value, onChange, onSend, disabled,
+  attachedResource = null, attachUpload = null, attachError = '',
+  onFileSelected, onPickFromLibrary, onRemoveAttachment,
+}) {
   const ref = useRef(null);
+  const fileInputRef = useRef(null);
 
   const handleKey = (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -20,6 +29,12 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
   const useTemplate = (template) => {
     onChange(template);
     ref.current?.focus();
+  };
+
+  const handleFileInputChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) onFileSelected?.(file);
   };
 
   return (
@@ -41,10 +56,46 @@ export default function ChatInput({ value, onChange, onSend, disabled }) {
             <Layers size={13} /> Flashcards
           </button>
         </div>
+
+        {(attachUpload || attachedResource) && (
+          <div className="flex items-center gap-2 mb-2 bg-primary-50/60 border border-primary-100 rounded-xl px-3 py-2 text-xs">
+            <FileText size={14} className="text-primary flex-shrink-0" />
+            {attachUpload ? (
+              <span className="flex-1 min-w-0 truncate text-ink-600">
+                Uploading &quot;{attachUpload.fileName}&quot;... {attachUpload.progress}%
+              </span>
+            ) : (
+              <span className="flex-1 min-w-0 truncate text-ink-700 font-medium">{attachedResource.title}</span>
+            )}
+            <button
+              type="button"
+              onClick={onRemoveAttachment}
+              aria-label="Remove attachment"
+              className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-full text-ink-400 hover:text-ink-800 hover:bg-ink-100"
+            >
+              {attachUpload ? <Loader2 size={12} className="animate-spin" /> : <X size={13} />}
+            </button>
+          </div>
+        )}
+        {attachError && <p className="text-xs text-rose-600 mb-2">{attachError}</p>}
+
         <div className="flex items-end gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-2xl px-3.5 py-2.5 shadow-soft transition-colors">
-          <button aria-label="Attach file" className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0">
-            <Paperclip size={16} />
-          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_RESOURCE_FILE_TYPES.join(',')}
+            onChange={handleFileInputChange}
+            className="hidden"
+          />
+          <ActionMenu
+            label="Attach a file"
+            icon={<Paperclip size={16} />}
+            triggerClassName={ATTACH_TRIGGER_CLASSNAME}
+            items={[
+              { label: 'Upload a file', icon: <Upload size={14} />, onClick: () => fileInputRef.current?.click() },
+              { label: 'Choose from Resource Library', icon: <FolderOpen size={14} />, onClick: onPickFromLibrary },
+            ]}
+          />
           <textarea
             ref={ref}
             rows={1}

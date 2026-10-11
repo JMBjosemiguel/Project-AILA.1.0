@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Menu } from 'lucide-react';
 import ChatInput from '../../../components/chatbot/ChatInput';
 import ChatSidebar from '../../../components/chatbot/ChatSidebar';
+import AttachResourceDialog from '../../../components/chatbot/AttachResourceDialog';
 import MessageBubble, { TypingBubble } from '../../../components/chatbot/MessageBubble';
 import SuggestedPrompts from '../../../components/chatbot/SuggestedPrompts';
 import AilaOrb from '../../../components/common/AilaOrb';
 import { useToast } from '../../../components/common/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChatbotData } from '../../../hooks/useChatbotData';
+import { ACCEPTED_RESOURCE_FILE_TYPES, MAX_RESOURCE_FILE_SIZE_BYTES } from '../../../constants/ui';
 import { consumePrefillPrompt } from '../../../utils/aiPrefill';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
+import { setResourceSearchTarget } from '../../../utils/resourceSearchTarget';
 import { readChatbotQuizState, writeChatbotQuizState } from '../../../utils/chatbotQuizState';
 import {
   sendChatMessage,
@@ -19,6 +22,7 @@ import {
   regenerateLastResponse,
 } from '../../../services/api/chatService';
 import { saveChatQuizAsQuiz } from '../../../services/api/quizService';
+import { uploadResource } from '../../../services/api/resourceService';
 
 // Sentinel for an AI request that started on a brand-new chat (no server id yet).
 const NEW_CHAT = Symbol('new-chat');
@@ -65,6 +69,15 @@ export default function AssistantPage({ onNavigate }) {
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   // Per-message "Save as Quiz" status, keyed by messageKey(message).
   const [saveQuizStates, setSaveQuizStates] = useState({});
+  // The resource currently attached to the compose box — frontend-session
+  // state only (see chatAttachment design notes in the final report): it
+  // keeps grounding on the same file across follow-ups in this conversation,
+  // but doesn't try to survive a hard page reload or reappear when reopening
+  // a past conversation from history (chat_messages has no column for that).
+  const [attachedResource, setAttachedResource] = useState(null); // { id, title, type }
+  const [attachUpload, setAttachUpload] = useState(null); // { fileName, progress }
+  const [attachError, setAttachError] = useState('');
+  const [showAttachPicker, setShowAttachPicker] = useState(false);
   const toast = useToast();
   const scrollRef = useRef(null);
   const sendingRef = useRef(false);
@@ -72,7 +85,15 @@ export default function AssistantPage({ onNavigate }) {
   const activeChatRef = useRef(null);
   const pendingChatRef = useRef(null);
   const deletedChatsRef = useRef(new Set());
+  const uploadTokenRef = useRef(0);
   const avatarLetter = user?.first_name?.[0] ?? 'A';
+
+  const clearAttachment = () => {
+    uploadTokenRef.current += 1; // invalidates any upload still in flight
+    setAttachUpload(null);
+    setAttachedResource(null);
+    setAttachError('');
+  };
 
   const currentKey = conversationKey(activeChat);
   const showTyping = pendingChat !== null && pendingChat === currentKey;
@@ -133,11 +154,17 @@ export default function AssistantPage({ onNavigate }) {
     const reqChat = conversationKey(activeChat);
     sendingRef.current = true;
     setError('');
-    setMessages((current) => [...current, { id: null, clientId: nextClientId(), role: 'user', text: value, type: 'text', data: null }]);
+    const attachmentForMessage = attachedResource ? { id: attachedResource.id, title: attachedResource.title } : null;
+    setMessages((current) => [...current, {
+      id: null, clientId: nextClientId(), role: 'user', text: value, type: 'text', data: null, attachment: attachmentForMessage,
+    }]);
     setInput('');
     startPending(reqChat);
 
-    const resourceId = pendingResourceIdRef.current;
+    // A fresh "Ask AILA" handoff from the Resource Library (one-shot) takes
+    // priority; otherwise resend whatever is currently attached so follow-ups
+    // in this conversation keep grounding on it (see attachedResource above).
+    const resourceId = pendingResourceIdRef.current ?? attachedResource?.id ?? null;
     pendingResourceIdRef.current = null;
 
     try {
@@ -179,7 +206,51 @@ export default function AssistantPage({ onNavigate }) {
     setMessages([]);
     setActiveChat(null);
     pendingResourceIdRef.current = null;
+    clearAttachment();
     setChatSidebarOpen(false);
+  };
+
+  const handleFileSelected = async (file) => {
+    setAttachError('');
+    if (!ACCEPTED_RESOURCE_FILE_TYPES.includes(file.type)) {
+      setAttachError('That file type is not supported. Try a PDF, Word, PowerPoint, or image file.');
+      return;
+    }
+    if (file.size > MAX_RESOURCE_FILE_SIZE_BYTES) {
+      setAttachError('That file is too large. The maximum size is 200 MB.');
+      return;
+    }
+
+    const token = (uploadTokenRef.current += 1);
+    setAttachedResource(null);
+    setAttachUpload({ fileName: file.name, progress: 0 });
+    try {
+      const resource = await uploadResource(file, null, {
+        onUploadProgress: (progress) => {
+          if (uploadTokenRef.current === token) setAttachUpload((current) => (current ? { ...current, progress } : current));
+        },
+      });
+      if (uploadTokenRef.current !== token) return; // removed while the upload was in flight
+      setAttachUpload(null);
+      setAttachedResource({ id: resource.id, title: resource.title });
+    } catch (uploadError) {
+      if (uploadTokenRef.current !== token) return;
+      setAttachUpload(null);
+      setAttachError(uploadError.message || 'Could not upload that file.');
+    }
+  };
+
+  const handlePickFromLibrary = (resource) => {
+    setShowAttachPicker(false);
+    setAttachError('');
+    uploadTokenRef.current += 1; // invalidates any upload still in flight
+    setAttachUpload(null);
+    setAttachedResource(resource);
+  };
+
+  const handleOpenAttachment = (attachment) => {
+    setResourceSearchTarget(attachment.title);
+    onNavigate?.('resources');
   };
 
   const handleRenameChat = async (id, title) => {
@@ -270,6 +341,7 @@ export default function AssistantPage({ onNavigate }) {
     if (id === activeChat) return;
 
     setError('');
+    clearAttachment();
     setActiveChat(id);
     activeChatRef.current = id;
     setLoadingChat(true);
@@ -347,6 +419,8 @@ export default function AssistantPage({ onNavigate }) {
                     onQuizLocalStateChange={isChatbotQuiz ? (state) => writeChatbotQuizState(message, state) : undefined}
                     onSaveAsQuiz={isChatbotQuiz ? () => handleSaveAsQuiz(message) : undefined}
                     saveAsQuizState={isChatbotQuiz ? (saveQuizStates[key] ?? 'idle') : 'idle'}
+                    attachment={message.attachment ?? null}
+                    onOpenAttachment={handleOpenAttachment}
                   />
                 );
               })}
@@ -361,8 +435,26 @@ export default function AssistantPage({ onNavigate }) {
           </div>
         )}
 
-        <ChatInput value={input} onChange={setInput} onSend={() => send()} disabled={isBusy} />
+        <ChatInput
+          value={input}
+          onChange={setInput}
+          onSend={() => send()}
+          disabled={isBusy || Boolean(attachUpload)}
+          attachedResource={attachedResource}
+          attachUpload={attachUpload}
+          attachError={attachError}
+          onFileSelected={handleFileSelected}
+          onPickFromLibrary={() => setShowAttachPicker(true)}
+          onRemoveAttachment={clearAttachment}
+        />
       </div>
+
+      {showAttachPicker && (
+        <AttachResourceDialog
+          onPick={handlePickFromLibrary}
+          onClose={() => setShowAttachPicker(false)}
+        />
+      )}
     </div>
   );
 }

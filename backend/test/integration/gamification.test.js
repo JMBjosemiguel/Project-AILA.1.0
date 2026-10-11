@@ -252,29 +252,38 @@ test('gamification — achievements, streaks, leaderboard', async (t) => {
     await seedXp(opted2.id, 90, 'lesson_completed:x2');
     await seedXp(hidden.id, 500, 'lesson_completed:x3');
 
-    // Nobody opted in yet.
+    // The board can carry other already-opted-in accounts (real/seeded, or
+    // leftovers from another test run) — assert only on our own tagged rows
+    // by display name, never on the board's absolute size or rank numbers.
+    const ourNames = new Set(['Alice A.', 'Bruno B.', 'Carmen C.']);
+    const ours = (board) => board.entries.filter((e) => ourNames.has(e.displayName));
+
+    // Nobody from this test has opted in yet.
     let board = await gamificationService.getLeaderboard(opted1.id, 'all_time');
-    assert.equal(board.entries.length, 0);
+    assert.deepEqual(ours(board), []);
     assert.equal(board.me, null);
 
     await profileService.updateProfile(opted1.id, { leaderboard_opt_in: true });
     await profileService.updateProfile(opted2.id, { leaderboard_opt_in: true });
 
     board = await gamificationService.getLeaderboard(opted1.id, 'all_time');
-    assert.deepEqual(board.entries.map((e) => e.displayName), ['Bruno B.', 'Alice A.']);
-    assert.deepEqual(board.entries.map((e) => e.rank), [1, 2]);
+    const ourEntries = ours(board);
+    assert.deepEqual(ourEntries.map((e) => e.displayName), ['Bruno B.', 'Alice A.'], 'higher XP ranks first, among our own accounts');
+    assert.ok(ourEntries[0].rank < ourEntries[1].rank, "Bruno's higher XP outranks Alice's");
     assert.equal(board.entries.find((e) => e.displayName === 'Carmen C.'), undefined, 'a hidden student never appears');
-    assert.deepEqual(board.me, { rank: 2, xp: 40 });
+    assert.equal(board.me?.xp, 40);
 
     // No PII leaks in the payload.
     const serialized = JSON.stringify(board);
     assert.doesNotMatch(serialized, /Alvarez|Bautista|Cruz|@example\.com/);
     assert.doesNotMatch(serialized, new RegExp(`"${opted1.id}"|user_id|userId`));
 
-    // Weekly board carries the same rows here (all XP is from this week).
+    // Weekly board carries the same rows here (all XP is from this week) —
+    // only the XP total is ours to assert on, not the absolute rank, since
+    // other opted-in accounts' weekly XP is outside this test's control.
     const weekly = await gamificationService.getLeaderboard(opted2.id, 'weekly');
     assert.equal(weekly.period, 'weekly');
-    assert.deepEqual(weekly.me, { rank: 1, xp: 90 });
+    assert.equal(weekly.me?.xp, 90);
     assert.ok(weekly.weekStart);
   });
 

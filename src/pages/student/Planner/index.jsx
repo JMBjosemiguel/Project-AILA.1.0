@@ -228,7 +228,7 @@ export default function PlannerPage() {
                   onChange={(event) => setDetails((current) => ({ ...current, subject_id: event.target.value }))}
                   className="w-full border border-ink-100 rounded-lg px-2.5 py-1.5 text-sm outline-none bg-surface focus-visible:ring-2 focus-visible:ring-primary-200"
                 >
-                  <option value="">None</option>
+                  <option value="">Custom (not a course)</option>
                   {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
                 </select>
               </div>

@@ -35,7 +35,14 @@ export const authService = {
       const user = await this.getCurrentUser();
       return normalizeSession({ user });
     } catch (error) {
-      tokenStorage.remove();
+      // Only a genuine 401 means the token itself is invalid/expired — clear
+      // it. Anything else (429 rate limit, 5xx, a dropped connection) is a
+      // transient failure of the SERVER, not proof the credential is bad;
+      // wiping the token here would force a full re-login even though the
+      // student was never actually signed out.
+      if (error.status === 401) {
+        tokenStorage.remove();
+      }
       return null;
     }
   },

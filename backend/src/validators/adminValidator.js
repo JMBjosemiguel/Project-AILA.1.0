@@ -25,10 +25,17 @@ const setUserActiveValidator = [
   body('is_active').isBoolean().withMessage('is_active must be a boolean.'),
 ];
 
+// 'course' and 'year_level' were removed as announcement targets — Everyone,
+// Specific student, and Role cover the intended uses, and those two overlap
+// confusingly with a course's own roster / a student's own profile. This
+// only blocks NEW announcements; existing rows sent to a course or year
+// level are untouched and still display correctly (see adminModel's read
+// path / targetLabel on the frontend).
 const announcementValidator = [
   body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 200 }),
   body('body').trim().notEmpty().withMessage('Message is required.').isLength({ max: 2000 }),
-  body('target_type').optional().trim().isIn(['all', 'user', 'course', 'year_level', 'role']),
+  body('target_type').optional().trim().isIn(['all', 'user', 'role'])
+    .withMessage('Target must be Everyone, Specific student, or Role.'),
   body('target_value').optional({ values: 'null' }).trim().isLength({ max: 100 }),
 ];
 

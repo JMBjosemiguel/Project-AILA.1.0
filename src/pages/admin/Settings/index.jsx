@@ -11,19 +11,19 @@ import SearchBar from '../../../components/admin/SearchBar';
 import AnnouncementEditDialog from '../../../components/admin/AnnouncementEditDialog';
 import {
   listAnnouncements, archiveAnnouncement, unarchiveAnnouncement, deleteAnnouncement,
-  sendAnnouncement, listAdminUsers, listAdminCourses,
+  sendAnnouncement, listAdminUsers,
 } from '../../../services/api/adminService';
 import { formatDate } from '../../../utils/formatDate';
 
+// 'course' and 'year_level' targets were removed — Everyone, Specific
+// student, and Role cover the intended uses. targetLabel() below still
+// handles those two values so past announcements keep displaying correctly.
 const TARGET_TYPES = [
   { id: 'all', label: 'Everyone' },
   { id: 'user', label: 'Specific student' },
-  { id: 'course', label: 'Specific course' },
-  { id: 'year_level', label: 'Year level' },
   { id: 'role', label: 'Role' },
 ];
 
-const YEAR_LEVELS = [1, 2, 3, 4];
 const ROLES = ['student', 'admin'];
 
 const ARCHIVED_FILTERS = [
@@ -48,7 +48,6 @@ export default function AdminSettingsPage() {
   const [targetValue, setTargetValue] = useState('');
   const [sending, setSending] = useState(false);
   const [userOptions, setUserOptions] = useState([]);
-  const [courseOptions, setCourseOptions] = useState([]);
 
   const [announcements, setAnnouncements] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, pageSize: 20 });
@@ -76,9 +75,6 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (targetType === 'user' && !userOptions.length) {
       listAdminUsers({ role: 'student', page: 1, pageSize: 100, sort: 'name' }).then((result) => setUserOptions(result.users ?? []));
-    }
-    if (targetType === 'course' && !courseOptions.length) {
-      listAdminCourses({ page: 1, pageSize: 100, sort: 'name' }).then((result) => setCourseOptions(result.courses ?? []));
     }
     setTargetValue('');
   }, [targetType]);
@@ -197,18 +193,6 @@ export default function AdminSettingsPage() {
             <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
               <option value="">Select a student...</option>
               {userOptions.map((u) => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
-            </select>
-          )}
-          {targetType === 'course' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
-              <option value="">Select a course...</option>
-              {courseOptions.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.first_name} {c.last_name})</option>)}
-            </select>
-          )}
-          {targetType === 'year_level' && (
-            <select value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="border border-ink-100 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200">
-              <option value="">Select a year level...</option>
-              {YEAR_LEVELS.map((y) => <option key={y} value={y}>Year {y}</option>)}
             </select>
           )}
           {targetType === 'role' && (

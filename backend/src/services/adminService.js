@@ -22,21 +22,6 @@ async function resolveTargetUserIds({ targetType, targetValue }) {
   if (targetType === 'user') {
     return targetValue ? [Number(targetValue)] : [];
   }
-  if (targetType === 'course') {
-    const rows = await query('SELECT created_by FROM subjects WHERE id = ? AND created_by IS NOT NULL', [Number(targetValue)]);
-    return rows.map((row) => row.created_by);
-  }
-  if (targetType === 'year_level') {
-    const rows = await query(
-      `
-        SELECT u.id FROM users u
-        INNER JOIN user_profiles up ON up.user_id = u.id
-        WHERE up.year_level = ? AND u.deleted_at IS NULL AND u.is_active = 1
-      `,
-      [Number(targetValue)]
-    );
-    return rows.map((row) => row.id);
-  }
   if (targetType === 'role') {
     const rows = await query(
       `SELECT id FROM users WHERE role_id = (SELECT id FROM roles WHERE name = ?) AND deleted_at IS NULL AND is_active = 1`,

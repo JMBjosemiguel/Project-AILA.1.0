@@ -3,6 +3,7 @@ const adminController = require('../controllers/adminController');
 const { authenticate } = require('../middlewares/authenticate');
 const { authorize } = require('../middlewares/authorize');
 const { validateRequest } = require('../middlewares/validateRequest');
+const { aiRateLimiter } = require('../middlewares/aiRateLimiter');
 const {
   userIdParamValidator,
   resourceIdParamValidator,
@@ -48,6 +49,8 @@ router.post('/learning/:courseId/archive', courseIdParamValidator, validateReque
 router.post('/learning/:courseId/unarchive', courseIdParamValidator, validateRequest, adminController.unarchiveCourse);
 
 router.get('/analytics', adminController.getAnalytics);
+router.get('/analytics/topic-groups', adminController.getTopicGroups);
+router.post('/analytics/topic-groups/regroup', aiRateLimiter, adminController.regroupTopicGroups);
 
 router.get('/audit-log/export', adminController.exportAuditLog);
 router.get('/audit-log', paginationQueryValidator, validateRequest, adminController.listAuditLog);

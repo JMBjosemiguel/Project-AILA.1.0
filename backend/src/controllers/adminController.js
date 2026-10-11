@@ -2,6 +2,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/http');
 const adminService = require('../services/adminService');
 const resourceService = require('../services/resourceService');
+const topicGroupingService = require('../services/topicGroupingService');
 
 const getDashboardStats = asyncHandler(async (req, res) => {
   const stats = await adminService.getDashboardStats();
@@ -143,6 +144,16 @@ const getAnalytics = asyncHandler(async (req, res) => {
   sendSuccess(res, analytics, 200, 'Analytics retrieved.');
 });
 
+const getTopicGroups = asyncHandler(async (req, res) => {
+  const result = await topicGroupingService.getTopicGroups();
+  sendSuccess(res, result, 200, 'Topic groups retrieved.');
+});
+
+const regroupTopicGroups = asyncHandler(async (req, res) => {
+  const result = await topicGroupingService.getTopicGroups({ forceRegroup: true });
+  sendSuccess(res, result, 200, 'Topic groups regrouped.');
+});
+
 const listAuditLog = asyncHandler(async (req, res) => {
   const { search = '', action = 'all', role = 'all', from = '', to = '' } = req.query;
   const result = await adminService.listAuditLog({ search, action, role, from, to, page: req.query.page, pageSize: req.query.pageSize });
@@ -207,6 +218,8 @@ module.exports = {
   unarchiveAnnouncement,
   deleteAnnouncement,
   getAnalytics,
+  getTopicGroups,
+  regroupTopicGroups,
   listAuditLog,
   exportAuditLog,
 };

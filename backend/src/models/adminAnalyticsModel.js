@@ -97,6 +97,23 @@ async function getMostActiveStudents(limit = 5) {
   );
 }
 
+// One row per (student, topic) with progress — the same FROM/JOIN/WHERE shape
+// as getTopicMasteryPlatform above, just ungrouped, so the caller can pool
+// rows per AI-defined topic group (weighted avg, distinct student count)
+// instead of only per individual topic.
+async function getTopicProgressRaw() {
+  return query(
+    `
+      SELECT lp.user_id, t.id, t.title, s.name AS course_name, lp.progress_percent
+      FROM learning_progress lp
+      INNER JOIN topics t ON t.id = lp.topic_id
+      INNER JOIN modules m ON m.id = t.module_id
+      INNER JOIN subjects s ON s.id = m.subject_id
+      WHERE lp.status != 'not_started'
+    `
+  );
+}
+
 async function getTopicMasteryPlatform(order = 'desc', limit = 5) {
   return query(
     `
@@ -122,5 +139,6 @@ module.exports = {
   getPopularCourses,
   getPopularResources,
   getMostActiveStudents,
+  getTopicProgressRaw,
   getTopicMasteryPlatform,
 };

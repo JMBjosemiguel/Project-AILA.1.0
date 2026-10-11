@@ -53,6 +53,19 @@ export default function AdminUsersPage() {
   const confirm = useConfirm();
   const toast = useToast();
 
+  // A "View details" link elsewhere (e.g. the Dashboard's "Students who may
+  // need help" card) opens this page with ?userId=<id> in the URL — pick it
+  // up once on mount and open that student's detail dialog directly, then
+  // clean the query string so a later reload/back doesn't reopen it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('userId');
+    if (userId) {
+      setSelectedUserId(Number(userId));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const load = () => {
     setLoading(true);
     setError(null);

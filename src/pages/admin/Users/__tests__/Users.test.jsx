@@ -11,7 +11,9 @@ vi.mock('../../../../services/api/adminService', () => ({
   resetUserProgress: vi.fn(),
   promoteToAdmin: vi.fn(),
 }));
-vi.mock('../../../../components/admin/UserDetailDialog', () => ({ default: () => null }));
+vi.mock('../../../../components/admin/UserDetailDialog', () => ({
+  default: ({ userId }) => <div data-testid="user-detail-dialog">{userId}</div>,
+}));
 
 const toast = { success: vi.fn(), error: vi.fn() };
 vi.mock('../../../../components/common/Toast', () => ({ useToast: () => toast }));
@@ -32,9 +34,26 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, '', '/admin/users');
   listAdminUsers.mockResolvedValue({
     users: [STUDENT, ADMIN],
     pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+  });
+});
+
+describe('AdminUsersPage — opening a user from a ?userId= deep link', () => {
+  it('opens that user\'s detail dialog on mount and cleans up the URL', async () => {
+    window.history.replaceState({}, '', '/admin/users?userId=10');
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId('user-detail-dialog')).toHaveTextContent('10'));
+    expect(window.location.search).toBe('');
+  });
+
+  it('does nothing when there is no userId in the URL', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Ada Lovelace')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-detail-dialog')).not.toBeInTheDocument();
   });
 });
 

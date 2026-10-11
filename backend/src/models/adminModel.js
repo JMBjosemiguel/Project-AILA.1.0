@@ -1,6 +1,10 @@
 const { query, execute } = require('../config/database');
 const { buildTombstoneEmail, buildTombstoneStudentNumber } = require('./userModel');
-const { appStartOfDay } = require('../utils/appTime');
+const { appStartOfDay, appDateStr } = require('../utils/appTime');
+const { appWindowStart, windowStartDays, distinctCountByAppDay } = require('../utils/dayBucket');
+const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
+
+const INACTIVITY_DAYS = 7;
 
 async function getDashboardStats() {
   const [users, courses, resources, conversations, lessons, quizzes, attempts, feedback, activeToday] = await Promise.all([
@@ -94,6 +98,115 @@ async function getRecentActivity(limit = 8) {
   ]);
 
   return { registrations, courses, uploads, quizCompletions, feedback, deletions };
+}
+
+async function getFeedbackPendingCount() {
+  const rows = await query("SELECT COUNT(*) AS count FROM feedback WHERE status = 'pending' AND deleted_at IS NULL");
+  return rows[0].count;
+}
+
+async function getUnverifiedOver24hCount() {
+  const rows = await query(
+    "SELECT COUNT(*) AS count FROM users WHERE email_verified_at IS NULL AND deleted_at IS NULL AND created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+  );
+  return rows[0].count;
+}
+
+// Active, verified students who may need a nudge: no learning activity in
+// the last INACTIVITY_DAYS days (learning_streaks.last_active_date, the same
+// signal the student-facing streak feature already treats as "last day this
+// student did something that counts"), or a weak recent quiz average (same
+// last-10-submitted-attempts window as studentContextService.getRecentQuizAverage,
+// just computed for every student at once instead of one at a time).
+// Returns up to `limit` students plus the true total so the dashboard's
+// "needs attention" count isn't silently capped at the display limit.
+async function getStudentsNeedingHelp(limit = 5) {
+  const cutoffDate = appDateStr(Date.now() - INACTIVITY_DAYS * 24 * 60 * 60 * 1000);
+
+  const [inactive, lowScoring] = await Promise.all([
+    query(
+      `
+        SELECT u.id, u.first_name, u.last_name, ls.last_active_date
+        FROM users u
+        INNER JOIN roles r ON r.id = u.role_id AND r.name = 'student'
+        LEFT JOIN learning_streaks ls ON ls.user_id = u.id
+        WHERE u.deleted_at IS NULL AND u.is_active = 1 AND u.email_verified_at IS NOT NULL
+          AND (ls.last_active_date IS NULL OR ls.last_active_date < ?)
+        ORDER BY (ls.last_active_date IS NULL) DESC, ls.last_active_date ASC
+      `,
+      [cutoffDate]
+    ),
+    query(
+      `
+        SELECT u.id, u.first_name, u.last_name, ranked.avg_percent
+        FROM users u
+        INNER JOIN roles r ON r.id = u.role_id AND r.name = 'student'
+        INNER JOIN (
+          SELECT user_id, ROUND(AVG(pct) * 100, 0) AS avg_percent
+          FROM (
+            SELECT qa.user_id, qa.score / qa.total AS pct,
+              ROW_NUMBER() OVER (PARTITION BY qa.user_id ORDER BY qa.completed_at DESC) AS rn
+            FROM quiz_attempts qa
+            WHERE qa.status = 'submitted' AND qa.total > 0
+          ) recent
+          WHERE rn <= 10
+          GROUP BY user_id
+          HAVING avg_percent < ?
+        ) ranked ON ranked.user_id = u.id
+        WHERE u.deleted_at IS NULL AND u.is_active = 1 AND u.email_verified_at IS NOT NULL
+        ORDER BY ranked.avg_percent ASC
+      `,
+      [WEAK_SCORE_THRESHOLD]
+    ),
+  ]);
+
+  const byId = new Map();
+  for (const row of inactive) {
+    const days = row.last_active_date
+      ? Math.floor((Date.now() - new Date(row.last_active_date).getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+    byId.set(row.id, {
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      reason: days === null ? 'No learning activity recorded yet' : `No activity for ${days} days`,
+    });
+  }
+  for (const row of lowScoring) {
+    // Inactivity is the more fundamental signal — don't overwrite it with the
+    // low-score reason if a student already qualifies both ways.
+    if (byId.has(row.id)) continue;
+    byId.set(row.id, {
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      reason: `Recent quiz average ${row.avg_percent}%`,
+    });
+  }
+
+  const all = Array.from(byId.values());
+  return { total: all.length, students: all.slice(0, limit) };
+}
+
+// Distinct active students per APP_TIMEZONE calendar day, last `days` days,
+// zero-filled. "Active" = any dashboard_activity_log event (lesson/quiz/task
+// completion, resource views, XP, streaks) — the broadest existing signal of
+// "this student did something," not just the 3 learning-completion types the
+// student dashboard's own weekly chart filters to.
+async function getActiveStudentsByDay(days = 7) {
+  const rows = await query(
+    `
+      SELECT dal.user_id, dal.created_at AS ts
+      FROM dashboard_activity_log dal
+      INNER JOIN users u ON u.id = dal.user_id
+      WHERE dal.created_at >= ? AND u.deleted_at IS NULL
+    `,
+    [appWindowStart(days - 1)]
+  );
+  const validDays = windowStartDays(days);
+  const counted = distinctCountByAppDay(rows, 'ts', 'user_id');
+  const countByDate = new Map(counted.map((row) => [row.date, row.count]));
+  return validDays.map((date) => ({ date, count: countByDate.get(date) || 0 }));
 }
 
 async function listStudentUserIds() {
@@ -400,6 +513,10 @@ async function setSubjectArchived(subjectId, isArchived) {
 module.exports = {
   getDashboardStats,
   getRecentActivity,
+  getFeedbackPendingCount,
+  getUnverifiedOver24hCount,
+  getStudentsNeedingHelp,
+  getActiveStudentsByDay,
   listStudentUserIds,
   listUsers,
   getUserDetail,

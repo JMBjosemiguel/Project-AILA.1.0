@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Send, Users, BookOpen, FolderOpen, MessageSquare, GraduationCap,
   ClipboardCheck, Star, Activity, UserPlus, Sparkles, Upload, Trash2, AlertTriangle,
+  Clock, LifeBuoy,
 } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
@@ -9,7 +10,68 @@ import StatCard from '../../../components/common/StatCard';
 import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonStat, SkeletonList } from '../../../components/common/Skeleton';
 import { useToast } from '../../../components/common/Toast';
+import BarChart from '../../../components/analytics/BarChart';
 import { getAdminDashboard, sendAnnouncement } from '../../../services/api/adminService';
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const STUDENTS_NEEDING_HELP_ANCHOR = 'students-needing-help';
+
+// Opens the Users page with ?userId=<id> in the URL and triggers the
+// router's own popstate listener so it picks up the new path — there is no
+// shared navigate-with-params helper, so this mirrors the pushState/popstate
+// pattern LessonReader already uses for its own history-aware state.
+function goToUserDetail(userId) {
+  window.history.pushState({}, '', `/admin/users?userId=${userId}`);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function scrollToStudentsNeedingHelp() {
+  document.getElementById(STUDENTS_NEEDING_HELP_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Consecutive admin-audit "removed a <table>" rows by the same admin on the
+// same table collapse into one row — e.g. 6 separate "removed a user" rows
+// become a single "removed 6 users" row.
+function collapseDeletions(deletions) {
+  const sorted = [...deletions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const groups = [];
+  for (const d of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last.first_name === d.first_name && last.last_name === d.last_name && last.target_table === d.target_table) {
+      last.count += 1;
+      last.ids.push(d.id);
+    } else {
+      groups.push({ first_name: d.first_name, last_name: d.last_name, target_table: d.target_table, created_at: d.created_at, count: 1, ids: [d.id] });
+    }
+  }
+  return groups.map((g) => ({
+    key: `del-${g.ids.join('-')}`,
+    icon: Trash2,
+    color: '#EF4444',
+    time: g.created_at,
+    text: g.count === 1
+      ? `${g.first_name} ${g.last_name} removed a ${g.target_table.slice(0, -1)}`
+      : `${g.first_name} ${g.last_name} removed ${g.count} ${g.target_table}`,
+  }));
+}
+
+function AttentionItem({ icon: Icon, label, value, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 min-w-[180px] flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-left transition-colors hover:border-amber-200"
+    >
+      <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+        <Icon size={15} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-lg font-display font-bold leading-none text-ink-800">{value}</div>
+        <div className="text-xs font-medium mt-0.5 text-ink-500">{label}</div>
+      </div>
+    </button>
+  );
+}
 
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -35,7 +97,7 @@ function ActivityRow({ icon: Icon, color, text, time }) {
   );
 }
 
-export default function AdminDashboardPage() {
+export default function AdminDashboardPage({ onNavigate }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -88,8 +150,14 @@ export default function AdminDashboardPage() {
     ...activity.uploads.map((u) => ({ key: `up-${u.id}`, icon: Upload, color: '#059669', time: u.created_at, text: `${u.first_name || 'A student'} uploaded "${u.title}"` })),
     ...activity.quizCompletions.map((q) => ({ key: `qz-${q.id}`, icon: ClipboardCheck, color: '#D97706', time: q.completed_at, text: `${q.first_name} completed quiz "${q.topic}" (${q.score}/${q.total})` })),
     ...activity.feedback.map((f) => ({ key: `fb-${f.id}`, icon: Star, color: '#DB2777', time: f.created_at, text: `${f.first_name} gave ${f.rating ? `${f.rating}-star ` : ''}feedback` })),
-    ...activity.deletions.map((d) => ({ key: `del-${d.id}`, icon: Trash2, color: '#EF4444', time: d.created_at, text: `${d.first_name} ${d.last_name} removed a ${d.target_table.slice(0, -1)}` })),
+    ...collapseDeletions(activity.deletions),
   ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 12) : [];
+
+  const needsAttention = stats?.needsAttention;
+  const activeStudentsChartData = (stats?.activeStudentsByDay ?? []).map((d) => ({
+    day: WEEKDAY_LABELS[new Date(`${d.date}T00:00:00Z`).getUTCDay()],
+    hours: d.count,
+  }));
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
@@ -110,6 +178,29 @@ export default function AdminDashboardPage() {
           cards.map((card) => <StatCard key={card.label} label={card.label} value={String(card.value ?? 0)} icon={card.icon} />)
         )}
       </div>
+
+      {!loading && needsAttention && (
+        <div className="flex flex-wrap gap-3 mb-5">
+          <AttentionItem
+            icon={MessageSquare}
+            label="Feedback awaiting reply"
+            value={needsAttention.feedbackPending}
+            onClick={() => onNavigate('feedback')}
+          />
+          <AttentionItem
+            icon={Clock}
+            label="Unverified 24h+"
+            value={needsAttention.unverifiedOver24h}
+            onClick={() => onNavigate('users')}
+          />
+          <AttentionItem
+            icon={LifeBuoy}
+            label="Students who may need help"
+            value={needsAttention.studentsNeedingHelp}
+            onClick={scrollToStudentsNeedingHelp}
+          />
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -165,6 +256,46 @@ export default function AdminDashboardPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div id={STUDENTS_NEEDING_HELP_ANCHOR} className="grid lg:grid-cols-3 gap-4 mt-4">
+        <Card className="lg:col-span-2">
+          <CardHeader title="Students who may need help" subtitle="Active, verified students with no recent activity or a weak quiz average." />
+          {loading ? (
+            <SkeletonList count={3} />
+          ) : stats?.studentsNeedingHelp?.length ? (
+            <div className="flex flex-col divide-y divide-ink-50">
+              {stats.studentsNeedingHelp.map((student) => (
+                <div key={student.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink-700 truncate">{student.first_name} {student.last_name}</p>
+                    <p className="text-xs text-ink-400">{student.reason}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => goToUserDetail(student.id)}
+                    className="text-xs font-semibold text-primary hover:underline flex-shrink-0"
+                  >
+                    View
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={LifeBuoy} title="Everyone's doing fine" message="Students with no recent activity or a weak quiz average will show up here." />
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Active students" subtitle="Distinct students active per day, last 7 days." />
+          {loading ? (
+            <SkeletonList count={1} />
+          ) : activeStudentsChartData.some((d) => d.hours > 0) ? (
+            <BarChart data={activeStudentsChartData} unit="" />
+          ) : (
+            <EmptyState title="No active students yet" message="Daily active students will appear here." />
+          )}
+        </Card>
       </div>
     </div>
   );

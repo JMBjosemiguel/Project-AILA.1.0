@@ -76,10 +76,27 @@ function avgPercentByAppDay(rows, tsKey = 'ts') {
     }));
 }
 
+// Groups rows by their APP_TIMEZONE calendar date and counts DISTINCT values
+// of `idKey` per day (e.g. many activity rows per user, but each user should
+// only count once per day). Returns `{ date, count }` rows, oldest first,
+// omitting days with no rows.
+function distinctCountByAppDay(rows, tsKey, idKey) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const day = appDateStr(row[tsKey]);
+    if (!byDay.has(day)) byDay.set(day, new Set());
+    byDay.get(day).add(row[idKey]);
+  }
+  return [...byDay.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([date, ids]) => ({ date, count: ids.size }));
+}
+
 module.exports = {
   appWindowStart,
   windowStartDays,
   countByAppDay,
   sumByAppDay,
   avgPercentByAppDay,
+  distinctCountByAppDay,
 };

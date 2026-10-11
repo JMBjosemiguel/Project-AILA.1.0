@@ -1,6 +1,6 @@
 const { query } = require('../config/database');
+const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
 
-const WEAK_SCORE_THRESHOLD = 60;
 const STRONG_SCORE_THRESHOLD = 80;
 const STALE_TOPIC_DAYS = 3;
 const RECENT_ATTEMPTS_WINDOW = 10;

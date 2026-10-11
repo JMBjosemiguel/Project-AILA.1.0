@@ -11,11 +11,25 @@ const { logAdminAction } = require('../utils/adminAudit');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 async function getDashboardStats() {
-  const [stats, activity] = await Promise.all([
+  const [stats, activity, feedbackPending, unverifiedOver24h, studentsNeedingHelp, activeStudentsByDay] = await Promise.all([
     adminModel.getDashboardStats(),
     adminModel.getRecentActivity(6),
+    adminModel.getFeedbackPendingCount(),
+    adminModel.getUnverifiedOver24hCount(),
+    adminModel.getStudentsNeedingHelp(5),
+    adminModel.getActiveStudentsByDay(7),
   ]);
-  return { ...stats, recentActivity: activity };
+  return {
+    ...stats,
+    recentActivity: activity,
+    needsAttention: {
+      feedbackPending,
+      unverifiedOver24h,
+      studentsNeedingHelp: studentsNeedingHelp.total,
+    },
+    studentsNeedingHelp: studentsNeedingHelp.students,
+    activeStudentsByDay,
+  };
 }
 
 async function resolveTargetUserIds({ targetType, targetValue }) {

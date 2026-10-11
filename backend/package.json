@@ -12,7 +12,9 @@
     "test": "node --test \"test/unit/**/*.test.js\"",
     "test:integration": "node --test --test-concurrency=1 \"test/integration/**/*.test.js\"",
     "test:smoke": "node --check src/server.js",
-    "validate:deployment": "node src/scripts/validateDeploymentConfig.js"
+    "validate:deployment": "node src/scripts/validateDeploymentConfig.js",
+    "mock:seed": "node scripts/mockData.js seed",
+    "mock:remove": "node scripts/mockData.js remove"
   },
   "keywords": [],
   "author": "",

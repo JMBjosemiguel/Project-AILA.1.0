@@ -242,14 +242,21 @@ test('gamification — achievements, streaks, leaderboard', async (t) => {
     const opted2 = await makeStudent('lb2', { firstName: 'Bruno', lastName: 'Bautista' });
     const hidden = await makeStudent('lb3', { firstName: 'Carmen', lastName: 'Cruz' });
 
-    // Give them XP this week via real awards.
+    // Give them XP this week via real awards. getLeaderboard's `entries` is
+    // capped to its top BOARD_SIZE (10) — with enough OTHER opted-in accounts
+    // around (demo mock data, a busy shared dev DB, ...) a modest XP total
+    // could rank outside that window even though `board.me` (computed
+    // separately, never capped) would still see it fine. Seed XP far above
+    // anything realistic so opted1/opted2 are guaranteed a top-10 spot
+    // regardless of ambient data, while keeping opted2 > opted1 for the
+    // ordering assertion below.
     const seedXp = async (userId, points, key) => {
       await db.query('INSERT INTO xp_events (user_id, event_key, points) VALUES (?, ?, ?)', [userId, key, points]);
       const total = Number((await db.query('SELECT COALESCE(SUM(points),0) s FROM xp_events WHERE user_id = ?', [userId]))[0].s);
       await db.query('UPDATE user_profiles SET xp_points = ?, level = ? WHERE user_id = ?', [total, Math.floor(total / 100) + 1, userId]);
     };
-    await seedXp(opted1.id, 40, 'lesson_completed:x1');
-    await seedXp(opted2.id, 90, 'lesson_completed:x2');
+    await seedXp(opted1.id, 500000, 'lesson_completed:x1');
+    await seedXp(opted2.id, 600000, 'lesson_completed:x2');
     await seedXp(hidden.id, 500, 'lesson_completed:x3');
 
     // The board can carry other already-opted-in accounts (real/seeded, or
@@ -271,7 +278,7 @@ test('gamification — achievements, streaks, leaderboard', async (t) => {
     assert.deepEqual(ourEntries.map((e) => e.displayName), ['Bruno B.', 'Alice A.'], 'higher XP ranks first, among our own accounts');
     assert.ok(ourEntries[0].rank < ourEntries[1].rank, "Bruno's higher XP outranks Alice's");
     assert.equal(board.entries.find((e) => e.displayName === 'Carmen C.'), undefined, 'a hidden student never appears');
-    assert.equal(board.me?.xp, 40);
+    assert.equal(board.me?.xp, 500000);
 
     // No PII leaks in the payload.
     const serialized = JSON.stringify(board);
@@ -283,7 +290,7 @@ test('gamification — achievements, streaks, leaderboard', async (t) => {
     // other opted-in accounts' weekly XP is outside this test's control.
     const weekly = await gamificationService.getLeaderboard(opted2.id, 'weekly');
     assert.equal(weekly.period, 'weekly');
-    assert.equal(weekly.me?.xp, 90);
+    assert.equal(weekly.me?.xp, 600000);
     assert.ok(weekly.weekStart);
   });
 

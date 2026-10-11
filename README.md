@@ -135,6 +135,24 @@ Local dev uses `aila_db` on XAMPP MySQL/MariaDB. For a **fresh install** import
 **existing database on v1.0.0**, apply the ordered migrations in
 `database/migrations/` (`001`–`009`) — see `database/migrations/README.md`.
 
+## Mock data
+
+For demos, `backend/scripts/mockData.js` seeds ~150 synthetic BS Nursing students
+(`mock.001@mock.aila.local` … `mock.150@mock.aila.local`) with courses, lesson/quiz
+progress, XP, streaks, achievements, feedback and a few chat conversations, so the
+leaderboard, admin dashboard, analytics and AI topic groups look like a real class
+instead of an empty database. Data is deterministic (fixed random seed) and tagged for
+exact removal — every mock course additionally carries a `code` starting with `MOCK-`.
+
+```bash
+npm run mock:seed    # removes any earlier mock data, then re-seeds
+npm run mock:remove  # deletes mock data only — real/seeded accounts are untouched
+```
+
+The script refuses to run unless `NODE_ENV` isn't `production`, `DB_HOST` is
+`localhost`/`127.0.0.1`, and `DB_SSL` is off — **never run it against production.**
+There is no override flag.
+
 ## Run
 
 ```bash

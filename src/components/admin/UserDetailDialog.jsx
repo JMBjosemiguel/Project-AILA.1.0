@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Flame, Loader2, MessageSquare, X } from 'lucide-react';
 import { getAdminUserDetail } from '../../services/api/adminService';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
+import ActivityList from '../student/ActivityList';
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
@@ -85,14 +86,7 @@ export default function UserDetailDialog({ userId, onClose }) {
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Recent activity</div>
                 {detail.recentActivity?.length ? (
-                  <div className="flex flex-col divide-y divide-ink-50">
-                    {detail.recentActivity.map((item) => (
-                      <div key={item.id} className="py-2 text-sm text-ink-600">
-                        {item.description}
-                        <span className="block text-xs text-ink-400">{formatDateTime(item.created_at)}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <ActivityList activities={detail.recentActivity} />
                 ) : <p className="text-sm text-ink-400">No recent activity.</p>}
               </div>
 

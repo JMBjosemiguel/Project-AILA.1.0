@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { db, purgeByTag } = require('./helpers');
+const { db, purgeByTag, api, serverReachable, createStudent } = require('./helpers');
 
 // Drives aiService.generateChatResponse in-process against the real local DB
 // with a stubbed Gemini — same convention as chatIntent.test.js (re-require
@@ -172,9 +172,21 @@ test('chat attachments (resource grounding)', async (t) => {
     const { aiService } = installGeminiStub();
     const reopened = await aiService.getConversation(A.id, started.conversationId);
     assert.deepEqual(reopened.conversation.resource, { id: resourceA2, title: 'A\'s OS Notes' });
+    assert.equal(reopened.conversation.resource_id, resourceA2);
 
     // Another student can't read A's conversation at all (opaque 404).
     await assert.rejects(() => aiService.getConversation(B.id, started.conversationId), (err) => err.statusCode === 404);
+
+    // Access revoked since attaching (soft-deleted here) — resource_id must
+    // NOT stay stale next to a null resource; both report "not attached."
+    await db.query('UPDATE resources SET deleted_at = NOW() WHERE id = ?', [resourceA2]);
+    try {
+      const reopenedAfterRevoke = await aiService.getConversation(A.id, started.conversationId);
+      assert.equal(reopenedAfterRevoke.conversation.resource, null);
+      assert.equal(reopenedAfterRevoke.conversation.resource_id, null);
+    } finally {
+      await db.query('UPDATE resources SET deleted_at = NULL WHERE id = ?', [resourceA2]);
+    }
   });
 
   await t.test('a conversation created via a resourceId on the first message (the "Ask AILA" path) shows its file too', async () => {
@@ -195,5 +207,30 @@ test('chat attachments (resource grounding)', async (t) => {
     const { aiService } = installGeminiStub();
     const reopened = await aiService.getConversation(A.id, started.conversationId);
     assert.equal(reopened.conversation.resource, null);
+  });
+
+  // The one HTTP-level test in this file (every test above drives
+  // aiService.generateChatResponse in-process, bypassing Express entirely) —
+  // this specifically exercises sendMessageValidator's `resource_id` coercion.
+  // generateChatResponse's ownership check only runs when `typeof resourceId
+  // === 'number'`; without the validator's .toInt(), a numeric STRING skips
+  // that check entirely and (per the real bug this closes) would go on to
+  // call Gemini grounded on a resource the student never got checked against
+  // — this asserts the request is rejected before any Gemini call happens,
+  // using another student's PRIVATE resource so a regression here would be a
+  // real cross-student data leak, not just a validation nicety.
+  await t.test('resource_id sent as a numeric STRING over real HTTP is still ownership-checked (validator coercion)', async () => {
+    if (!(await serverReachable())) return; // covered by the in-process tests above either way
+    const student = await createStudent(TAG, 'httpstring');
+    try {
+      const res = await api('POST', '/chat', {
+        token: student.token,
+        body: { message: 'Summarize the attached file for me.', resource_id: String(resourceB) },
+      });
+      assert.equal(res.status, 404);
+    } finally {
+      await db.query('DELETE FROM chat_messages WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id = ?)', [student.id]).catch(() => {});
+      await db.query('DELETE FROM chat_conversations WHERE user_id = ?', [student.id]).catch(() => {});
+    }
   });
 });

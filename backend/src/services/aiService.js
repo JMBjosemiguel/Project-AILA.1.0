@@ -406,7 +406,10 @@ async function getConversation(userId, conversationId) {
   const messages = await chatModel.getMessagesForConversation(conversation.id);
 
   return {
-    conversation: { ...conversation, resource },
+    // `resource_id` is overridden (not just spread from the raw row) so it
+    // can never disagree with `resource` above — if access was revoked since
+    // attaching, both report "not attached," not a stale id next to a null.
+    conversation: { ...conversation, resource_id: resource?.id ?? null, resource },
     messages: messages.map((row) => ({
       id: row.id,
       sender: row.sender,

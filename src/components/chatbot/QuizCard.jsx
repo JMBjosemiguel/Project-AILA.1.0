@@ -14,6 +14,33 @@ function normalize(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+// Identification only: uppercase, trim, collapse whitespace, strip
+// surrounding punctuation, then accept an exact match or one that differs
+// only by a trailing singular/plural "s"/"es" on either side — mirrors the
+// backend's identification grading (quizService.isAnswerMatch) so the
+// instant client-side check here never disagrees with the server's.
+function normalizeIdentification(value) {
+  return (value ?? '')
+    .toString()
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
+function isSimplePluralVariant(a, b) {
+  return a === `${b}S` || a === `${b}ES` || b === `${a}S` || b === `${a}ES`;
+}
+
+function isAnswerMatch(selectedAnswer, correctAnswer, quizType) {
+  if (quizType !== 'identification') {
+    return normalize(selectedAnswer) === normalize(correctAnswer);
+  }
+  const a = normalizeIdentification(selectedAnswer);
+  const b = normalizeIdentification(correctAnswer);
+  return a === b || isSimplePluralVariant(a, b);
+}
+
 // Server-saved answers arrive as [{ questionId, selectedAnswer }]; QuizCard keys
 // its local answer state by item index, so map one onto the other up front.
 function seedAnswers(items, initialAnswers) {
@@ -29,7 +56,7 @@ function seedAnswers(items, initialAnswers) {
 // A graded quiz always resolves to one review row per item, no matter whether
 // it was graded by the server (persisted quiz) or self-checked from an inline
 // answer key (chatbot practice quiz).
-function reviewFromServerResult(items, answers, result) {
+function reviewFromServerResult(items, answers, result, quizType) {
   const graded = Array.isArray(result?.items) ? result.items : [];
   const byId = new Map(graded.map((row) => [row.id, row]));
 
@@ -40,16 +67,16 @@ function reviewFromServerResult(items, answers, result) {
       explanation: row.explanation ?? '',
       isCorrect: typeof row.isCorrect === 'boolean'
         ? row.isCorrect
-        : normalize(answers[index]) === normalize(row.correctAnswer),
+        : isAnswerMatch(answers[index], row.correctAnswer, quizType),
     };
   });
 }
 
-function reviewFromInlineKey(items, answers) {
+function reviewFromInlineKey(items, answers, quizType) {
   return items.map((item, index) => ({
     correctAnswer: item.correctAnswer ?? '',
     explanation: item.explanation ?? '',
-    isCorrect: normalize(answers[index]) === normalize(item.correctAnswer),
+    isCorrect: isAnswerMatch(answers[index], item.correctAnswer, quizType),
   }));
 }
 
@@ -156,7 +183,7 @@ export default function QuizCard({
       setSubmitting(true);
       try {
         const result = await onSubmit(payload);
-        setReview(reviewFromServerResult(items, answers, result));
+        setReview(reviewFromServerResult(items, answers, result, quiz?.quizType));
       } catch {
         setSubmitting(false);
       }
@@ -164,7 +191,7 @@ export default function QuizCard({
     }
 
     // No server round-trip — informal practice quiz self-checked on the client.
-    const graded = reviewFromInlineKey(items, answers);
+    const graded = reviewFromInlineKey(items, answers, quiz?.quizType);
     setReview(graded);
     onLocalStateChange?.({ answers, review: graded });
   };

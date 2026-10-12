@@ -357,6 +357,38 @@ function normalizeAnswer(value) {
   return (value ?? '').toString().trim().toLowerCase();
 }
 
+// Identification grading only: uppercase, trim, collapse repeated whitespace,
+// and strip surrounding punctuation, so "VACUUM TUBES." and " vacuum tubes "
+// compare equal before the singular/plural check below ever runs.
+function normalizeIdentificationAnswer(value) {
+  return (value ?? '')
+    .toString()
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
+// True when one side equals the other plus a trailing "S" or "ES" — i.e. one
+// is the simple plural of the other (e.g. "VACUUM TUBE" / "VACUUM TUBES").
+// Appending, not stripping a fixed suffix from both: a word that already
+// ends in "E" (TUBE -> TUBES) must not get 2 chars chopped off either side.
+function isSimplePluralVariant(a, b) {
+  return a === `${b}S` || a === `${b}ES` || b === `${a}S` || b === `${a}ES`;
+}
+
+// Multiple-choice and true/false grading stay exact (normalizeAnswer,
+// unchanged). Identification alone gets the forgiving compare above — this
+// only affects answers graded from this point on, never past attempts.
+function isAnswerMatch(selectedAnswer, correctAnswer, quizType) {
+  if (quizType !== 'identification') {
+    return normalizeAnswer(selectedAnswer) === normalizeAnswer(correctAnswer);
+  }
+  const a = normalizeIdentificationAnswer(selectedAnswer);
+  const b = normalizeIdentificationAnswer(correctAnswer);
+  return a === b || isSimplePluralVariant(a, b);
+}
+
 /**
  * TAKE payload — everything the client needs to answer the quiz and NOTHING
  * that reveals the answer key. No correct_answer / correctAnswer / explanation
@@ -491,7 +523,7 @@ async function buildFailRecommendation(userId, quiz) {
 function gradeQuiz(quiz, answerByQuestionId) {
   const gradedAnswers = quiz.questions.map((question) => {
     const selectedAnswer = answerByQuestionId.get(question.id) ?? '';
-    const isCorrect = normalizeAnswer(selectedAnswer) === normalizeAnswer(question.correct_answer);
+    const isCorrect = isAnswerMatch(selectedAnswer, question.correct_answer, quiz.quiz_type);
     return { questionId: question.id, selectedAnswer, isCorrect };
   });
   const score = gradedAnswers.filter((answer) => answer.isCorrect).length;
@@ -1432,4 +1464,6 @@ module.exports = {
   MAX_BATCH_CALLS_PER_QUIZ,
   extractLessonCoreSections,
   buildQuizSourceContextBlock,
+  normalizeAnswer,
+  isAnswerMatch,
 };

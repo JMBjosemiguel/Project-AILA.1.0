@@ -165,9 +165,9 @@ export default function LessonReader({
         <div className="max-w-[760px] mx-auto flex items-start justify-between gap-3 px-4 sm:px-6 py-3">
           <div className="min-w-0">
             {detail && (
-              <p className="text-xs text-ink-400 truncate">{detail.subject.name} / {detail.module.title} / {detail.topic.title}</p>
+              <p className="text-xs text-ink-400 break-words">{detail.subject.name} / {detail.module.title} / {detail.topic.title}</p>
             )}
-            <h2 id="lesson-reader-title" className="text-base font-display font-semibold text-ink-800 truncate">
+            <h2 id="lesson-reader-title" className="text-base font-display font-semibold text-ink-800 break-words">
               {detail?.lesson.title ?? 'Loading lesson...'}
             </h2>
             {detail && (

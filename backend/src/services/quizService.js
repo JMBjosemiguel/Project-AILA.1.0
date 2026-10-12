@@ -207,7 +207,43 @@ const QUIZ_TYPE_INSTRUCTIONS = {
   identification: 'Each item must omit "options" (or leave it empty) and "correctAnswer" must be the short expected term or phrase.',
 };
 
-async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium', sourceText = null, personalizationText = '' }) {
+// Lesson content is generated as '## <Heading>' Markdown sections in a fixed
+// order (see courseGenerationService.LESSON_CONTENT_PROMPT_SECTIONS). Pulling
+// just the core sections keeps the quiz grounded in what the lesson actually
+// teaches without the examples/recap/review sections bloating the prompt.
+const LESSON_CONTEXT_SECTION_HEADINGS = ['Objectives', 'Summary', 'Main Explanation'];
+const LESSON_CONTEXT_MAX_CHARS = 4000;
+
+function extractLessonCoreSections(content) {
+  if (!content) return '';
+  const sections = new Map();
+  for (const block of content.split(/\n(?=##\s)/)) {
+    const headingMatch = block.match(/^##\s*(.+?)\s*\n/);
+    if (!headingMatch) continue;
+    sections.set(headingMatch[1].trim(), block.slice(headingMatch[0].length).trim());
+  }
+  const picked = LESSON_CONTEXT_SECTION_HEADINGS
+    .filter((heading) => sections.has(heading))
+    .map((heading) => `## ${heading}\n${sections.get(heading)}`);
+  return truncateForAi(picked.join('\n\n'), LESSON_CONTEXT_MAX_CHARS);
+}
+
+// Builds the delimited "what this quiz must stay on-topic about" block for a
+// lesson- or topic-sourced quiz (see quizModel.getQuizSourceContext). Returns
+// '' for every other source type, which callers treat as "no extra context".
+function buildQuizSourceContextBlock(sourceContext) {
+  if (!sourceContext) return '';
+  const lines = [];
+  if (sourceContext.courseTitle) lines.push(`Course: ${sourceContext.courseTitle}`);
+  if (sourceContext.moduleTitle) lines.push(`Module: ${sourceContext.moduleTitle}`);
+  if (sourceContext.topicTitle) lines.push(`Topic: ${sourceContext.topicTitle}`);
+  if (sourceContext.lessonTitle) lines.push(`Lesson: ${sourceContext.lessonTitle}`);
+  const coreSections = extractLessonCoreSections(sourceContext.lessonContent);
+  if (coreSections) lines.push('', 'Lesson content:', coreSections);
+  return lines.join('\n');
+}
+
+async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium', sourceText = null, sourceContextText = '', personalizationText = '' }) {
   const typeLabel = QUIZ_TYPE_LABELS[quizType] || QUIZ_TYPE_LABELS.multiple_choice;
   const difficultyLabel = DIFFICULTY_LABELS[difficulty] || DIFFICULTY_LABELS.medium;
 
@@ -220,11 +256,15 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
       ? `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz based ONLY on the following document content. Base every question on facts actually present in the document.`
       : `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz for a college student on the topic below.`,
     personalizationService.delimitStudentText('topic', topic),
+    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+    sourceContextText
+      ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above. Do not drift to a different subject or field, even if the topic title alone could plausibly apply elsewhere.'
+      : '',
     QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
     'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
     'Do not include any text outside the JSON object.',
     sourceText ? `\n\nDocument content:\n${truncateForAi(sourceText, 10000)}` : '',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   const generationConfig = {
     maxOutputTokens: quizOutputBudget(itemCount),
@@ -464,14 +504,20 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
     sourceText = await resourceModel.getExtractedText(sourceId, userId).catch(() => null);
   }
 
+  // Lesson/topic quizzes are grounded in the actual course/module/topic
+  // (and, for a lesson, its own content) rather than trusting whatever bare
+  // topic string the frontend sent — see quizModel.getQuizSourceContext.
+  const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
+  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  const effectiveTopic = sourceContext?.lessonTitle || sourceContext?.topicTitle || topic;
+
   // Personalize the formal quiz to the student's context, scoped to the source
   // course/topic where one exists. Best-effort — a context failure must not
   // block quiz generation.
   let context = null;
   try {
-    const subjectId = await quizModel.getSubjectIdForSource(sourceType, sourceId).catch(() => null);
     context = await personalizationService.buildPersonalizationContext(userId, {
-      subjectId,
+      subjectId: sourceContext?.subjectId ?? null,
       requestedDifficulty: difficulty,
       generationType: 'quiz',
     });
@@ -480,11 +526,12 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
   }
 
   const generated = await generateQuiz({
-    topic,
+    topic: effectiveTopic,
     quizType,
     itemCount,
     difficulty,
     sourceText,
+    sourceContextText,
     personalizationText: personalizationService.formatPersonalizationPrompt(context),
   });
 
@@ -492,9 +539,13 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
     throw new ApiError(502, 'AILA could not generate that quiz. Please try again.');
   }
 
+  // For lesson/topic quizzes, name the quiz after the resolved lesson/topic
+  // title, not whatever Gemini's own "topic" field happened to echo back.
+  const finalTopic = sourceContext ? effectiveTopic : generated.topic;
+
   const quizId = await quizModel.createQuiz({
     userId,
-    topic: generated.topic,
+    topic: finalTopic,
     quizType,
     difficulty,
     sourceType,
@@ -558,7 +609,7 @@ const PLAN_SCHEMA = {
 // Never blocks generation: a failed/short plan call falls back to the raw
 // topic repeated for every batch, which still works, just without the extra
 // variety a good plan adds.
-async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, personalizationText }) {
+async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, personalizationText, sourceContextText = '' }) {
   const fallback = Array.from({ length: numBatches }, () => topic);
   if (numBatches <= 1) return fallback;
 
@@ -566,8 +617,10 @@ async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, pers
   const prompt = [
     `This quiz topic will be split into ${numBatches} batches of questions, generated separately. List exactly ${numBatches} distinct subtopics or angles of the topic below, one per batch, so each batch can focus on something different and the whole quiz ends up well-rounded instead of repetitive.`,
     personalizationService.delimitStudentText('topic', topic),
+    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+    sourceContextText ? 'Every subtopic must stay within the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
     'Keep each subtopic short (3-8 words). Respond with JSON only, matching the schema.',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   try {
     const payload = await callGemini({
@@ -601,7 +654,7 @@ async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, pers
 // Generates up to `count` validated, deduped items for one batch/subtopic,
 // with one top-up call if dedup/validation leaves it short — same
 // deadline/retry shape as generateQuiz, just parameterized per-batch.
-async function generateBatchItems({ topic, subtopic, quizType, difficulty, count, personalizationText, existingKeys }) {
+async function generateBatchItems({ topic, subtopic, quizType, difficulty, count, personalizationText, existingKeys, sourceContextText = '' }) {
   const typeLabel = QUIZ_TYPE_LABELS[quizType] || QUIZ_TYPE_LABELS.multiple_choice;
   const difficultyLabel = DIFFICULTY_LABELS[difficulty] || DIFFICULTY_LABELS.medium;
   const systemInstruction = personalizationText ? `${QUIZ_SYSTEM_RULES}\n\n${personalizationText}` : QUIZ_SYSTEM_RULES;
@@ -611,6 +664,8 @@ async function generateBatchItems({ topic, subtopic, quizType, difficulty, count
       `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of the topic below:`,
       personalizationService.delimitStudentText('topic', topic),
       personalizationService.delimitStudentText('quiz_subtopic', subtopic),
+      sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+      sourceContextText ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
       QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
       'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
       avoidKeys.length
@@ -670,22 +725,25 @@ async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, 
   const target = Math.max(1, Math.min(BATCHED_MAX_ITEMS, Math.trunc(Number(itemCount) || 0)));
   const numBatches = Math.ceil(target / BATCH_MAX_ITEMS);
 
+  const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
+  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  const effectiveTopic = sourceContext?.lessonTitle || sourceContext?.topicTitle || topic;
+
   let context = null;
   try {
-    const subjectId = await quizModel.getSubjectIdForSource(sourceType, sourceId).catch(() => null);
     context = await personalizationService.buildPersonalizationContext(userId, {
-      subjectId, requestedDifficulty: difficulty, generationType: 'quiz',
+      subjectId: sourceContext?.subjectId ?? null, requestedDifficulty: difficulty, generationType: 'quiz',
     });
   } catch {
     context = null;
   }
   const personalizationText = personalizationService.formatPersonalizationPrompt(context);
 
-  const subtopics = await buildSubtopicPlan({ topic, quizType, difficulty, numBatches, personalizationText });
+  const subtopics = await buildSubtopicPlan({ topic: effectiveTopic, quizType, difficulty, numBatches, personalizationText, sourceContextText });
 
   const quizId = await quizModel.createQuizShell({
     userId,
-    topic,
+    topic: effectiveTopic,
     quizType,
     difficulty,
     sourceType,
@@ -732,9 +790,13 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
   const remaining = state.target - state.actual;
   const countToRequest = Math.min(BATCH_MAX_ITEMS, remaining, Math.max(1, Math.trunc(Number(requestedCount) || BATCH_MAX_ITEMS)));
 
+  const sourceContext = await quizModel.getQuizSourceContext(state.source_type, state.source_id).catch(() => null);
+  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+
   let context = null;
   try {
     context = await personalizationService.buildPersonalizationContext(userId, {
+      subjectId: sourceContext?.subjectId ?? null,
       requestedDifficulty: state.difficulty, generationType: 'quiz',
     });
   } catch {
@@ -752,6 +814,7 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
     count: countToRequest,
     personalizationText: personalizationService.formatPersonalizationPrompt(context),
     existingKeys,
+    sourceContextText,
   });
 
   const { total, saved } = await quizModel.appendQuizQuestions(state.id, items);
@@ -1367,4 +1430,6 @@ module.exports = {
   questionDedupeKey,
   buildSubtopicPlan,
   MAX_BATCH_CALLS_PER_QUIZ,
+  extractLessonCoreSections,
+  buildQuizSourceContextBlock,
 };

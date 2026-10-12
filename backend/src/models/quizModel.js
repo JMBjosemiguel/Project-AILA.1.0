@@ -75,7 +75,7 @@ async function createQuizShell({
 // is only ever allowed before the first attempt starts).
 async function getQuizGenerationState(quizId, userId) {
   const rows = await query(
-    'SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context FROM quizzes WHERE id = ? LIMIT 1',
+    'SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, source_type, source_id FROM quizzes WHERE id = ? LIMIT 1',
     [quizId]
   );
   const quiz = rows[0];
@@ -371,23 +371,55 @@ async function deleteAttemptForUser(attemptId, userId) {
   return result.affectedRows;
 }
 
-// The subject a quiz's source belongs to, so personalization signals can be
-// scoped to that course. Only 'lesson' and 'topic' sources map to a subject.
-async function getSubjectIdForSource(sourceType, sourceId) {
+// Full course/module/topic/lesson context for a lesson- or topic-sourced
+// quiz (including its subjectId, for scoping personalization to that
+// course), used to ground generation in the right material instead of a
+// bare (possibly ambiguous) topic string.
+async function getQuizSourceContext(sourceType, sourceId) {
   if (!sourceId) return null;
   if (sourceType === 'lesson') {
     const rows = await query(
-      'SELECT m.subject_id FROM lessons l INNER JOIN topics t ON t.id = l.topic_id INNER JOIN modules m ON m.id = t.module_id WHERE l.id = ? LIMIT 1',
+      `SELECT s.id AS subjectId, s.name AS courseTitle, m.title AS moduleTitle,
+              t.title AS topicTitle, l.title AS lessonTitle, l.content AS lessonContent
+       FROM lessons l
+       INNER JOIN topics t ON t.id = l.topic_id
+       INNER JOIN modules m ON m.id = t.module_id
+       INNER JOIN subjects s ON s.id = m.subject_id
+       WHERE l.id = ? LIMIT 1`,
       [sourceId]
     );
-    return rows[0]?.subject_id ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      sourceType: 'lesson',
+      subjectId: row.subjectId,
+      courseTitle: row.courseTitle,
+      moduleTitle: row.moduleTitle,
+      topicTitle: row.topicTitle,
+      lessonTitle: row.lessonTitle,
+      lessonContent: row.lessonContent,
+    };
   }
   if (sourceType === 'topic') {
     const rows = await query(
-      'SELECT m.subject_id FROM topics t INNER JOIN modules m ON m.id = t.module_id WHERE t.id = ? LIMIT 1',
+      `SELECT s.id AS subjectId, s.name AS courseTitle, m.title AS moduleTitle, t.title AS topicTitle
+       FROM topics t
+       INNER JOIN modules m ON m.id = t.module_id
+       INNER JOIN subjects s ON s.id = m.subject_id
+       WHERE t.id = ? LIMIT 1`,
       [sourceId]
     );
-    return rows[0]?.subject_id ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      sourceType: 'topic',
+      subjectId: row.subjectId,
+      courseTitle: row.courseTitle,
+      moduleTitle: row.moduleTitle,
+      topicTitle: row.topicTitle,
+      lessonTitle: null,
+      lessonContent: null,
+    };
   }
   return null;
 }
@@ -440,5 +472,5 @@ module.exports = {
   listAttemptsForUser,
   getQuizAverageScore,
   deleteAttemptForUser,
-  getSubjectIdForSource,
+  getQuizSourceContext,
 };

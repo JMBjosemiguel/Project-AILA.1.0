@@ -5,13 +5,14 @@ import ChatSidebar from '../../../components/chatbot/ChatSidebar';
 import AttachResourceDialog from '../../../components/chatbot/AttachResourceDialog';
 import MessageBubble, { TypingBubble } from '../../../components/chatbot/MessageBubble';
 import SuggestedPrompts from '../../../components/chatbot/SuggestedPrompts';
+import QuizRunner from '../../../components/student/quiz/QuizRunner';
 import AilaOrb from '../../../components/common/AilaOrb';
 import { useToast } from '../../../components/common/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChatbotData } from '../../../hooks/useChatbotData';
+import { useSavedChatQuizzes } from '../../../hooks/useSavedChatQuizzes';
 import { ACCEPTED_RESOURCE_FILE_TYPES, MAX_RESOURCE_FILE_SIZE_BYTES } from '../../../constants/ui';
 import { consumePrefillPrompt } from '../../../utils/aiPrefill';
-import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setResourceSearchTarget } from '../../../utils/resourceSearchTarget';
 import { readChatbotQuizState, writeChatbotQuizState } from '../../../utils/chatbotQuizState';
 import {
@@ -59,6 +60,12 @@ export default function AssistantPage({ onNavigate }) {
   const { user } = useAuth();
   const [historyVersion, setHistoryVersion] = useState(0);
   const { data } = useChatbotData(historyVersion);
+  const [savedQuizzesVersion, setSavedQuizzesVersion] = useState(0);
+  const { data: savedQuizzesData, loading: savedQuizzesLoading } = useSavedChatQuizzes(savedQuizzesVersion);
+  // The quiz currently open inside the AI Assistant (its own QuizRunner
+  // overlay) — opened either by "Save as Quiz" or by taking/resuming one
+  // from the Saved quizzes tab. Never navigates to the Learning Hub.
+  const [activeQuizId, setActiveQuizId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   // Which conversation currently owns an in-flight AI request (id, NEW_CHAT, or null).
@@ -349,8 +356,9 @@ export default function AssistantPage({ onNavigate }) {
     }
   };
 
-  // "Save as Quiz" — turn an informal chatbot mini-quiz into a persisted practice
-  // quiz, then hand off to the Learning Hub QuizRunner to take it formally.
+  // "Save as Quiz" — turn an informal chatbot mini-quiz into a persisted
+  // practice quiz, then open it right here via QuizRunner (never navigates
+  // away to the Learning Hub — a chat quiz lives only in the AI Assistant).
   const handleSaveAsQuiz = async (message) => {
     if (message.id == null) {
       toast.error('Give the quiz a moment to finish saving, then try again.');
@@ -361,13 +369,23 @@ export default function AssistantPage({ onNavigate }) {
     try {
       const result = await saveChatQuizAsQuiz(message.id);
       setSaveQuizStates((current) => ({ ...current, [key]: 'saved' }));
-      toast.success(result.alreadySaved ? 'Already in your quizzes — opening it.' : 'Saved to your quizzes.');
-      setResumeQuiz(result.quizId);
-      onNavigate?.('hub');
+      toast.success(result.alreadySaved ? 'Already in your AI chat quizzes — opening it.' : 'Saved to your AI chat quizzes.');
+      setSavedQuizzesVersion((version) => version + 1);
+      setActiveQuizId(result.quizId);
     } catch (saveError) {
       setSaveQuizStates((current) => ({ ...current, [key]: 'error' }));
       toast.error(saveError.message || 'Could not save that quiz.');
     }
+  };
+
+  // Take / Retake / Resume from the Saved quizzes tab.
+  const handleTakeSavedQuiz = (quizId) => {
+    setActiveQuizId(quizId);
+  };
+
+  const handleCloseQuizRunner = () => {
+    setActiveQuizId(null);
+    setSavedQuizzesVersion((version) => version + 1);
   };
 
   const handleSelectChat = async (id) => {
@@ -404,6 +422,9 @@ export default function AssistantPage({ onNavigate }) {
         activeChat={activeChat}
         conversations={data?.conversations ?? []}
         categories={data?.categories ?? []}
+        savedQuizzes={savedQuizzesData?.quizzes ?? []}
+        savedQuizzesLoading={savedQuizzesLoading}
+        onTakeSavedQuiz={handleTakeSavedQuiz}
         open={chatSidebarOpen}
         onClose={() => setChatSidebarOpen(false)}
         onSelectChat={handleSelectChat}
@@ -411,6 +432,8 @@ export default function AssistantPage({ onNavigate }) {
         onRenameChat={handleRenameChat}
         onDeleteChat={handleDeleteChat}
       />
+
+      {activeQuizId && <QuizRunner resumeQuizId={activeQuizId} onClose={handleCloseQuizRunner} />}
 
       <div className="flex-1 flex flex-col min-w-0 bg-canvas">
         <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 border-b border-ink-100 bg-surface">

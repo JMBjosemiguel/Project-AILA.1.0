@@ -1409,6 +1409,22 @@ async function deleteAttempt(userId, attemptId) {
 // Used by the Learning Hub search — the authenticated student's own quizzes
 // only, matched on topic. An empty term returns nothing rather than the whole
 // quiz list, since this endpoint only exists to back the search box.
+// The student's own saved AI-chat quizzes — their dedicated home in the AI
+// Assistant page (never the Learning Hub, never learning analytics).
+async function listChatQuizzes(userId) {
+  const rows = await quizModel.listChatQuizzesForUser(userId);
+  return rows.map((row) => ({
+    id: row.id,
+    topic: row.topic,
+    quizType: row.quiz_type,
+    itemCount: row.item_count,
+    createdAt: row.created_at,
+    lastPercent: row.last_total ? Math.round((row.last_score / row.last_total) * 100) : null,
+    bestPercent: row.best_percent != null ? Number(row.best_percent) : null,
+    inProgress: row.in_progress_attempt_id != null,
+  }));
+}
+
 async function searchQuizzes(userId, search) {
   const term = (search || '').trim();
   if (!term) return [];
@@ -1447,6 +1463,7 @@ module.exports = {
   listQuizHistory,
   deleteAttempt,
   searchQuizzes,
+  listChatQuizzes,
   formatQuizForTake,
   formatAttemptForResume,
   formatAttemptReview,

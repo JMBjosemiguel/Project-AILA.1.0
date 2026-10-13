@@ -97,6 +97,12 @@ const search = asyncHandler(async (req, res) => {
   sendSuccess(res, { quizzes }, 200, 'Quizzes retrieved.');
 });
 
+// GET /quizzes/chat — the AI Assistant's "Saved quizzes" view.
+const listChatQuizzes = asyncHandler(async (req, res) => {
+  const quizzes = await quizService.listChatQuizzes(req.auth.user.id);
+  sendSuccess(res, { quizzes }, 200, 'Chat quizzes retrieved.');
+});
+
 // GET /quizzes/attempts/:attemptId — resume (in progress) or review (submitted).
 const getAttempt = asyncHandler(async (req, res) => {
   const attempt = await quizService.getAttempt(req.auth.user.id, req.params.attemptId);
@@ -121,6 +127,7 @@ module.exports = {
   submitLegacyAttempt,
   history,
   search,
+  listChatQuizzes,
   getAttempt,
   deleteAttempt,
 };

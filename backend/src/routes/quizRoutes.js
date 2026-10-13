@@ -27,8 +27,10 @@ router.post('/:quizId/generate/finish', authenticate, quizIdParamValidator, vali
 // AI call, no aiRateLimiter — it copies already-generated questions.
 router.post('/from-chat-message/:messageId', authenticate, chatMessageIdParamValidator, validateRequest, quizController.saveFromChatMessage);
 router.get('/history', authenticate, quizController.history);
-// Registered ahead of the /:quizId catch-all so "search" is never read as a quiz id.
+// Registered ahead of the /:quizId catch-all so "search"/"chat" are never read as a quiz id.
 router.get('/search', authenticate, searchQuizzesValidator, validateRequest, quizController.search);
+// GET /quizzes/chat — the AI Assistant's "Saved quizzes" view.
+router.get('/chat', authenticate, quizController.listChatQuizzes);
 
 // Resumable attempt lifecycle.
 router.post('/:quizId/attempts/start', authenticate, quizIdParamValidator, validateRequest, quizController.startAttempt);

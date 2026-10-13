@@ -1,5 +1,6 @@
 const { query, execute, transaction } = require('../config/database');
 const { quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
 
 async function createQuiz({
   userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null,
@@ -334,6 +335,7 @@ async function listActiveAttemptsForUser(userId, limit = 10) {
        ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.status = 'in_progress'
         AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+        AND ${notChatQuizCondition('q')}
       ORDER BY COALESCE(qa.updated_at, qa.started_at) DESC
       LIMIT ?`,
     [userId, Number(limit)]
@@ -352,6 +354,7 @@ async function listAttemptsForUser(userId, limit = 10) {
       ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.status = 'submitted'
         AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+        AND ${notChatQuizCondition('q')}
       ORDER BY qa.completed_at DESC
       LIMIT ?
     `,
@@ -368,6 +371,7 @@ async function getQuizAverageScore(userId) {
       ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
         AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+        AND ${notChatQuizCondition('q')}
     `,
     [userId]
   );
@@ -447,12 +451,36 @@ async function findQuizIdByChatMessage(userId, chatMessageId) {
 async function searchQuizzesForUser(userId, searchTerm, limit = 20) {
   return query(
     `SELECT id, topic, quiz_type, difficulty, assessment_kind, subject_id, module_id
-       FROM quizzes
-      WHERE user_id = ? AND topic LIKE ?
-        AND EXISTS (SELECT 1 FROM quiz_questions WHERE quiz_questions.quiz_id = quizzes.id)
-      ORDER BY created_at DESC
+       FROM quizzes q
+      WHERE q.user_id = ? AND q.topic LIKE ?
+        AND ${notChatQuizCondition('q')}
+        AND EXISTS (SELECT 1 FROM quiz_questions WHERE quiz_questions.quiz_id = q.id)
+      ORDER BY q.created_at DESC
       LIMIT ?`,
     [userId, `%${searchTerm}%`, limit]
+  );
+}
+
+// The student's own saved AI-chat quizzes (source_type = 'chat') — their
+// dedicated home in the AI Assistant page, never in the Learning Hub. One row
+// per quiz with its last/best submitted score and whether an attempt is
+// currently in progress (so the UI can offer Resume instead of Take/Retake).
+async function listChatQuizzesForUser(userId) {
+  return query(
+    `
+      SELECT q.id, q.topic, q.quiz_type, q.item_count, q.created_at,
+        (SELECT a.score FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'submitted'
+           ORDER BY a.completed_at DESC LIMIT 1) AS last_score,
+        (SELECT a.total FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'submitted'
+           ORDER BY a.completed_at DESC LIMIT 1) AS last_total,
+        (SELECT MAX(ROUND(a.score / a.total * 100)) FROM quiz_attempts a
+          WHERE a.quiz_id = q.id AND a.status = 'submitted' AND a.total > 0) AS best_percent,
+        (SELECT a.id FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'in_progress' LIMIT 1) AS in_progress_attempt_id
+      FROM quizzes q
+      WHERE q.user_id = ? AND q.source_type = 'chat'
+      ORDER BY q.created_at DESC
+    `,
+    [userId]
   );
 }
 
@@ -460,6 +488,7 @@ module.exports = {
   createQuiz,
   findQuizIdByChatMessage,
   searchQuizzesForUser,
+  listChatQuizzesForUser,
   getQuizWithQuestions,
   getQuestionForQuiz,
   createQuizShell,

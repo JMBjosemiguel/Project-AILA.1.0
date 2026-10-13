@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
 const { subjectVisibleClause, quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
 
 const STRONG_SCORE_THRESHOLD = 80;
 const STALE_TOPIC_DAYS = 3;
@@ -100,6 +101,7 @@ async function getRecentQuizAverage(userId, { subjectId = null } = {}) {
         ${quizSubjectJoins('q')}
         WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
           AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+          AND ${notChatQuizCondition('q')}
           ${subjectId ? 'AND qsv_s.id = ?' : ''}
         ORDER BY qa.completed_at DESC
         LIMIT ${RECENT_ATTEMPTS_WINDOW}

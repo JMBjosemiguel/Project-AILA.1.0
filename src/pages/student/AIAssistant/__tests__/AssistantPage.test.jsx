@@ -24,11 +24,19 @@ vi.mock('../../../../services/api/chatService', () => ({
 }));
 
 const saveChatQuizAsQuiz = vi.fn();
+const getChatQuizzes = vi.fn();
 vi.mock('../../../../services/api/quizService', () => ({
   saveChatQuizAsQuiz: (...args) => saveChatQuizAsQuiz(...args),
+  getChatQuizzes: (...args) => getChatQuizzes(...args),
 }));
-const setResumeQuiz = vi.fn();
-vi.mock('../../../../utils/quizResumeTarget', () => ({ setResumeQuiz: (id) => setResumeQuiz(id) }));
+vi.mock('../../../../components/student/quiz/QuizRunner', () => ({
+  default: ({ resumeQuizId, onClose }) => (
+    <div data-testid="quiz-runner">
+      <span>QuizRunner for {resumeQuizId}</span>
+      <button onClick={onClose}>Close runner</button>
+    </div>
+  ),
+}));
 const setResourceSearchTarget = vi.fn();
 vi.mock('../../../../utils/resourceSearchTarget', () => ({ setResourceSearchTarget: (term) => setResourceSearchTarget(term) }));
 const uploadResource = vi.fn();
@@ -90,6 +98,7 @@ beforeEach(() => {
   _resetChatbotQuizState();
   getConversationMessages.mockImplementation((id) => Promise.resolve(historyFor[id]));
   getResourceLibraryData.mockResolvedValue({ resources: [] });
+  getChatQuizzes.mockResolvedValue({ quizzes: [] });
 });
 
 function makeFile(name, type, size = 1024) {
@@ -332,7 +341,7 @@ describe('AssistantPage — chatbot mini-quiz state', () => {
     expect(screen.getByRole('button', { name: /Check Answers/i })).toBeInTheDocument();
   });
 
-  it('"Save as Quiz" persists the quiz and hands off to the Learning Hub', async () => {
+  it('"Save as Quiz" saves the quiz and opens it right there, without navigating to the Learning Hub', async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     saveChatQuizAsQuiz.mockResolvedValue({ quizId: 555, alreadySaved: false });
@@ -343,9 +352,50 @@ describe('AssistantPage — chatbot mini-quiz state', () => {
 
     await user.click(screen.getByRole('button', { name: /Save as Quiz/i }));
     await waitFor(() => expect(saveChatQuizAsQuiz).toHaveBeenCalledWith(101));
-    expect(setResumeQuiz).toHaveBeenCalledWith(555);
-    expect(onNavigate).toHaveBeenCalledWith('hub');
-    expect(toastSuccess).toHaveBeenCalled();
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('AI chat quizzes'));
+    expect(onNavigate).not.toHaveBeenCalledWith('hub');
+    await waitFor(() => expect(screen.getByTestId('quiz-runner')).toHaveTextContent('555'));
+  });
+
+  it('"Save as Quiz" saved twice still opens the same existing quiz (idempotent)', async () => {
+    const user = userEvent.setup();
+    saveChatQuizAsQuiz.mockResolvedValue({ quizId: 555, alreadySaved: true });
+
+    render(<AssistantPage onNavigate={vi.fn()} />);
+    await openChat(user, 'Chat A');
+    await waitFor(() => screen.getByText(/Capital of France\?/));
+
+    await user.click(screen.getByRole('button', { name: /Save as Quiz/i }));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('Already in your AI chat quizzes')));
+    await waitFor(() => expect(screen.getByTestId('quiz-runner')).toHaveTextContent('555'));
+  });
+});
+
+describe('AssistantPage — Saved quizzes tab', () => {
+  it('renders the saved chat quizzes and opens the runner on Take', async () => {
+    const user = userEvent.setup();
+    getChatQuizzes.mockResolvedValue({
+      quizzes: [
+        { id: 42, topic: 'Subnetting basics', quizType: 'multiple_choice', itemCount: 5, createdAt: '2026-01-01T00:00:00Z', lastPercent: 80, bestPercent: 80, inProgress: false },
+      ],
+    });
+
+    render(<AssistantPage onNavigate={vi.fn()} />);
+    await user.click(screen.getByRole('tab', { name: /Saved quizzes/i }));
+
+    await waitFor(() => expect(screen.getByText('Subnetting basics')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /Retake/i }));
+    await waitFor(() => expect(screen.getByTestId('quiz-runner')).toHaveTextContent('42'));
+  });
+
+  it('shows an empty state when there are no saved quizzes yet', async () => {
+    const user = userEvent.setup();
+    getChatQuizzes.mockResolvedValue({ quizzes: [] });
+
+    render(<AssistantPage onNavigate={vi.fn()} />);
+    await user.click(screen.getByRole('tab', { name: /Saved quizzes/i }));
+
+    await waitFor(() => expect(screen.getByText(/No saved quizzes yet/i)).toBeInTheDocument());
   });
 });
 

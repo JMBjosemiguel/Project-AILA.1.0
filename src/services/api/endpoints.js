@@ -36,6 +36,7 @@ export const API_ENDPOINTS = {
     batchFinish: (quizId) => `/quizzes/${quizId}/generate/finish`,
     fromChatMessage: (messageId) => `/quizzes/from-chat-message/${messageId}`,
     search: '/quizzes/search',
+    chatQuizzes: '/quizzes/chat',
     quiz: (id) => `/quizzes/${id}`,
     attempts: (id) => `/quizzes/${id}/attempts`,
     startAttempt: (id) => `/quizzes/${id}/attempts/start`,

@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ClipboardList, Loader2, MessageSquare, Pencil, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import EmptyState from '../common/EmptyState';
 import { useMobileDrawer } from '../../hooks/useMobileDrawer';
 import { formatDate } from '../../utils/formatDate';
+
+const TABS = [
+  { id: 'conversations', label: 'Conversations', icon: MessageSquare },
+  { id: 'quizzes', label: 'Saved quizzes', icon: ClipboardList },
+];
 
 export default function ChatSidebar({
   activeChat,
   conversations = [],
   categories = [],
+  savedQuizzes = [],
+  savedQuizzesLoading = false,
+  onTakeSavedQuiz,
   open,
   onClose,
   onSelectChat,
@@ -16,6 +24,7 @@ export default function ChatSidebar({
   onDeleteChat,
 }) {
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('conversations');
   useMobileDrawer(open, onClose);
 
   const filteredConversations = search.trim()
@@ -39,67 +48,137 @@ export default function ChatSidebar({
         ].join(' ')}
       >
         <div className="flex items-center justify-between md:hidden">
-          <span className="text-sm font-semibold text-ink-800">Conversations</span>
+          <span className="text-sm font-semibold text-ink-800">{tab === 'quizzes' ? 'Saved quizzes' : 'Conversations'}</span>
           <button onClick={onClose} aria-label="Close conversation list" className="w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50">
             <X size={16} />
           </button>
         </div>
 
-        <button
-          onClick={onNewChat}
-          className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 shadow-lift hover:bg-primary-600 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-1"
-        >
-          <Plus size={16} /> New chat
-        </button>
+        <div className="flex items-center gap-1 bg-canvas border border-ink-100 rounded-xl p-1" role="tablist">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={[
+                'flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg py-1.5 transition-colors',
+                tab === id ? 'bg-surface text-primary shadow-sm' : 'text-ink-500 hover:text-ink-800',
+              ].join(' ')}
+            >
+              <Icon size={13} /> {label}
+            </button>
+          ))}
+        </div>
 
-        {conversations.length > 0 && (
-          <div className="flex items-center gap-2 bg-canvas border border-ink-100 rounded-xl px-2.5 py-1.5">
-            <Search size={13} className="text-ink-400 flex-shrink-0" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search chats..."
-              className="flex-1 min-w-0 bg-transparent outline-none text-xs text-ink-800 placeholder:text-ink-400"
-            />
-          </div>
-        )}
+        {tab === 'conversations' ? (
+          <>
+            <button
+              onClick={onNewChat}
+              className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-xl py-2.5 shadow-lift hover:bg-primary-600 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:ring-offset-1"
+            >
+              <Plus size={16} /> New chat
+            </button>
 
-        <div>
-          <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">Conversations</div>
-          <div className="flex flex-col gap-0.5">
-            {filteredConversations.length ? filteredConversations.map((conversation) => (
-              <ChatItem
-                key={conversation.id}
-                chat={conversation}
-                active={activeChat === conversation.id}
-                onClick={() => onSelectChat(conversation.id)}
-                onRename={onRenameChat}
-                onDelete={onDeleteChat}
-              />
-            )) : (
+            {conversations.length > 0 && (
+              <div className="flex items-center gap-2 bg-canvas border border-ink-100 rounded-xl px-2.5 py-1.5">
+                <Search size={13} className="text-ink-400 flex-shrink-0" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search chats..."
+                  className="flex-1 min-w-0 bg-transparent outline-none text-xs text-ink-800 placeholder:text-ink-400"
+                />
+              </div>
+            )}
+
+            <div>
+              <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">Conversations</div>
+              <div className="flex flex-col gap-0.5">
+                {filteredConversations.length ? filteredConversations.map((conversation) => (
+                  <ChatItem
+                    key={conversation.id}
+                    chat={conversation}
+                    active={activeChat === conversation.id}
+                    onClick={() => onSelectChat(conversation.id)}
+                    onRename={onRenameChat}
+                    onDelete={onDeleteChat}
+                  />
+                )) : (
+                  <EmptyState
+                    title={search ? 'No matches' : 'No conversations'}
+                    message={search ? 'Try a different search term.' : 'Start a new chat to begin talking with AILA.'}
+                    className="py-6"
+                  />
+                )}
+              </div>
+            </div>
+
+            {categories.length > 0 && (
+              <div>
+                <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">By category</div>
+                <div className="flex flex-col gap-0.5">
+                  {categories.map((category) => (
+                    <div key={category.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-ink-600 hover:bg-ink-50 cursor-pointer transition-colors">
+                      {category.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">
+              Saved quizzes
+            </div>
+            {savedQuizzesLoading ? (
+              <div className="flex justify-center py-6 text-ink-400">
+                <Loader2 size={16} className="animate-spin" />
+              </div>
+            ) : savedQuizzes.length ? (
+              <div className="flex flex-col gap-1.5">
+                {savedQuizzes.map((quiz) => (
+                  <SavedQuizItem key={quiz.id} quiz={quiz} onTake={() => onTakeSavedQuiz?.(quiz.id)} />
+                ))}
+              </div>
+            ) : (
               <EmptyState
-                title={search ? 'No matches' : 'No conversations'}
-                message={search ? 'Try a different search term.' : 'Start a new chat to begin talking with AILA.'}
+                icon={ClipboardList}
+                title="No saved quizzes yet"
+                message='Tap "Save as Quiz" on a quiz AILA gives you in chat to practice it here.'
                 className="py-6"
               />
             )}
           </div>
-        </div>
-
-        {categories.length > 0 && (
-          <div>
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-ink-400/80 px-2 mb-1.5">By category</div>
-            <div className="flex flex-col gap-0.5">
-              {categories.map((category) => (
-                <div key={category.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-ink-600 hover:bg-ink-50 cursor-pointer transition-colors">
-                  {category.name}
-                </div>
-              ))}
-            </div>
-          </div>
         )}
       </div>
     </>
+  );
+}
+
+function SavedQuizItem({ quiz, onTake }) {
+  const buttonLabel = quiz.inProgress ? 'Resume' : quiz.bestPercent != null ? 'Retake' : 'Take';
+  return (
+    <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-ink-50 transition-colors">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-ink-800 truncate" title={quiz.topic}>{quiz.topic}</div>
+        <div className="text-[0.65rem] text-ink-400">
+          {quiz.itemCount} item{quiz.itemCount === 1 ? '' : 's'} &middot; {formatDate(quiz.createdAt)}
+        </div>
+        {quiz.bestPercent != null && (
+          <div className="text-[0.65rem] text-ink-400">
+            Best {quiz.bestPercent}% &middot; Last {quiz.lastPercent}%
+          </div>
+        )}
+      </div>
+      <button
+        onClick={onTake}
+        className="flex-shrink-0 flex items-center gap-1 text-[0.65rem] font-semibold text-primary bg-primary-50 hover:bg-primary-100 rounded-lg px-2.5 py-1.5 transition-colors"
+      >
+        {quiz.inProgress && <RotateCcw size={11} />} {buttonLabel}
+      </button>
+    </div>
   );
 }
 

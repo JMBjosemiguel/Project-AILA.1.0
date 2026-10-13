@@ -50,6 +50,12 @@ export function saveChatQuizAsQuiz(messageId) {
   return apiClient.post(API_ENDPOINTS.quizzes.fromChatMessage(messageId));
 }
 
+// The AI Assistant's "Saved quizzes" view — only this student's own
+// chat-saved quizzes, never counted toward learning analytics.
+export function getChatQuizzes() {
+  return apiClient.get(API_ENDPOINTS.quizzes.chatQuizzes);
+}
+
 // --- Resumable attempt lifecycle ---
 
 // Begin or resume an attempt. Returns { attempt, quiz, items, answers }.

@@ -1,6 +1,7 @@
 const { query } = require('../config/database');
 const { appWindowStart, windowStartDays, sumByAppDay, avgPercentByAppDay } = require('../utils/dayBucket');
 const { subjectVisibleClause, quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
 
 async function getCompletionCounts(userId) {
   const rows = await query(
@@ -79,6 +80,7 @@ async function getQuizPerformanceTrend(userId) {
       ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.completed_at IS NOT NULL
         AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+        AND ${notChatQuizCondition('q')}
       ORDER BY qa.completed_at DESC
       LIMIT 1000
     `,

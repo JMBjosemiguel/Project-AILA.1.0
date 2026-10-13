@@ -18,11 +18,15 @@ vi.mock('../../../../components/admin/UserDetailDialog', () => ({
 const toast = { success: vi.fn(), error: vi.fn() };
 vi.mock('../../../../components/common/Toast', () => ({ useToast: () => toast }));
 
+let mockCurrentUser = null;
+vi.mock('../../../../contexts/AuthContext', () => ({ useAuth: () => ({ user: mockCurrentUser }) }));
+
 import AdminUsersPage from '../index.jsx';
-import { listAdminUsers, promoteToAdmin } from '../../../../services/api/adminService';
+import { listAdminUsers, promoteToAdmin, deleteAdminUser } from '../../../../services/api/adminService';
 
 const STUDENT = { id: 10, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com', role: 'student', is_active: 1, email_verified_at: '2026-01-01', level: 1, xp_points: 0 };
 const ADMIN = { id: 20, first_name: 'Grace', last_name: 'Hopper', email: 'grace@example.com', role: 'admin', is_active: 1, email_verified_at: '2026-01-01', level: 1, xp_points: 0 };
+const OTHER_ADMIN = { id: 30, first_name: 'Alan', last_name: 'Turing', email: 'alan@example.com', role: 'admin', is_active: 1, email_verified_at: '2026-01-01', level: 1, xp_points: 0 };
 
 function renderPage() {
   return render(
@@ -34,6 +38,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockCurrentUser = null;
   window.history.replaceState({}, '', '/admin/users');
   listAdminUsers.mockResolvedValue({
     users: [STUDENT, ADMIN],
@@ -115,6 +120,69 @@ describe('AdminUsersPage — Promote to Admin', () => {
     await user.click(screen.getByRole('button', { name: 'Promote' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('personal uploads')));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminUsersPage — deleting an admin account', () => {
+  it('hides Delete and Deactivate on your own row, but shows them on other admins', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Grace Hopper')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Grace Hopper' }));
+    expect(screen.queryByRole('menuitem', { name: /^Delete$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Deactivate/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Actions for Grace Hopper' }));
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    expect(screen.getByRole('menuitem', { name: /^Delete$/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Deactivate/i })).toBeInTheDocument();
+  });
+
+  it('shows an admin-specific confirm message and deletes on confirm', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    deleteAdminUser.mockResolvedValue(null);
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Alan Turing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Delete$/i }));
+
+    expect(screen.getByText(/Delete admin account Alan Turing\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/lose admin access immediately/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(deleteAdminUser).toHaveBeenCalledWith(30));
+    expect(toast.success).toHaveBeenCalledWith('Admin account deleted.');
+  });
+
+  it('a rejected delete (e.g. last active admin) shows the server error', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    deleteAdminUser.mockRejectedValue(new Error('AILA needs at least one admin.'));
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Alan Turing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    await user.click(screen.getByRole('menuitem', { name: /^Delete$/i }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('AILA needs at least one admin.'));
     expect(toast.success).not.toHaveBeenCalled();
   });
 });

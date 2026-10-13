@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { appWindowStart, windowStartDays, sumByAppDay, avgPercentByAppDay } = require('../utils/dayBucket');
+const { subjectVisibleClause, quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
 
 async function getCompletionCounts(userId) {
   const rows = await query(
@@ -43,7 +44,7 @@ async function getMasteryBySubject(userId) {
       INNER JOIN topics t ON t.id = lp.topic_id
       INNER JOIN modules m ON m.id = t.module_id
       INNER JOIN subjects s ON s.id = m.subject_id
-      WHERE lp.user_id = ?
+      WHERE lp.user_id = ? AND ${subjectVisibleClause('s')}
       GROUP BY s.id, s.name
       ORDER BY pct DESC
     `,
@@ -72,10 +73,13 @@ async function getQuizPerformanceTrend(userId) {
   // than 14 days of quiz activity silently stayed stuck showing ancient data.
   const rows = await query(
     `
-      SELECT completed_at AS ts, score, total
-      FROM quiz_attempts
-      WHERE user_id = ? AND completed_at IS NOT NULL
-      ORDER BY completed_at DESC
+      SELECT qa.completed_at AS ts, qa.score, qa.total
+      FROM quiz_attempts qa
+      INNER JOIN quizzes q ON q.id = qa.quiz_id
+      ${quizSubjectJoins('q')}
+      WHERE qa.user_id = ? AND qa.completed_at IS NOT NULL
+        AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+      ORDER BY qa.completed_at DESC
       LIMIT 1000
     `,
     [userId]
@@ -125,7 +129,7 @@ async function getTopicMasteryRanked(userId) {
       INNER JOIN topics t ON t.id = lp.topic_id
       INNER JOIN modules m ON m.id = t.module_id
       INNER JOIN subjects s ON s.id = m.subject_id
-      WHERE lp.user_id = ? AND lp.status != 'not_started'
+      WHERE lp.user_id = ? AND lp.status != 'not_started' AND ${subjectVisibleClause('s')}
       ORDER BY lp.progress_percent DESC
     `,
     [userId]

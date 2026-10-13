@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
+const { subjectVisibleClause, quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
 
 const STRONG_SCORE_THRESHOLD = 80;
 const STALE_TOPIC_DAYS = 3;
@@ -30,6 +31,7 @@ async function getWeakTopics(userId, { subjectId = null } = {}) {
       LEFT JOIN subjects s ON s.id = m.subject_id
       WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
         AND (t.id IS NOT NULL OR lt.id IS NOT NULL)
+        AND ${subjectVisibleClause('s')}
         ${subjectId ? 'AND s.id = ?' : ''}
       GROUP BY COALESCE(t.id, lt.id), COALESCE(t.title, lt.title), s.name
       HAVING avg_percent < ?
@@ -56,6 +58,7 @@ async function getStrongTopics(userId, { subjectId = null } = {}) {
       LEFT JOIN subjects s ON s.id = m.subject_id
       WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
         AND (t.id IS NOT NULL OR lt.id IS NOT NULL)
+        AND ${subjectVisibleClause('s')}
         ${subjectId ? 'AND s.id = ?' : ''}
       GROUP BY COALESCE(t.id, lt.id), COALESCE(t.title, lt.title), s.name
       HAVING avg_percent >= ?
@@ -75,6 +78,7 @@ async function getStaleTopics(userId) {
       INNER JOIN modules m ON m.id = t.module_id
       INNER JOIN subjects s ON s.id = m.subject_id
       WHERE lp.user_id = ? AND lp.status = 'in_progress'
+        AND ${subjectVisibleClause('s')}
         AND lp.updated_at <= DATE_SUB(NOW(), INTERVAL ? DAY)
       ORDER BY lp.updated_at ASC
       LIMIT 5
@@ -93,14 +97,10 @@ async function getRecentQuizAverage(userId, { subjectId = null } = {}) {
         SELECT qa.score / qa.total AS pct
         FROM quiz_attempts qa
         INNER JOIN quizzes q ON q.id = qa.quiz_id
-        ${subjectId ? `
-          LEFT JOIN topics t ON q.source_type = 'topic' AND t.id = q.source_id
-          LEFT JOIN lessons l ON q.source_type = 'lesson' AND l.id = q.source_id
-          LEFT JOIN topics lt ON lt.id = l.topic_id
-          LEFT JOIN modules m ON m.id = COALESCE(t.module_id, lt.module_id)
-        ` : ''}
+        ${quizSubjectJoins('q')}
         WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
-        ${subjectId ? 'AND m.subject_id = ?' : ''}
+          AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
+          ${subjectId ? 'AND qsv_s.id = ?' : ''}
         ORDER BY qa.completed_at DESC
         LIMIT ${RECENT_ATTEMPTS_WINDOW}
       ) recent
@@ -145,7 +145,7 @@ async function getFailedAssessments(userId) {
            FROM quiz_attempts a
           WHERE a.quiz_id = q.id AND a.status = 'submitted') AS last_attempt_at
       FROM quizzes q
-      INNER JOIN subjects s ON s.id = q.subject_id AND s.deleted_at IS NULL
+      INNER JOIN subjects s ON s.id = q.subject_id AND ${subjectVisibleClause('s')}
       WHERE q.user_id = ? AND q.assessment_kind <> 'practice'
         AND EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.status = 'submitted')
         AND NOT EXISTS (SELECT 1 FROM quiz_attempts a WHERE a.quiz_id = q.id AND a.passed = 1)

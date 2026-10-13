@@ -77,7 +77,7 @@ export const authService = {
   // Backend response: { alreadyVerified: boolean }. Never throws for a
   // recognised invalid/expired/used token — those are normal outcomes the
   // caller inspects via the thrown ApiClientError's `.details.code` instead
-  // (TOKEN_INVALID | TOKEN_USED | TOKEN_EXPIRED) so the Verify Email page can
+  // (TOKEN_INVALID | TOKEN_SUPERSEDED | TOKEN_EXPIRED) so the Verify Email page can
   // show a specific state rather than a generic error.
   async verifyEmail(token) {
     return apiClient.post(API_ENDPOINTS.auth.verifyEmail, { token });

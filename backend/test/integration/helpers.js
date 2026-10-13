@@ -69,6 +69,18 @@ async function createStudent(tag, suffix) {
   return { id: reg.json.data.user.id, email, token: login.json.data.token };
 }
 
+// A promoted user's existing token keeps working and immediately resolves
+// as admin on the next request — role is read fresh from the DB per request
+// (authenticate -> findUserById), never baked into the JWT — so no re-login
+// is needed after promotion.
+async function createAdmin(tag, suffix) {
+  const student = await createStudent(tag, suffix);
+  const adminToken = await loginAdmin();
+  const promote = await api('PATCH', `/admin/users/${student.id}/role`, { token: adminToken });
+  if (promote.status !== 200) throw new Error(`promote ${suffix} failed: ${promote.status} ${JSON.stringify(promote.json)}`);
+  return student;
+}
+
 async function purgeByTag(tag) {
   const users = await db.query('SELECT id FROM users WHERE email LIKE ?', [`${tag}%`]);
   for (const { id } of users) {
@@ -109,4 +121,4 @@ function containsSecret(value) {
   return null;
 }
 
-module.exports = { BASE_URL, db, api, serverReachable, loginAdmin, createStudent, purgeByTag, containsSecret };
+module.exports = { BASE_URL, db, api, serverReachable, loginAdmin, createStudent, createAdmin, purgeByTag, containsSecret };

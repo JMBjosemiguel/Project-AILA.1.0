@@ -294,8 +294,12 @@ async function verifyEmail(rawToken) {
       throw new ApiError(400, 'This verification link is invalid.', { code: 'TOKEN_INVALID' });
     }
 
+    // deleted_at IS NULL: a soft-deleted account's own still-unused,
+    // still-unexpired token (issued before the admin deleted it) must never
+    // verify the dead row — without this, such a token would silently
+    // "succeed" within its TTL on an account nobody can log into anymore.
     const [userRows] = await connection.execute(
-      'SELECT email_verified_at FROM users WHERE id = ? LIMIT 1',
+      'SELECT email_verified_at FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
       [tokenRow.user_id]
     );
     const userRow = userRows[0];
@@ -310,7 +314,12 @@ async function verifyEmail(rawToken) {
     }
 
     if (tokenRow.used_at) {
-      throw new ApiError(400, 'This verification link is invalid.', { code: 'TOKEN_USED' });
+      // A token is only ever marked used_at by markTokenUsed (which verifies
+      // the user in the SAME transaction) or by issueVerificationToken's
+      // invalidateActiveTokens (superseded by a newer token issued for a
+      // register retry or Resend) — the user not being verified here means
+      // this is the latter: a stale link, not a genuinely consumed one.
+      throw new ApiError(400, 'A newer verification link was sent for this account.', { code: 'TOKEN_SUPERSEDED' });
     }
     if (new Date(tokenRow.expires_at).getTime() < Date.now()) {
       throw new ApiError(410, 'This verification link has expired. Please request a new one.', { code: 'TOKEN_EXPIRED' });

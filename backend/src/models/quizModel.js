@@ -1,4 +1,5 @@
 const { query, execute, transaction } = require('../config/database');
+const { quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
 
 async function createQuiz({
   userId, topic, quizType, difficulty, sourceType, sourceId, items, personalizationContext = null,
@@ -330,7 +331,9 @@ async function listActiveAttemptsForUser(userId, limit = 10) {
               WHERE x.attempt_id = qa.id AND x.selected_answer IS NOT NULL AND x.selected_answer <> '') AS answered
        FROM quiz_attempts qa
        INNER JOIN quizzes q ON q.id = qa.quiz_id
+       ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.status = 'in_progress'
+        AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
       ORDER BY COALESCE(qa.updated_at, qa.started_at) DESC
       LIMIT ?`,
     [userId, Number(limit)]
@@ -346,7 +349,9 @@ async function listAttemptsForUser(userId, limit = 10) {
              q.topic, q.quiz_type, q.difficulty, q.assessment_kind, q.passing_score
       FROM quiz_attempts qa
       INNER JOIN quizzes q ON q.id = qa.quiz_id
+      ${quizSubjectJoins('q')}
       WHERE qa.user_id = ? AND qa.status = 'submitted'
+        AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
       ORDER BY qa.completed_at DESC
       LIMIT ?
     `,
@@ -357,9 +362,12 @@ async function listAttemptsForUser(userId, limit = 10) {
 async function getQuizAverageScore(userId) {
   const rows = await query(
     `
-      SELECT ROUND(AVG(score / total) * 100, 0) AS avg_percent, COUNT(*) AS attempt_count
-      FROM quiz_attempts
-      WHERE user_id = ? AND status = 'submitted' AND total > 0
+      SELECT ROUND(AVG(qa.score / qa.total) * 100, 0) AS avg_percent, COUNT(*) AS attempt_count
+      FROM quiz_attempts qa
+      INNER JOIN quizzes q ON q.id = qa.quiz_id
+      ${quizSubjectJoins('q')}
+      WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
+        AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
     `,
     [userId]
   );

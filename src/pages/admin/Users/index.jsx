@@ -3,6 +3,7 @@ import { Eye, RotateCcw, ShieldCheck, Trash2, UserCheck, UserX, Users as UsersIc
 import ActionMenu from '../../../components/common/ActionMenu';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
+import { useAuth } from '../../../contexts/AuthContext';
 import DataTable from '../../../components/admin/DataTable';
 import Pagination from '../../../components/admin/Pagination';
 import SearchBar from '../../../components/admin/SearchBar';
@@ -52,6 +53,7 @@ export default function AdminUsersPage() {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const confirm = useConfirm();
   const toast = useToast();
+  const { user: currentUser } = useAuth();
 
   // A "View details" link elsewhere (e.g. the Dashboard's "Students who may
   // need help" card) opens this page with ?userId=<id> in the URL — pick it
@@ -86,9 +88,9 @@ export default function AdminUsersPage() {
     try {
       await setUserActive(user.id, !user.is_active);
       setUsers((current) => current.map((item) => (item.id === user.id ? { ...item, is_active: !item.is_active } : item)));
-      toast.success(user.is_active ? 'Student deactivated.' : 'Student reactivated.');
+      toast.success(user.is_active ? 'Account deactivated.' : 'Account reactivated.');
     } catch (error) {
-      toast.error(error.message || 'Could not update that student.');
+      toast.error(error.message || 'Could not update that account.');
     }
   };
 
@@ -125,18 +127,21 @@ export default function AdminUsersPage() {
   };
 
   const handleDelete = async (user) => {
+    const isAdmin = user.role === 'admin';
     const ok = await confirm({
-      title: 'Delete this student?',
-      message: `"${user.first_name} ${user.last_name}" will be permanently removed from the active roster. This can't be undone.`,
+      title: isAdmin ? `Delete admin account ${user.first_name} ${user.last_name}?` : 'Delete this student?',
+      message: isAdmin
+        ? "They will lose admin access immediately. This can't be undone."
+        : `"${user.first_name} ${user.last_name}" will be permanently removed from the active roster. This can't be undone.`,
     });
     if (!ok) return;
 
     try {
       await deleteAdminUser(user.id);
-      toast.success('Student deleted.');
+      toast.success(isAdmin ? 'Admin account deleted.' : 'Student deleted.');
       load();
     } catch (error) {
-      toast.error(error.message || 'Could not delete that student.');
+      toast.error(error.message || 'Could not delete that account.');
     }
   };
 
@@ -170,20 +175,25 @@ export default function AdminUsersPage() {
       key: 'actions',
       label: '',
       align: 'right',
-      render: (u) => (
-        <ActionMenu
-          label={`Actions for ${u.first_name} ${u.last_name}`}
-          items={[
-            { label: 'View Profile', icon: <Eye size={14} />, onClick: () => setSelectedUserId(u.id) },
-            u.role === 'student'
-              ? { label: u.is_active ? 'Deactivate' : 'Reactivate', icon: u.is_active ? <UserX size={14} /> : <UserCheck size={14} />, onClick: () => toggleActive(u) }
-              : null,
-            u.role === 'student' ? { label: 'Reset Progress', icon: <RotateCcw size={14} />, onClick: () => handleReset(u) } : null,
-            u.role === 'student' ? { label: 'Promote to Admin', icon: <ShieldCheck size={14} />, onClick: () => handlePromote(u) } : null,
-            u.role === 'student' ? { label: 'Delete', icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(u) } : null,
-          ].filter(Boolean)}
-        />
-      ),
+      render: (u) => {
+        const isSelf = Number(u.id) === Number(currentUser?.id);
+        return (
+          <ActionMenu
+            label={`Actions for ${u.first_name} ${u.last_name}`}
+            items={[
+              { label: 'View Profile', icon: <Eye size={14} />, onClick: () => setSelectedUserId(u.id) },
+              isSelf
+                ? null
+                : { label: u.is_active ? 'Deactivate' : 'Reactivate', icon: u.is_active ? <UserX size={14} /> : <UserCheck size={14} />, onClick: () => toggleActive(u) },
+              u.role === 'student' ? { label: 'Reset Progress', icon: <RotateCcw size={14} />, onClick: () => handleReset(u) } : null,
+              u.role === 'student' ? { label: 'Promote to Admin', icon: <ShieldCheck size={14} />, onClick: () => handlePromote(u) } : null,
+              isSelf
+                ? null
+                : { label: 'Delete', icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(u) },
+            ].filter(Boolean)}
+          />
+        );
+      },
     },
   ];
 

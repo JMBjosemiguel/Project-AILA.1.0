@@ -71,20 +71,58 @@ async function getUserDetail(userId) {
   return detail;
 }
 
+// Deactivating an admin is a removal of access just like deleting one, so it
+// gets the same two guards: never yourself, never the last active admin.
+// Both checks run inside the transaction that performs the update, with
+// countActiveAdmins' row locking (see adminModel) serializing concurrent
+// requests against each other.
 async function setUserActive(adminId, userId, isActive) {
-  const affectedRows = await adminModel.setUserActive(Number(userId), isActive);
+  const numericUserId = Number(userId);
+  if (!isActive && Number(adminId) === numericUserId) {
+    throw new ApiError(400, "You can't deactivate your own account.");
+  }
+
+  const affectedRows = await transaction(async (connection) => {
+    const target = await adminModel.getUserForDeletion(numericUserId, connection);
+    if (!target) return 0;
+    if (!isActive && target.role === 'admin') {
+      const activeAdmins = await adminModel.countActiveAdmins(connection);
+      if (activeAdmins <= 1) {
+        throw new ApiError(409, 'AILA needs at least one admin.');
+      }
+    }
+    return adminModel.setUserActive(numericUserId, isActive, connection);
+  });
+
   if (!affectedRows) {
     throw new ApiError(404, 'User not found.');
   }
-  await logAdminAction(adminId, isActive ? 'user.reactivate' : 'user.deactivate', 'users', Number(userId));
+  await logAdminAction(adminId, isActive ? 'user.reactivate' : 'user.deactivate', 'users', numericUserId);
 }
 
 async function deleteUser(adminId, userId) {
-  const affectedRows = await adminModel.deleteUser(Number(userId));
+  const numericUserId = Number(userId);
+  if (Number(adminId) === numericUserId) {
+    throw new ApiError(400, "You can't delete your own account.");
+  }
+
+  const { affectedRows, targetRole } = await transaction(async (connection) => {
+    const target = await adminModel.getUserForDeletion(numericUserId, connection);
+    if (!target) return { affectedRows: 0, targetRole: null };
+    if (target.role === 'admin') {
+      const activeAdmins = await adminModel.countActiveAdmins(connection);
+      if (activeAdmins <= 1) {
+        throw new ApiError(409, 'AILA needs at least one admin.');
+      }
+    }
+    const affected = await adminModel.deleteUser(numericUserId, connection);
+    return { affectedRows: affected, targetRole: target.role };
+  });
+
   if (!affectedRows) {
     throw new ApiError(404, 'User not found.');
   }
-  await logAdminAction(adminId, 'user.delete', 'users', Number(userId));
+  await logAdminAction(adminId, 'user.delete', 'users', numericUserId, targetRole === 'admin' ? { targetRole: 'admin' } : null);
 }
 
 // Promote only, no demote. Resource visibility hardcodes role_id = 2 (admin)

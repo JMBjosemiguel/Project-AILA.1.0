@@ -14,6 +14,7 @@
  *     below, entirely from environment variables. No credentials in code.
  */
 const ApiError = require('../utils/ApiError');
+const { appDateTimeStr, appTimeStr } = require('../utils/appTime');
 
 let cachedTransport = null;
 
@@ -104,14 +105,23 @@ async function sendEmail({ to, subject, html, text }) {
     : sendViaConsole({ to, subject, html, text });
 }
 
-function buildVerificationEmail({ firstName, verifyUrl }) {
+// A register retry or Resend issues a brand-new link to the same address
+// with an otherwise-identical subject — Gmail (and most clients) then groups
+// them into one thread, burying the newest link under an older, now-
+// superseded one. Including the send time in both the subject and the body
+// makes consecutive emails visually distinct, so the right one is easy to
+// spot even inside a collapsed thread.
+function buildVerificationEmail({ firstName, verifyUrl, sentAt = new Date() }) {
   const greetName = firstName ? `, ${firstName}` : '';
+  const sentLabel = appDateTimeStr(sentAt);
   const text = [
     `Welcome to AILA${greetName}.`,
     '',
     'Please verify your email address to activate your account.',
     '',
     `Verify your email: ${verifyUrl}`,
+    '',
+    `Sent ${sentLabel}.`,
     '',
     "This link expires in about 30 minutes. If you didn't create an AILA account, you can ignore this email.",
   ].join('\n');
@@ -125,13 +135,14 @@ function buildVerificationEmail({ firstName, verifyUrl }) {
           Verify Email
         </a>
       </p>
+      <p style="font-size: 12px; color: #9ca3af;">Sent ${sentLabel}.</p>
       <p style="font-size: 13px; color: #6b7280;">
         This link expires in about 30 minutes. If you didn't create an AILA account, you can safely ignore this email.
       </p>
     </div>
   `;
 
-  return { subject: 'Verify your AILA email address', html, text };
+  return { subject: `Verify your AILA account (${appTimeStr(sentAt)})`, html, text };
 }
 
 async function sendVerificationEmail(user, verifyUrl) {
@@ -167,4 +178,6 @@ module.exports = {
   maskEmail,
   sendEmail,
   sendVerificationEmail,
+  // exposed for unit tests only — not part of the intended public surface
+  buildVerificationEmail,
 };

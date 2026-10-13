@@ -39,6 +39,12 @@ const authenticate = asyncHandler(async (req, res, next) => {
   if (!user) {
     throw new ApiError(401, 'User account is no longer available.');
   }
+  // findUserById already excludes deleted_at — this closes the matching gap
+  // for a DEactivated account: without it, an admin/student's existing token
+  // keeps working on every route until it expires, even after being deactivated.
+  if (!user.is_active) {
+    throw new ApiError(401, 'User account is no longer available.');
+  }
 
   req.auth = {
     user,

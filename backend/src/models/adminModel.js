@@ -320,8 +320,9 @@ async function getUserDetail(userId) {
 // The row itself, its id, and every historical child-table relationship
 // (chats, quizzes, XP, resources, ...) are untouched — nothing is deleted
 // except the identity fields, and the account is never reactivated.
-async function deleteUser(userId) {
-  const result = await query(
+async function deleteUser(userId, connection = null) {
+  const result = await execute(
+    connection,
     `
       UPDATE users
       SET deleted_at = CURRENT_TIMESTAMP,
@@ -335,6 +336,47 @@ async function deleteUser(userId) {
   return result.affectedRows;
 }
 
+// Role + active status for the target of a delete/deactivate, locked for the
+// duration of the caller's transaction (FOR UPDATE) so a concurrent request
+// against the SAME row can't race past the guard below it. Mirrors
+// getUserForPromotion's shape; kept separate since promotion's eligibility
+// checks are unrelated to delete/deactivate's "last admin" guard.
+async function getUserForDeletion(userId, connection) {
+  const rows = await execute(
+    connection,
+    `
+      SELECT u.id, u.is_active, r.name AS role
+      FROM users u
+      INNER JOIN roles r ON r.id = u.role_id
+      WHERE u.id = ? AND u.deleted_at IS NULL
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+// Must be called inside the SAME transaction as the delete/deactivate it is
+// guarding. FOR UPDATE here locks every row counted as an active admin, not
+// just one — so two concurrent requests targeting two DIFFERENT admins (e.g.
+// "delete admin X" and "delete admin Y" at the same moment, with only X and Y
+// left) still serialize against each other instead of both reading "2 active
+// admins, safe to proceed" and leaving zero.
+async function countActiveAdmins(connection) {
+  const rows = await execute(
+    connection,
+    `
+      SELECT COUNT(*) AS count
+      FROM users u
+      INNER JOIN roles r ON r.id = u.role_id
+      WHERE r.name = 'admin' AND u.deleted_at IS NULL AND u.is_active = 1
+      FOR UPDATE
+    `
+  );
+  return Number(rows[0].count);
+}
+
 async function resetUserProgress(userId, connection) {
   await execute(connection, 'DELETE FROM lesson_progress WHERE user_id = ?', [userId]);
   await execute(connection, 'DELETE FROM learning_progress WHERE user_id = ?', [userId]);
@@ -343,8 +385,8 @@ async function resetUserProgress(userId, connection) {
   await execute(connection, 'UPDATE user_profiles SET xp_points = 0, level = 1 WHERE user_id = ?', [userId]);
 }
 
-async function setUserActive(userId, isActive) {
-  const result = await query('UPDATE users SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, userId]);
+async function setUserActive(userId, isActive, connection = null) {
+  const result = await execute(connection, 'UPDATE users SET is_active = ? WHERE id = ?', [isActive ? 1 : 0, userId]);
   return result.affectedRows;
 }
 
@@ -524,6 +566,8 @@ module.exports = {
   resetUserProgress,
   setUserActive,
   getUserForPromotion,
+  getUserForDeletion,
+  countActiveAdmins,
   countPersonalUploads,
   promoteToAdmin,
   listResourcesAdmin,

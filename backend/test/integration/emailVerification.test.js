@@ -137,19 +137,40 @@ test('email verification', async (t) => {
     assert.equal(reuse.json.data.alreadyVerified, true);
   });
 
-  await t.test('verifyEmail: a token superseded before ever being consumed reports TOKEN_USED', async () => {
+  await t.test('verifyEmail: a token superseded before ever being consumed reports TOKEN_SUPERSEDED, not TOKEN_USED', async () => {
     const email = nextEmail();
     const reg = await registerRaw(email);
     const userId = reg.json.data.user.id;
 
     // A still-unverified user's old (superseded) token carries used_at even
-    // though it was never actually consumed by a successful verify.
+    // though it was never actually consumed by a successful verify — e.g. a
+    // register retry or Resend issued a newer one. This must read as "a
+    // newer link exists", not the same generic "invalid" as a truly used or
+    // garbage token.
     const { raw, hash } = generateVerificationToken();
     await insertToken(userId, hash, { expiresAt: new Date(Date.now() + 30 * 60 * 1000), usedAt: new Date() });
 
     const res = await api('POST', '/auth/verify-email', { body: { token: raw } });
     assert.equal(res.status, 400);
-    assert.equal(res.json.details?.code, 'TOKEN_USED');
+    assert.equal(res.json.details?.code, 'TOKEN_SUPERSEDED');
+  });
+
+  await t.test('verifyEmail: a soft-deleted account\'s own still-valid token can never verify it', async () => {
+    const email = nextEmail();
+    const reg = await registerRaw(email);
+    const userId = reg.json.data.user.id;
+
+    const { raw, hash } = generateVerificationToken();
+    await insertToken(userId, hash, { expiresAt: new Date(Date.now() + 30 * 60 * 1000) });
+
+    await db.query('UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [userId]);
+
+    const res = await api('POST', '/auth/verify-email', { body: { token: raw } });
+    assert.equal(res.status, 400);
+    assert.equal(res.json.details?.code, 'TOKEN_INVALID');
+
+    const row = (await db.query('SELECT email_verified_at FROM users WHERE id = ?', [userId]))[0];
+    assert.equal(row.email_verified_at, null, 'a deleted account must never get verified');
   });
 
   await t.test('verifyEmail: invalid / garbage tokens are rejected', async () => {

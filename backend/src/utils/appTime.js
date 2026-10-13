@@ -95,10 +95,30 @@ function appStartOfWeek(instant = new Date()) {
   return localMidnightUtc(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, anchor.getUTCDate());
 }
 
+// Human-readable instant, application timezone — e.g. "Oct 14, 2026, 9:41 PM".
+// For display text (emails, audit-style messages), never for comparisons.
+function appDateTimeStr(instant = new Date()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIMEZONE, year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(asDate(instant));
+}
+
+// Just the time portion — e.g. "9:41 PM". Short enough to drop into a
+// subject line so otherwise-identical emails (a register retry, Resend) are
+// visually distinct in an inbox that threads by subject.
+function appTimeStr(instant = new Date()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIMEZONE, hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(asDate(instant));
+}
+
 module.exports = {
   APP_TIMEZONE,
   appDateStr,
   appYesterdayStr,
   appStartOfDay,
   appStartOfWeek,
+  appDateTimeStr,
+  appTimeStr,
 };

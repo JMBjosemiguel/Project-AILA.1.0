@@ -73,7 +73,7 @@ function AchievementsTab({ refreshKey, onRetry }) {
       {earned.length > 0 && (
         <div>
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-400">Earned</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {earned.map((a) => (
               <AchievementBadge key={a.slug} achievement={a} earned earnedAt={a.earnedAt} />
             ))}
@@ -84,7 +84,7 @@ function AchievementsTab({ refreshKey, onRetry }) {
       {locked.length > 0 && (
         <div>
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-400">Locked</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {locked.map((a) => (
               <AchievementBadge key={a.slug} achievement={a} />
             ))}

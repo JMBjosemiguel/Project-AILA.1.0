@@ -65,7 +65,7 @@ export default function FeedbackPage() {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
-      <div className="grid lg:grid-cols-[1fr_300px] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
         <div className="flex flex-col gap-5">
           <Card>
             <CardHeader title="Rate your experience" />

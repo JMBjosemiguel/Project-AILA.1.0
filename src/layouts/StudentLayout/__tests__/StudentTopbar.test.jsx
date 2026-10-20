@@ -213,6 +213,102 @@ describe('StudentTopbar command palette', () => {
   });
 });
 
+// Spied (not reassigned) so vitest.config's restoreMocks undoes this after
+// each test — a plain reassignment would leak into every later test in the
+// file, since restoreMocks only reverts vi.spyOn/vi.fn spies.
+function mockMobileViewport() {
+  vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+    matches: query === '(max-width: 639px)',
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  }));
+}
+
+describe('StudentTopbar — phone compact bar', () => {
+  it('shows menu, title, search icon, bell and avatar — no dark-mode/logout buttons directly on the bar', () => {
+    mockMobileViewport();
+    renderTopbar();
+
+    expect(screen.getByRole('button', { name: 'Open navigation menu' })).toBeInTheDocument();
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Search AILA' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View notifications' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument();
+    expect(screen.queryByTitle('Log out')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search AILA...')).not.toBeInTheDocument();
+  });
+
+  it('tapping the search icon opens a full-width search panel with the input focused', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+
+    const dialog = screen.getByRole('dialog', { name: /search aila destinations/i });
+    expect(dialog).toBeInTheDocument();
+    const input = within(dialog).getByRole('textbox', { name: 'Search AILA' });
+    expect(input).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close search' })).toBeInTheDocument();
+  });
+
+  it('the mobile panel shows the same results and keyboard navigation as desktop', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const { onNavigate } = renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search AILA' }), 'planner');
+    await user.keyboard('{Enter}');
+
+    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.PLANNER);
+  });
+
+  it('closing with the X button works', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('closing with Escape works', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('dark mode and Log out are reachable from the avatar menu, and logout still asks for confirmation', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const { onNavigate } = renderTopbar();
+    logoutMock.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByRole('menuitem', { name: /dark mode/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: /log out/i }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByText('Log out?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Log out' }));
+
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('/login');
+  });
+});
+
 describe('StudentTopbar logout confirmation', () => {
   it('asks for confirmation and stays logged in on Cancel', async () => {
     const user = userEvent.setup();

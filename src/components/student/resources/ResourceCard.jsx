@@ -1,6 +1,7 @@
 import { Download, ExternalLink, FileText, Image, Link2, Pencil, Presentation, Sparkles, Trash2 } from 'lucide-react';
 import { DomainChip } from '../../common/DomainChip';
 import ActionMenu from '../../common/ActionMenu';
+import { displayResourceTitle } from '../../../utils/resourceTitle';
 
 const TYPE_META = {
   pdf: { icon: FileText, color: '#ef4444', tint: '#FFF1F2' },
@@ -36,7 +37,7 @@ export default function ResourceCard({ file, onSelect, selected, onOpen, onDownl
         }
       }}
       className={[
-        'flex items-center gap-3.5 w-full text-left p-5 rounded-2xl border shadow-soft transition-colors cursor-pointer',
+        'flex items-center gap-3.5 w-full min-w-0 text-left p-5 rounded-2xl border shadow-soft transition-colors cursor-pointer',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
         selected ? 'border-primary-300 bg-primary-50' : 'border-ink-100 bg-surface hover:border-primary-200',
       ].join(' ')}
@@ -45,10 +46,10 @@ export default function ResourceCard({ file, onSelect, selected, onOpen, onDownl
         <Icon size={18} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-ink-800 truncate">{file.title}</p>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <DomainChip subject={subject} />
-          {file.category_name && <span className="text-xs text-ink-400">{file.category_name}</span>}
+        <p className="text-sm font-semibold text-ink-800 truncate">{displayResourceTitle(file)}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap min-w-0">
+          <DomainChip subject={subject} className="min-w-0 max-w-full truncate" />
+          {file.category_name && <span className="text-xs text-ink-400 truncate">{file.category_name}</span>}
         </div>
       </div>
       <span className="text-[0.65rem] font-bold text-ink-400 uppercase flex-shrink-0">{file.type}</span>

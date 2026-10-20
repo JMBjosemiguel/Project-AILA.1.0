@@ -16,6 +16,7 @@ import { useResourceLibraryData } from '../../../hooks/useResourceLibraryData';
 import { addLinkResource, deleteResource, downloadResource, logResourceView, openResourceFile, uploadResource } from '../../../services/api/resourceService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
 import { consumeResourceSearchTarget } from '../../../utils/resourceSearchTarget';
+import { displayResourceTitle } from '../../../utils/resourceTitle';
 
 const ACCEPTED_FILE_TYPES = ACCEPTED_RESOURCE_FILE_TYPES.join(',');
 
@@ -129,7 +130,7 @@ export default function ResourcesPage({ onNavigate }) {
   const handleDeleteResource = async (file) => {
     const ok = await confirm({
       title: 'Delete this resource?',
-      message: `"${file.title}" and its AI analysis will be permanently removed. This can't be undone.`,
+      message: `"${displayResourceTitle(file)}" and its AI analysis will be permanently removed. This can't be undone.`,
     });
     if (!ok) return;
 
@@ -153,7 +154,7 @@ export default function ResourcesPage({ onNavigate }) {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
-      <div className="grid lg:grid-cols-[200px_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6">
         <Card className="h-fit lg:sticky lg:top-20 min-w-0">
           <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2 px-1">Subjects</div>
           <div className="flex lg:flex-col gap-1 flex-wrap">
@@ -214,13 +215,13 @@ export default function ResourcesPage({ onNavigate }) {
 
           {uploadError && <p className="text-xs text-rose-600 -mt-2">{uploadError}</p>}
 
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 overflow-x-auto scrollbar-thin sm:overflow-visible sm:flex-wrap -mx-1 px-1 pb-1 sm:pb-0">
             {RESOURCE_TYPES.map((resourceType) => (
               <button
                 key={resourceType}
                 onClick={() => setType(resourceType)}
                 className={[
-                  'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
+                  'flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors',
                   type === resourceType ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
                 ].join(' ')}
               >
@@ -243,7 +244,7 @@ export default function ResourcesPage({ onNavigate }) {
               onRetry={() => setRefreshVersion((version) => version + 1)}
             />
           ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {filtered.length ? filtered.map((file) => (
                 <ResourceCard
                   key={file.id}
@@ -273,13 +274,13 @@ export default function ResourcesPage({ onNavigate }) {
           )}
 
           {(recentlyOpened.length > 0 || popular.length > 0 || recommended.length > 0) && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
               {recommended.length > 0 && (
                 <Card>
                   <CardHeader title="Recommended for you" />
                   <div className="flex flex-col gap-2">
                     {recommended.map((item) => (
-                      <div key={item.id} className="text-sm text-ink-600 truncate">{item.title}</div>
+                      <div key={item.id} className="text-sm text-ink-600 truncate">{displayResourceTitle(item)}</div>
                     ))}
                   </div>
                 </Card>
@@ -289,7 +290,7 @@ export default function ResourcesPage({ onNavigate }) {
                   <CardHeader title="Recently opened" />
                   <div className="flex flex-col gap-2">
                     {recentlyOpened.map((item) => (
-                      <div key={item.id} className="text-sm text-ink-600 truncate">{item.title}</div>
+                      <div key={item.id} className="text-sm text-ink-600 truncate">{displayResourceTitle(item)}</div>
                     ))}
                   </div>
                 </Card>
@@ -299,8 +300,8 @@ export default function ResourcesPage({ onNavigate }) {
                   <CardHeader title="Popular resources" />
                   <div className="flex flex-col gap-2">
                     {popular.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between text-sm text-ink-600">
-                        <span className="truncate min-w-0">{item.title}</span>
+                      <div key={item.id} className="flex items-center justify-between text-sm text-ink-600 min-w-0 gap-2">
+                        <span className="truncate min-w-0">{displayResourceTitle(item)}</span>
                         <span className="text-xs text-ink-400 flex-shrink-0">{item.view_count} view{item.view_count === 1 ? '' : 's'}</span>
                       </div>
                     ))}
@@ -316,7 +317,7 @@ export default function ResourcesPage({ onNavigate }) {
         <Card className="mt-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-ink-800">{selected.title}</p>
+              <p className="text-sm font-semibold text-ink-800 truncate">{displayResourceTitle(selected)}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <DomainChip subject={selected.subjects?.[0]} />
                 <span className="text-xs text-ink-400">{selected.category_name ?? selected.type}</span>

@@ -184,7 +184,7 @@ export default function PlannerPage() {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHeader title="Your tasks" subtitle={`${pending.length} pending — ${completed.length} completed`} />
 
@@ -219,7 +219,7 @@ export default function PlannerPage() {
           </button>
 
           {showDetails && (
-            <div className="grid sm:grid-cols-2 gap-3 mb-4 p-3.5 bg-ink-50/60 rounded-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3.5 bg-ink-50/60 rounded-xl">
               <div>
                 <label htmlFor="task-subject" className="text-xs font-semibold text-ink-600 mb-1 block">Subject</label>
                 <select

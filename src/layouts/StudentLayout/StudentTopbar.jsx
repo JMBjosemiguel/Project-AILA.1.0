@@ -1,6 +1,7 @@
-import { Bell, LogOut, Menu, Search, X } from 'lucide-react';
+import { Bell, LogOut, Menu, Moon, Search, Sun, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STUDENT_NAV_GROUPS, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoutes';
+import ActionMenu from '../../components/common/ActionMenu';
 import { useConfirm } from '../../components/common/ConfirmDialog';
 import ThemeToggle from '../../components/common/ThemeToggle';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,6 +9,10 @@ import { useNotificationsData } from '../../hooks/useNotificationsData';
 import { useTheme } from '../../hooks/useTheme';
 
 const STUDENT_SEARCH_DESTINATIONS = STUDENT_NAV_GROUPS.flatMap((group) => group.items);
+// Tailwind's `sm` breakpoint — below this the topbar switches to the compact
+// phone layout (menu, title, search icon, bell, avatar) and the search panel
+// goes full-screen; at/above it, everything is unchanged from before.
+const MOBILE_QUERY = '(max-width: 639px)';
 
 function routeMatches(route, query) {
   const haystack = [route.label, route.title, route.subtitle, route.path]
@@ -17,10 +22,82 @@ function routeMatches(route, query) {
   return haystack.includes(query);
 }
 
+// Driven by matchMedia (not CSS) so exactly one topbar/search presentation is
+// ever actually rendered — simpler to reason about and to test than two
+// CSS-hidden copies, and it updates live if the viewport is resized.
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches
+  ));
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_QUERY);
+    const handleChange = (event) => setIsMobile(event.matches);
+    if (mediaQuery.addEventListener) mediaQuery.addEventListener('change', handleChange);
+    else mediaQuery.addListener?.(handleChange);
+    return () => {
+      if (mediaQuery.removeEventListener) mediaQuery.removeEventListener('change', handleChange);
+      else mediaQuery.removeListener?.(handleChange);
+    };
+  }, []);
+
+  return isMobile;
+}
+
+// Shared between the desktop dropdown and the mobile full-screen panel so
+// results and keyboard navigation are identical in both — not two
+// re-implementations that could drift apart.
+function SearchResultsList({ results, activeIndex, setActiveIndex, onSelect }) {
+  if (!results.length) {
+    return (
+      <div className="py-10 text-center text-sm text-ink-400">
+        <p className="font-semibold text-ink-600">No results found</p>
+        <p className="text-xs mt-1">Try another destination.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div role="listbox" aria-label="Student destinations" className="flex flex-col gap-1">
+      {results.map((destination, index) => {
+        const Icon = destination.icon;
+        const selected = index === activeIndex;
+
+        return (
+          <button
+            key={destination.id}
+            type="button"
+            role="option"
+            aria-selected={selected}
+            onMouseEnter={() => setActiveIndex(index)}
+            onClick={() => onSelect(destination)}
+            className={[
+              'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+              selected ? 'bg-primary-50 text-primary' : 'text-ink-700 hover:bg-ink-50',
+            ].join(' ')}
+          >
+            <span className={[
+              'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+              selected ? 'bg-surface text-primary' : 'bg-ink-50 text-ink-400',
+            ].join(' ')}>
+              <Icon size={16} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold truncate">{destination.label}</span>
+              <span className="block text-xs text-ink-400 truncate">{destination.subtitle}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavigate }) {
   const { logout, user } = useAuth();
   const confirm = useConfirm();
   const { theme, toggleTheme } = useTheme();
+  const isMobile = useIsMobileViewport();
   const route = STUDENT_ROUTES[active] || {};
   const avatarLetter = user?.first_name?.[0] ?? 'A';
   const { data: notificationsData } = useNotificationsData(active);
@@ -30,6 +107,12 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef(null);
   const headerSearchRef = useRef(null);
+  const mobilePanelRef = useRef(null);
+  // Mobile-back-closes-the-panel bookkeeping (mirrors LessonReader's own
+  // history.back() pattern): engaged only when opened on a phone-width
+  // viewport, so desktop never gets an extra history entry.
+  const historyEngagedRef = useRef(false);
+  const closedByPopRef = useRef(false);
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -47,15 +130,30 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
     setPaletteOpen(true);
   };
 
+  // The raw reset — used directly for passive closes (losing focus/visibility,
+  // navigating to a different page) where triggering a browser Back would be
+  // wrong, since nothing was "backed out of".
   const closePalette = () => {
     setPaletteOpen(false);
     setQuery('');
     setActiveIndex(0);
   };
 
+  // What every user-facing dismiss (X button, Escape, selecting a result,
+  // clicking outside) calls instead: routes through history.back() when the
+  // mobile panel engaged it, so a single real Back press and an in-app close
+  // both consume exactly one history entry, never an orphaned one.
+  const requestClosePalette = () => {
+    if (historyEngagedRef.current && !closedByPopRef.current) {
+      window.history.back();
+      return;
+    }
+    closePalette();
+  };
+
   const navigateTo = (destination) => {
     if (!destination) return;
-    closePalette();
+    requestClosePalette();
     onNavigate(destination.id);
   };
 
@@ -91,18 +189,39 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   useEffect(() => {
     if (!paletteOpen) return undefined;
     const handleClickOutside = (event) => {
-      if (headerSearchRef.current && !headerSearchRef.current.contains(event.target)) {
-        closePalette();
-      }
+      const insideDesktop = headerSearchRef.current?.contains(event.target);
+      const insideMobile = mobilePanelRef.current?.contains(event.target);
+      if (!insideDesktop && !insideMobile) requestClosePalette();
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paletteOpen]);
+
+  // Engages the history trick only on a phone-width viewport, at the moment
+  // the panel opens — never on desktop/tablet, where the dropdown behaves
+  // exactly as it always has.
+  useEffect(() => {
+    if (!paletteOpen || !isMobile) return undefined;
+
+    historyEngagedRef.current = true;
+    closedByPopRef.current = false;
+    window.history.pushState({ studentSearchPanel: true }, '');
+    const handlePopState = () => {
+      closedByPopRef.current = true;
+      closePalette();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      historyEngagedRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paletteOpen]);
 
   useEffect(() => {
-    setPaletteOpen(false);
-    setQuery('');
-    setActiveIndex(0);
+    closePalette();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   useEffect(() => {
@@ -132,7 +251,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
   const handlePaletteKeyDown = (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      closePalette();
+      requestClosePalette();
       return;
     }
 
@@ -153,6 +272,98 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       navigateTo(results[activeIndex]);
     }
   };
+
+  if (isMobile) {
+    const avatarMenuItems = [
+      { label: 'Profile', icon: <UserRound size={14} />, onClick: () => onNavigate(STUDENT_ROUTE_IDS.PROFILE) },
+      {
+        label: theme === 'dark' ? 'Light mode' : 'Dark mode',
+        icon: theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />,
+        onClick: toggleTheme,
+      },
+      { label: 'Log out', icon: <LogOut size={14} />, danger: true, onClick: handleLogout },
+    ];
+
+    return (
+      <header className="sticky top-0 z-40 h-16 flex items-center gap-2 px-4 bg-surface/80 backdrop-blur-md border-b border-ink-100">
+        <button
+          onClick={onMenuClick}
+          aria-label="Open navigation menu"
+          aria-expanded={sidebarOpen}
+          aria-controls="student-sidebar-nav"
+          className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50"
+        >
+          <Menu size={18} />
+        </button>
+
+        <h1 className="flex-1 min-w-0 font-display font-bold text-ink-800 text-[1.05rem] leading-tight truncate">
+          {route.title}
+        </h1>
+
+        <button
+          onClick={openPalette}
+          aria-label="Search AILA"
+          className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50"
+        >
+          <Search size={18} />
+        </button>
+
+        <button
+          onClick={() => onNavigate(STUDENT_ROUTE_IDS.NOTIFICATIONS)}
+          aria-label="View notifications"
+          className="relative w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-600 hover:bg-ink-50 transition-colors"
+        >
+          <Bell size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-rose-500 border border-surface" />
+          )}
+        </button>
+
+        <ActionMenu
+          label="Account menu"
+          icon={avatarLetter}
+          triggerClassName="w-11 h-11 flex-shrink-0 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+          items={avatarMenuItems}
+        />
+
+        {paletteOpen && (
+          <div
+            ref={mobilePanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-command-palette-title"
+            className="fixed inset-0 z-50 bg-surface flex flex-col"
+          >
+            <div className="h-14 flex items-center gap-2 px-4 border-b border-ink-100 flex-shrink-0">
+              <Search size={16} className="text-ink-400 flex-shrink-0" />
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={handlePaletteKeyDown}
+                placeholder="Search AILA..."
+                aria-label="Search AILA"
+                className="flex-1 bg-transparent outline-none text-base text-ink-800 placeholder:text-ink-400 min-w-0"
+              />
+              <button
+                type="button"
+                onClick={requestClosePalette}
+                aria-label="Close search"
+                className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+              <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
+              <SearchResultsList results={results} activeIndex={activeIndex} setActiveIndex={setActiveIndex} onSelect={navigateTo} />
+            </div>
+          </div>
+        )}
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-40 h-16 flex items-center gap-4 px-4 lg:px-8 bg-surface/80 backdrop-blur-md border-b border-ink-100">
@@ -206,7 +417,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
                 />
                 <button
                   type="button"
-                  onClick={closePalette}
+                  onClick={requestClosePalette}
                   aria-label="Close search"
                   className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
                 >
@@ -216,45 +427,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
 
               <div className="max-h-80 overflow-y-auto scrollbar-thin p-2 border-t border-ink-100">
                 <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
-                {results.length ? (
-                  <div role="listbox" aria-label="Student destinations" className="flex flex-col gap-1">
-                    {results.map((destination, index) => {
-                      const Icon = destination.icon;
-                      const selected = index === activeIndex;
-
-                      return (
-                        <button
-                          key={destination.id}
-                          type="button"
-                          role="option"
-                          aria-selected={selected}
-                          onMouseEnter={() => setActiveIndex(index)}
-                          onClick={() => navigateTo(destination)}
-                          className={[
-                            'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
-                            selected ? 'bg-primary-50 text-primary' : 'text-ink-700 hover:bg-ink-50',
-                          ].join(' ')}
-                        >
-                          <span className={[
-                            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                            selected ? 'bg-surface text-primary' : 'bg-ink-50 text-ink-400',
-                          ].join(' ')}>
-                            <Icon size={16} />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-semibold truncate">{destination.label}</span>
-                            <span className="block text-xs text-ink-400 truncate">{destination.subtitle}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-10 text-center text-sm text-ink-400">
-                    <p className="font-semibold text-ink-600">No results found</p>
-                    <p className="text-xs mt-1">Try another destination.</p>
-                  </div>
-                )}
+                <SearchResultsList results={results} activeIndex={activeIndex} setActiveIndex={setActiveIndex} onSelect={navigateTo} />
               </div>
             </div>
           )}

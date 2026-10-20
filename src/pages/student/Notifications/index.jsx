@@ -11,6 +11,7 @@ import {
   deleteAllNotifications, deleteNotification, markAllNotificationsRead, markNotificationRead,
 } from '../../../services/api/notificationService';
 import { formatDateTime } from '../../../utils/formatDate';
+import { notificationIconMeta } from '../../../utils/notificationIcons';
 
 export default function NotificationsPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -90,7 +91,9 @@ export default function NotificationsPage() {
             message={error.message || 'Something went wrong loading your notifications.'}
             onRetry={() => setRefreshVersion((version) => version + 1)}
           />
-        ) : items.length ? items.map((notification) => (
+        ) : items.length ? items.map((notification) => {
+          const { icon: NotificationIcon, color } = notificationIconMeta(notification);
+          return (
           <div
             key={notification.id}
             role="button"
@@ -108,8 +111,8 @@ export default function NotificationsPage() {
               !notification.is_read ? 'border-primary-200' : 'border-ink-100',
             ].join(' ')}
           >
-            <div className="w-9 h-9 rounded-lg bg-ink-50 flex items-center justify-center text-base flex-shrink-0">
-              {notification.type?.slice(0, 1).toUpperCase()}
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+              <NotificationIcon size={16} />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink-800">{notification.title}</p>
@@ -125,7 +128,8 @@ export default function NotificationsPage() {
               <Trash2 size={13} />
             </button>
           </div>
-        )) : (
+          );
+        }) : (
           <EmptyState icon={BellOff} title="You're all caught up" message="New notifications will show up here as things happen." />
         )}
       </div>

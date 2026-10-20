@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2">
           <CardHeader title="Weekly performance trend" />
           {performanceTrend.length ? <TrendLine points={performanceTrend} maxValue={100} /> : <EmptyState icon={TrendingUp} title="No trend data" message="Take a few quizzes to see your performance trend over time." />}

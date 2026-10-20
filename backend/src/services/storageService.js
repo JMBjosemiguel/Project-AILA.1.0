@@ -58,13 +58,18 @@ function getR2Config() {
   return { endpoint, accessKeyId, secretAccessKey, bucket };
 }
 
-function signR2Request({ method, key, body = Buffer.alloc(0), headers = {} }) {
+function signR2Request({ method, key, body = Buffer.alloc(0), headers = {}, payloadHash: explicitPayloadHash }) {
   const { endpoint, accessKeyId, secretAccessKey, bucket } = getR2Config();
   const url = new URL(`${endpoint}/${bucket}/${encodePathSegments(key)}`);
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   const dateStamp = amzDate.slice(0, 8);
-  const payloadHash = body.length ? hash(body) : EMPTY_SHA256;
+  // Hashing the body up front would mean reading a streamed upload fully into
+  // memory before the request even starts — exactly what streaming is meant
+  // to avoid. S3-compatible APIs (R2 included) accept UNSIGNED-PAYLOAD as the
+  // content-sha256 for this reason: headers are still fully signed, only the
+  // body hash is skipped.
+  const payloadHash = explicitPayloadHash || (body.length ? hash(body) : EMPTY_SHA256);
 
   const signedHeadersMap = {
     host: url.host,
@@ -124,42 +129,58 @@ function parseR2Error(xml) {
   };
 }
 
-async function r2Request(method, key, { body, headers = {} } = {}) {
-  const bodyBuffer = body ? Buffer.from(body) : Buffer.alloc(0);
-  const signed = signR2Request({ method, key, body: bodyBuffer, headers });
-
-  let response;
+async function r2Request(method, key, { body, stream, contentLength, headers = {} } = {}) {
+  // A stream passed in but never consumed (signing fails before fetch even
+  // starts, a non-ok response, any thrown error below) would otherwise sit
+  // around and emit an unhandled 'error' once its deferred fs.open() finally
+  // runs against a file that may already be gone — an uncaught exception
+  // that crashes the whole process, not just this one request.
   try {
-    response = await fetch(signed.url, {
-      method,
-      headers: signed.headers,
-      ...(bodyBuffer.length ? { body: bodyBuffer } : {}),
-    });
-  } catch (networkError) {
-    console.error(`[ResourceStorage] r2 ${method} network error: ${networkError.message} (key=${key})`);
-    throw new ApiError(502, 'Resource storage is unreachable right now. Please try again.');
-  }
+    const requestHeaders = { ...headers };
+    const signed = stream
+      ? signR2Request({ method, key, headers: { ...requestHeaders, 'content-length': String(contentLength) }, payloadHash: 'UNSIGNED-PAYLOAD' })
+      : signR2Request({ method, key, body: body ? Buffer.from(body) : Buffer.alloc(0), headers: requestHeaders });
 
-  if (!response.ok) {
-    const { code, message } = parseR2Error(await response.text().catch(() => ''));
-    // Secret-free diagnostics: the generic user-facing message alone is not
-    // enough to tell a signing/permission/bucket problem apart in the logs.
-    console.error(
-      `[ResourceStorage] r2 ${method} failed: status=${response.status} code=${code || 'unknown'} ` +
-      `message=${JSON.stringify((message || '').slice(0, 200))} bucket=${process.env.R2_BUCKET || '(unset)'} ` +
-      `endpointExplicit=${Boolean(process.env.R2_ENDPOINT)} key=${key}`
-    );
-
-    if (response.status === 404) {
-      throw new ApiError(404, 'This file is not available in storage.');
+    let response;
+    try {
+      response = await fetch(signed.url, {
+        method,
+        headers: signed.headers,
+        // duplex: 'half' is required by Node's fetch whenever the request body
+        // is a stream rather than a fully-buffered value.
+        ...(stream
+          ? { body: Readable.toWeb(stream), duplex: 'half' }
+          : (body && body.length ? { body: Buffer.from(body) } : {})),
+      });
+    } catch (networkError) {
+      console.error(`[ResourceStorage] r2 ${method} network error: ${networkError.message} (key=${key})`);
+      throw new ApiError(502, 'Resource storage is unreachable right now. Please try again.');
     }
-    if (response.status === 401 || response.status === 403) {
-      throw new ApiError(502, 'Resource storage rejected the request. Please try again, or contact support if it keeps happening.');
-    }
-    throw new ApiError(502, 'Resource storage could not complete the request.');
-  }
 
-  return response;
+    if (!response.ok) {
+      const { code, message } = parseR2Error(await response.text().catch(() => ''));
+      // Secret-free diagnostics: the generic user-facing message alone is not
+      // enough to tell a signing/permission/bucket problem apart in the logs.
+      console.error(
+        `[ResourceStorage] r2 ${method} failed: status=${response.status} code=${code || 'unknown'} ` +
+        `message=${JSON.stringify((message || '').slice(0, 200))} bucket=${process.env.R2_BUCKET || '(unset)'} ` +
+        `endpointExplicit=${Boolean(process.env.R2_ENDPOINT)} key=${key}`
+      );
+
+      if (response.status === 404) {
+        throw new ApiError(404, 'This file is not available in storage.');
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new ApiError(502, 'Resource storage rejected the request. Please try again, or contact support if it keeps happening.');
+      }
+      throw new ApiError(502, 'Resource storage could not complete the request.');
+    }
+
+    return response;
+  } catch (error) {
+    if (stream && !stream.destroyed) stream.destroy();
+    throw error;
+  }
 }
 
 function buildStoredFileName(originalName) {
@@ -190,34 +211,39 @@ async function ensureUploadsDir() {
   await fs.promises.mkdir(UPLOADS_DIR, { recursive: true });
 }
 
-async function getUploadBuffer(file) {
-  if (file.buffer) return file.buffer;
-  if (file.path) return fs.promises.readFile(file.path);
-  throw new ApiError(400, 'Uploaded file data is missing.');
-}
-
 async function storeResourceFile(userId, file) {
-  const buffer = await getUploadBuffer(file);
-
   if (isR2Enabled()) {
+    if (!file.path) throw new ApiError(400, 'Uploaded file data is missing.');
+
     const key = buildR2ObjectKey(userId, file.originalname);
-    await r2Request('PUT', key, {
-      body: buffer,
-      headers: {
-        'content-type': file.mimetype || contentTypeForName(file.originalname),
-      },
+    const stream = fs.createReadStream(file.path);
+    // Belt-and-suspenders alongside r2Request's own destroy-on-error: a
+    // stream's 'error' event with zero listeners crashes the process, and
+    // this is cheap insurance against that regardless of exactly when/how
+    // the stream gets torn down.
+    stream.on('error', (error) => {
+      console.error(`[storageService] temp upload stream error for ${file.path}: ${error.message}`);
     });
-    return { filePath: `r2://${key}`, buffer };
+    try {
+      await r2Request('PUT', key, {
+        stream,
+        contentLength: file.size,
+        headers: { 'content-type': file.mimetype || contentTypeForName(file.originalname) },
+      });
+    } finally {
+      await fs.promises.unlink(file.path).catch((error) => {
+        console.error(`[storageService] failed to remove temp upload file ${file.path}: ${error.message}`);
+      });
+    }
+    return { filePath: `r2://${key}` };
   }
 
   await ensureUploadsDir();
-  if (file.path && file.filename) {
-    return { filePath: `/resources/${file.filename}`, buffer };
+  if (!file.path || !file.filename) {
+    throw new ApiError(400, 'Uploaded file data is missing.');
   }
-
-  const fileName = buildStoredFileName(file.originalname);
-  await fs.promises.writeFile(path.join(UPLOADS_DIR, fileName), buffer);
-  return { filePath: `/resources/${fileName}`, buffer };
+  // multer already wrote this file straight into UPLOADS_DIR — nothing to copy.
+  return { filePath: `/resources/${file.filename}` };
 }
 
 async function getStoredFile(filePath) {

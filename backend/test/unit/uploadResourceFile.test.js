@@ -1,6 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const http = require('node:http');
 const express = require('express');
 const multer = require('multer');
@@ -64,6 +66,43 @@ test('uploadResourceFile', async (t) => {
       assert.equal(overLimit.json.code, 'LIMIT_FILE_SIZE');
     } finally {
       await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  await t.test('in R2 mode, the file is streamed to a disk temp file (never buffered in memory), and the temp file is deleted once the response finishes', async () => {
+    const MODULE_PATH = path.join(__dirname, '../../src/middlewares/uploadResourceFile.js');
+    delete require.cache[require.resolve(MODULE_PATH)];
+    process.env.STORAGE_DRIVER = 'r2';
+    const { uploadResourceFile: r2Upload } = require(MODULE_PATH);
+
+    const app = express();
+    let capturedPath = null;
+    app.post('/upload', r2Upload, (req, res) => {
+      capturedPath = req.file.path;
+      assert.equal(req.file.buffer, undefined, 'R2 mode must not use multer.memoryStorage()');
+      assert.equal(typeof req.file.path, 'string', 'R2 mode must write to a disk temp file');
+      res.status(201).json({ ok: true });
+    });
+
+    const server = http.createServer(app);
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+
+    try {
+      const fd = new FormData();
+      fd.append('file', new Blob([Buffer.from('hello world')], { type: 'application/pdf' }), 'f.pdf');
+      const res = await fetch(`http://127.0.0.1:${port}/upload`, { method: 'POST', body: fd });
+      assert.equal(res.status, 201);
+      assert.ok(capturedPath, 'handler should have run and captured req.file.path');
+
+      // res.on('finish') fires asynchronously after the response is sent —
+      // give it a tick before asserting the cleanup ran.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(fs.existsSync(capturedPath), false, 'temp upload file must be deleted after the response finishes');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      delete process.env.STORAGE_DRIVER;
+      delete require.cache[require.resolve(MODULE_PATH)];
     }
   });
 });

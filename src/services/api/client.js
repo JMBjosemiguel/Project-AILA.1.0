@@ -1,7 +1,27 @@
 import axios from 'axios';
+import { setConnectivityStatus } from './connectivityStatus';
 
 const TOKEN_KEY = 'aila.jwt';
 const API_URL = import.meta.env.VITE_API_URL;
+
+// Render's free tier can take close to a minute to wake a sleeping instance,
+// and Aiven/network blips cause a handful of seconds of 502/503/504 or
+// outright connection failures. Retrying GETs quietly (with backoff, for up
+// to this long) means the student just sees a brief delay instead of the
+// page looking broken. Never applied to POST/PUT/PATCH/DELETE — those are
+// not safe to silently repeat.
+const RETRY_BUDGET_MS = 60000;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+function wait(ms) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
+function isRetryableError(error) {
+  if (error.response) return RETRYABLE_STATUSES.has(error.response.status);
+  // No response at all: a network error, a dropped connection, or a timeout.
+  return Boolean(error.request);
+}
 
 // Slightly longer than the backend's own Gemini deadline (GEMINI_TIMEOUT_MS,
 // 30s by default) so a stuck AI generation request always ends in an error
@@ -55,24 +75,73 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+function toApiClientError(error) {
+  if (error.response) {
+    const { status, data } = error.response;
+    const details = data?.details ?? null;
+    const detailMessage = Array.isArray(details)
+      ? details.map((item) => item.message).filter(Boolean).join(' ')
+      : '';
+    const message = detailMessage || data?.message || `Request failed with status ${status}.`;
+
+    return new ApiClientError(message, { status, details });
+  }
+
+  if (error.request) {
+    return new ApiClientError('Unable to reach the server. Please try again.');
+  }
+
+  return new ApiClientError(error.message || 'Request failed.');
+}
+
 apiClient.interceptors.response.use(
-  (response) => response.data?.data ?? response.data,
-  (error) => {
-    if (error.response) {
-      const { status, data } = error.response;
-      const details = data?.details ?? null;
-      const detailMessage = Array.isArray(details)
-        ? details.map((item) => item.message).filter(Boolean).join(' ')
-        : '';
-      const message = detailMessage || data?.message || `Request failed with status ${status}.`;
+  (response) => {
+    setConnectivityStatus('online');
+    return response.data?.data ?? response.data;
+  },
+  async (error) => {
+    const config = error.config;
+    const method = (config?.method || 'get').toLowerCase();
 
-      return Promise.reject(new ApiClientError(message, { status, details }));
+    if (!config || method !== 'get' || !isRetryableError(error)) {
+      // Any response at all — even an error one — proves the server is
+      // reachable, so a non-retried failure should still clear the banner.
+      if (error.response) setConnectivityStatus('online');
+      return Promise.reject(toApiClientError(error));
     }
 
-    if (error.request) {
-      return Promise.reject(new ApiClientError('Unable to reach the server. Please try again.'));
+    const startedAt = Date.now();
+    let attempt = 0;
+    let lastError = error;
+    let gaveUpOnBudget = false;
+
+    // Re-issued via the bare `axios` import (not `apiClient`) so this loop
+    // never re-enters these same interceptors — config already carries the
+    // resolved baseURL/url/auth header from the original attempt.
+    for (;;) {
+      if (Date.now() - startedAt >= RETRY_BUDGET_MS) {
+        gaveUpOnBudget = true;
+        break;
+      }
+      setConnectivityStatus('reconnecting');
+      await wait(Math.min(1000 * 2 ** attempt, 8000));
+      attempt += 1;
+      try {
+        const response = await axios.request({ ...config, timeout: config.timeout || 10000 });
+        setConnectivityStatus('online');
+        return response.data?.data ?? response.data;
+      } catch (retryError) {
+        lastError = retryError;
+        if (!isRetryableError(retryError)) break;
+      }
     }
 
-    return Promise.reject(new ApiClientError(error.message || 'Request failed.'));
+    setConnectivityStatus('unavailable');
+    if (gaveUpOnBudget) {
+      return Promise.reject(new ApiClientError("AILA's server is waking up. Please try again in a moment.", {
+        status: lastError.response?.status ?? null,
+      }));
+    }
+    return Promise.reject(toApiClientError(lastError));
   }
 );

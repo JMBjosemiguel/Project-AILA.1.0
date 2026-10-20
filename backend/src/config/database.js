@@ -33,6 +33,29 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
   timezone: 'Z',
   ssl: buildSslConfig(),
+  // Aiven (and most managed MySQL) silently drops idle TCP connections well
+  // before MySQL's own wait_timeout fires, and a NAT/load-balancer between
+  // Render and Aiven can do the same. Without TCP keep-alive, a connection
+  // the network already closed looks perfectly idle to this pool and gets
+  // handed to the next request, which then hangs until its own timeout.
+  enableKeepAlive: process.env.DB_ENABLE_KEEPALIVE === undefined
+    ? true
+    : isTruthy(process.env.DB_ENABLE_KEEPALIVE),
+  keepAliveInitialDelay: Number(process.env.DB_KEEPALIVE_INITIAL_DELAY_MS || 10000),
+  // Keep both comfortably under Aiven's wait_timeout (check the Aiven console
+  // if this value is ever unknown) so the pool recycles a connection before
+  // the server side closes it out from under us.
+  maxIdle: Number(process.env.DB_MAX_IDLE || process.env.DB_CONNECTION_LIMIT || 10),
+  idleTimeout: Number(process.env.DB_IDLE_TIMEOUT_MS || 60000),
+});
+
+// Without a listener, an 'error' event from the pool (e.g. an idle connection
+// the server or network closed) is an unhandled EventEmitter error, which
+// crashes the whole Node process — the most direct way a single dropped DB
+// connection could take down every concurrent user, not just the one request
+// that hit it.
+pool.on('error', (error) => {
+  console.error(`[database] pool error: ${error.code || 'UNKNOWN_ERROR'} ${error.message || ''}`);
 });
 
 // `timezone: 'Z'` above only tells this driver to treat values MySQL returns
@@ -51,9 +74,38 @@ pool.on('connection', (connection) => {
 // (Aiven): execute() sends every JS number as a DOUBLE, which MySQL rejects for
 // LIMIT/OFFSET ("Incorrect arguments to mysqld_stmt_execute"). MariaDB accepts it,
 // which is why this only surfaced in production.
+// Errors mysql2 raises when the underlying socket is already dead (closed by
+// Aiven, a NAT/load-balancer, or the network) rather than a real query
+// failure — safe to retry once on a different (fresh) pooled connection.
+const DEAD_CONNECTION_ERROR_CODES = new Set([
+  'PROTOCOL_CONNECTION_LOST',
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ER_CON_COUNT_ERROR',
+  'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+  'PROTOCOL_ENQUEUE_AFTER_QUIT',
+]);
+
+function isDeadConnectionError(error) {
+  return Boolean(error && DEAD_CONNECTION_ERROR_CODES.has(error.code));
+}
+
 async function query(sql, params = []) {
-  const [rows] = await pool.query(sql, params);
-  return rows;
+  try {
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  } catch (error) {
+    if (!isDeadConnectionError(error)) throw error;
+    // pool.query() acquires and releases its own connection, and mysql2
+    // destroys (rather than recycles) a connection that errored fatally, so
+    // this retry is guaranteed a different, fresh connection — never the one
+    // that just failed.
+    console.error(`[database] query failed on a dead connection (${error.code}); retrying once on a fresh connection`);
+    const [rows] = await pool.query(sql, params);
+    return rows;
+  }
 }
 
 // InnoDB may pick either side of a lock cycle as the deadlock victim and abort it
@@ -120,4 +172,5 @@ module.exports = {
   transaction,
   testConnection,
   execute,
+  isDeadConnectionError,
 };

@@ -1,3 +1,4 @@
+const fs = require('fs');
 const ApiError = require('../utils/ApiError');
 const resourceModel = require('../models/resourceModel');
 const learningModel = require('../models/learningModel');
@@ -44,6 +45,38 @@ function normalizeDifficulty(value) {
 
 function stripExtension(filename) {
   return filename.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim() || filename;
+}
+
+// Keeps AI analysis memory bounded regardless of the 200 MB upload limit.
+// Text extraction only needs a prefix of the file (full-document accuracy
+// isn't required for a summary/keywords pass); images are analyzed whole, so
+// oversized ones are skipped rather than read in full.
+const MAX_TEXT_EXTRACTION_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_ANALYSIS_BYTES = 15 * 1024 * 1024;
+
+async function readUploadBufferForAnalysis(file, type) {
+  try {
+    if (type === 'image') {
+      if (file.size > MAX_IMAGE_ANALYSIS_BYTES) {
+        console.warn(`[resourceService] skipping AI image analysis: ${file.size} bytes exceeds the ${MAX_IMAGE_ANALYSIS_BYTES} byte cap`);
+        return null;
+      }
+      return await fs.promises.readFile(file.path);
+    }
+
+    const cap = Math.min(file.size, MAX_TEXT_EXTRACTION_BYTES);
+    const handle = await fs.promises.open(file.path, 'r');
+    try {
+      const buffer = Buffer.alloc(cap);
+      await handle.read(buffer, 0, cap, 0);
+      return buffer;
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    console.error(`[resourceService] could not read uploaded file for AI analysis: ${error.message}`);
+    return null;
+  }
 }
 
 async function extractTextForType(type, buffer) {
@@ -233,6 +266,9 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
   await assertSubjectOwnership(userId, subjectId);
 
   const title = stripExtension(file.originalname);
+  // Read before storeResourceFile: for R2 it deletes the temp file right
+  // after streaming it up, so the raw upload is only ever readable here.
+  const analysisBuffer = await readUploadBufferForAnalysis(file, type);
   const storedFile = await storeResourceFile(userId, file);
   let resourceId;
 
@@ -257,10 +293,11 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
   }
 
   try {
-    const buffer = storedFile.buffer;
-
-    if (type === 'image') {
-      const analysis = await analyzeImage(buffer, file.mimetype);
+    if (!analysisBuffer) {
+      // Oversized image, or the upload file couldn't be read back — the file
+      // itself is already saved and usable, just without AI analysis.
+    } else if (type === 'image') {
+      const analysis = await analyzeImage(analysisBuffer, file.mimetype);
       await resourceModel.updateResourceAnalysis(resourceId, {
         extractedText: analysis.transcript || '',
         summary: analysis.summary,
@@ -269,7 +306,7 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
         difficulty: normalizeDifficulty(analysis.difficulty),
       });
     } else {
-      const extractedText = await extractTextForType(type, buffer);
+      const extractedText = await extractTextForType(type, analysisBuffer);
       if (extractedText) {
         const analysis = await analyzeText(extractedText);
         await resourceModel.updateResourceAnalysis(resourceId, {

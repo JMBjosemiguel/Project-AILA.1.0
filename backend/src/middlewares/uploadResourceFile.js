@@ -1,4 +1,6 @@
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const crypto = require('crypto');
 const multer = require('multer');
 const ApiError = require('../utils/ApiError');
@@ -22,12 +24,24 @@ function resourceTypeForMimetype(mimetype) {
   return MIME_TO_TYPE[mimetype] || null;
 }
 
+function uniqueFileName(originalname) {
+  const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+  return `${unique}${path.extname(originalname).toLowerCase()}`;
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
-    cb(null, `${unique}${path.extname(file.originalname).toLowerCase()}`);
-  },
+  filename: (req, file, cb) => cb(null, uniqueFileName(file.originalname)),
+});
+
+// Even when R2 is the final destination, a file never sits fully in RAM: it
+// streams straight to this OS temp file (multer writes it incrementally as
+// it arrives), and storageService streams that temp file on to R2 and
+// deletes it afterward — a 200 MB upload never costs more than a few MB of
+// buffering at any point, which matters a lot on a 512 MB server.
+const tempStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, os.tmpdir()),
+  filename: (req, file, cb) => cb(null, uniqueFileName(file.originalname)),
 });
 
 function fileFilter(req, file, cb) {
@@ -39,7 +53,7 @@ function fileFilter(req, file, cb) {
 }
 
 const runUpload = multer({
-  storage: isR2Enabled() ? multer.memoryStorage() : storage,
+  storage: isR2Enabled() ? tempStorage : storage,
   fileFilter,
   limits: { fileSize: MAX_FILE_SIZE },
 }).single('file');
@@ -48,6 +62,19 @@ const runUpload = multer({
 // student sees a useful message instead of a generic 500.
 function uploadResourceFile(req, res, next) {
   runUpload(req, res, (err) => {
+    // Guaranteed cleanup of the R2 temp file no matter what happens next in
+    // the chain (ownership check, DB error, successful upload — all paths
+    // end in the response finishing or the connection closing). storageService
+    // already deletes it right after a successful R2 PUT; this is the
+    // catch-all for every other path, so unlink-ing an already-gone file here
+    // is the expected common case, not an error.
+    if (req.file && isR2Enabled()) {
+      const tempPath = req.file.path;
+      const cleanup = () => fs.unlink(tempPath, () => {});
+      res.once('finish', cleanup);
+      res.once('close', cleanup);
+    }
+
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {

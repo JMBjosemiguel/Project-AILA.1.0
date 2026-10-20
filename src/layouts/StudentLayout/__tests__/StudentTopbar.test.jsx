@@ -307,6 +307,92 @@ describe('StudentTopbar — phone compact bar', () => {
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith('/login');
   });
+
+  it('renders the panel into document.body, not inside the top bar (the backdrop-blur clipping bug from update 119)', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+
+    const dialog = screen.getByRole('dialog', { name: /search aila destinations/i });
+    expect(dialog.closest('header')).toBeNull();
+    expect(dialog.parentElement).toBe(document.body);
+  });
+
+  it('shows the full default destination list on open, before typing anything', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+
+    const dialog = screen.getByRole('dialog', { name: /search aila destinations/i });
+    expect(within(dialog).getByRole('option', { name: /Dashboard/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: /AI Assistant/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: /Learning Hub/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: /Resource Library/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('option', { name: /Study Planner/i })).toBeInTheDocument();
+    expect(within(dialog).queryByText('No results found')).not.toBeInTheDocument();
+  });
+
+  it('shows "No results found" once typing matches nothing', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search AILA' }), 'not-a-real-place');
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+  });
+
+  it('closes on the phone Back button, consuming exactly the one history entry it pushed', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const backSpy = vi.spyOn(window.history, 'back');
+    renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    expect(screen.getByRole('dialog', { name: /search aila destinations/i })).toBeInTheDocument();
+    expect(backSpy).not.toHaveBeenCalled();
+
+    // Simulate the browser's own Back button, not our X/Escape (which call
+    // history.back() themselves) — a real Back press fires popstate directly.
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('selecting a result consumes the pushed history entry itself, via one history.back() call', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const { onNavigate } = renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.click(screen.getByRole('option', { name: /Learning Hub/i }));
+
+    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.HUB);
+    expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks body scroll while open and restores it on close', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    document.body.style.overflow = '';
+    renderTopbar();
+
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await user.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
 });
 
 describe('StudentTopbar logout confirmation', () => {

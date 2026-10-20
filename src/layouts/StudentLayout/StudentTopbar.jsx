@@ -1,5 +1,6 @@
 import { Bell, LogOut, Menu, Moon, Search, Sun, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { STUDENT_NAV_GROUPS, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from '../../app/routes/studentRoutes';
 import ActionMenu from '../../components/common/ActionMenu';
 import { useConfirm } from '../../components/common/ConfirmDialog';
@@ -219,6 +220,19 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paletteOpen]);
 
+  // Background scroll lock while the full-screen mobile panel is open —
+  // same technique as useMobileDrawer/LessonReader, inlined here (rather than
+  // reusing that hook) so its own Escape handler can't double-fire alongside
+  // handlePaletteKeyDown's, which already closes on Escape for both panels.
+  useEffect(() => {
+    if (!paletteOpen || !isMobile) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [paletteOpen, isMobile]);
+
   useEffect(() => {
     closePalette();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -285,6 +299,7 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
     ];
 
     return (
+      <>
       <header className="sticky top-0 z-40 h-16 flex items-center gap-2 px-4 bg-surface/80 backdrop-blur-md border-b border-ink-100">
         <button
           onClick={onMenuClick}
@@ -326,42 +341,52 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
           items={avatarMenuItems}
         />
 
-        {paletteOpen && (
-          <div
-            ref={mobilePanelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="student-command-palette-title"
-            className="fixed inset-0 z-50 bg-surface flex flex-col"
-          >
-            <div className="h-14 flex items-center gap-2 px-4 border-b border-ink-100 flex-shrink-0">
-              <Search size={16} className="text-ink-400 flex-shrink-0" />
-              <input
-                ref={searchInputRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={handlePaletteKeyDown}
-                placeholder="Search AILA..."
-                aria-label="Search AILA"
-                className="flex-1 bg-transparent outline-none text-base text-ink-800 placeholder:text-ink-400 min-w-0"
-              />
-              <button
-                type="button"
-                onClick={requestClosePalette}
-                aria-label="Close search"
-                className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
-              <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
-              <SearchResultsList results={results} activeIndex={activeIndex} setActiveIndex={setActiveIndex} onSelect={navigateTo} />
-            </div>
-          </div>
-        )}
       </header>
+
+      {/* Portaled to document.body (same pattern as AddCourseWizard): the
+          header has backdrop-blur, which creates a new containing block for
+          `position: fixed` descendants — a fixed child rendered INSIDE the
+          header gets clipped to the header's own 64px box instead of
+          covering the viewport. Rendering it as a sibling of the header via
+          a portal avoids that entirely, regardless of where this sits in
+          the component tree. */}
+      {paletteOpen && createPortal(
+        <div
+          ref={mobilePanelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="student-command-palette-title"
+          className="fixed inset-0 h-dvh z-[110] bg-surface flex flex-col"
+        >
+          <div className="h-14 flex items-center gap-2 px-4 border-b border-ink-100 flex-shrink-0">
+            <Search size={16} className="text-ink-400 flex-shrink-0" />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={handlePaletteKeyDown}
+              placeholder="Search AILA..."
+              aria-label="Search AILA"
+              className="flex-1 bg-transparent outline-none text-base text-ink-800 placeholder:text-ink-400 min-w-0"
+            />
+            <button
+              type="button"
+              onClick={requestClosePalette}
+              aria-label="Close search"
+              className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-ink-800"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+            <h2 id="student-command-palette-title" className="sr-only">Search AILA destinations</h2>
+            <SearchResultsList results={results} activeIndex={activeIndex} setActiveIndex={setActiveIndex} onSelect={navigateTo} />
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
     );
   }
 

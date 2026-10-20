@@ -264,7 +264,7 @@ describe('StudentTopbar — phone compact bar', () => {
     await user.type(screen.getByRole('textbox', { name: 'Search AILA' }), 'planner');
     await user.keyboard('{Enter}');
 
-    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.PLANNER);
+    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.PLANNER, { replace: true });
   });
 
   it('closing with the X button works', async () => {
@@ -366,17 +366,62 @@ describe('StudentTopbar — phone compact bar', () => {
     expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
   });
 
-  it('selecting a result consumes the pushed history entry itself, via one history.back() call', async () => {
+  // Real browsers resolve history.back() asynchronously — the cursor move
+  // and its popstate event land on a later tick, not synchronously. That's
+  // exactly what let the original bug happen (selecting a result, then
+  // landing back on the starting page): a synchronous back() mock would
+  // hide it entirely. This mock fires popstate on a macrotask instead.
+  function mockAsyncHistoryBack() {
+    return vi.spyOn(window.history, 'back').mockImplementation(() => {
+      setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+    });
+  }
+
+  it('selecting a different result navigates via replace (never back), and the async Back that follows never reverts it', async () => {
     mockMobileViewport();
     const user = userEvent.setup();
-    const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const backSpy = mockAsyncHistoryBack();
     const { onNavigate } = renderTopbar();
 
     await user.click(screen.getByRole('button', { name: 'Search AILA' }));
     await user.click(screen.getByRole('option', { name: /Learning Hub/i }));
 
-    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.HUB);
+    // Ends on the selected page right away — no history.back() in this path.
+    expect(onNavigate).toHaveBeenCalledWith(STUDENT_ROUTE_IDS.HUB, { replace: true });
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+
+    // Even after whatever async popstate noise follows, it's still the one
+    // call — nothing reverts it.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('selecting the page already showing just closes the panel (no navigate, no extra history entry)', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const backSpy = mockAsyncHistoryBack();
+    const { onNavigate } = renderTopbar(); // active: STUDENT_ROUTE_IDS.DASHBOARD by default
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.click(screen.getByRole('option', { name: /Dashboard/i }));
+
+    expect(onNavigate).not.toHaveBeenCalled();
     expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: /search aila destinations/i })).not.toBeInTheDocument();
+  });
+
+  it('closing without selecting (X) still uses history.back(), leaving no orphaned entry', async () => {
+    mockMobileViewport();
+    const user = userEvent.setup();
+    const backSpy = mockAsyncHistoryBack();
+    const { onNavigate } = renderTopbar();
+
+    await user.click(screen.getByRole('button', { name: 'Search AILA' }));
+    await user.click(screen.getByRole('button', { name: 'Close search' }));
+
+    expect(backSpy).toHaveBeenCalledTimes(1);
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it('locks body scroll while open and restores it on close', async () => {

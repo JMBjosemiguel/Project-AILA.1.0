@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ADMIN_ROUTE_ALIASES, ADMIN_ROUTE_IDS, ADMIN_ROUTES, getAdminRouteByPath } from './routes/adminRoutes';
+import { ADMIN_ROUTE_IDS, ADMIN_ROUTES, getAdminRouteByPath } from './routes/adminRoutes';
 import { AUTH_PATHS } from './routes/authPaths';
 import ProtectedRoute from './routes/ProtectedRoute';
-import {
-  getStudentRouteByPath,
-  STUDENT_ROUTE_ALIASES,
-  STUDENT_ROUTE_IDS,
-  STUDENT_ROUTES,
-} from './routes/studentRoutes';
+import { getStudentRouteByPath, STUDENT_ROUTE_IDS, STUDENT_ROUTES } from './routes/studentRoutes';
+import { useAppNavigate } from './useAppNavigate';
 import { ROLES } from '../constants/roles';
 import { useAuth } from '../contexts/AuthContext';
 import AdminLayout from '../layouts/AdminLayout/AdminLayout';
@@ -71,18 +67,6 @@ function resolveRoute(pathname, role) {
   return getStudentRouteByPath(pathname) ?? STUDENT_ROUTES[STUDENT_ROUTE_IDS.DASHBOARD];
 }
 
-function resolveNavigationTarget(target, role) {
-  const ownAliases = role === ROLES.ADMIN ? ADMIN_ROUTE_ALIASES : STUDENT_ROUTE_ALIASES;
-  const otherAliases = role === ROLES.ADMIN ? STUDENT_ROUTE_ALIASES : ADMIN_ROUTE_ALIASES;
-  const ownRoutes = role === ROLES.ADMIN ? ADMIN_ROUTES : STUDENT_ROUTES;
-  const otherRoutes = role === ROLES.ADMIN ? STUDENT_ROUTES : ADMIN_ROUTES;
-
-  const routeId = ownAliases[target] ?? otherAliases[target] ?? target;
-  const route = ownRoutes[routeId] ?? otherRoutes[routeId];
-
-  return route?.path ?? target;
-}
-
 export default function AppRouter() {
   const { isAuthenticated, isReady, role } = useAuth();
   const [pathname, setPathname] = useState(window.location.pathname);
@@ -93,14 +77,7 @@ export default function AppRouter() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  const navigate = (target) => {
-    const nextPath = resolveNavigationTarget(target, role);
-
-    if (nextPath !== window.location.pathname) {
-      window.history.pushState({}, '', nextPath);
-      setPathname(nextPath);
-    }
-  };
+  const navigate = useAppNavigate(role, setPathname);
 
   const route = useMemo(() => resolveRoute(pathname, role), [pathname, role]);
 

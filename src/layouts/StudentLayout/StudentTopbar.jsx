@@ -152,8 +152,31 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
     closePalette();
   };
 
+  // Selecting a result while the mobile panel's history entry is active must
+  // NOT go through requestClosePalette's history.back() — back() is
+  // asynchronous (it resolves on a later tick, as a real popstate), so by
+  // the time it actually moves the cursor, the pushState below has already
+  // moved it past the panel's entry, and the "back" lands one step behind
+  // where it meant to: right back on the original page. Replacing the
+  // panel's own entry with the destination instead needs no async wait and
+  // never fires popstate, so the router's own listener can't double-react.
   const navigateTo = (destination) => {
     if (!destination) return;
+
+    if (destination.id === active) {
+      // Already there — just close, exactly like dismissing without picking
+      // anything. No page change means nothing to replace the entry with.
+      requestClosePalette();
+      return;
+    }
+
+    if (historyEngagedRef.current && !closedByPopRef.current) {
+      historyEngagedRef.current = false;
+      closePalette();
+      onNavigate(destination.id, { replace: true });
+      return;
+    }
+
     requestClosePalette();
     onNavigate(destination.id);
   };

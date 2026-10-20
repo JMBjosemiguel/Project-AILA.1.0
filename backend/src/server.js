@@ -14,17 +14,26 @@ const { apiRateLimiter } = require('./middlewares/apiRateLimiter');
 const { logEmailConfigStatus } = require('./services/emailService');
 const { formatStartupError } = require('./utils/formatStartupError');
 
-// A rejected promise with no .catch, or a genuinely unexpected synchronous
-// throw, must never take the whole process down with it — that would end
-// every other student's in-flight request too, not just the one that hit the
-// bug. Logging-and-continuing is a deliberate tradeoff here: the alternative
-// (exit and let Render restart) turns one rare bug into a full outage.
+// A rejected promise with no .catch must never take the whole process down
+// with it — that would end every other student's in-flight request too, not
+// just the one that hit the bug. Logging-and-continuing is a deliberate
+// tradeoff here: the alternative (exit and let Render restart) turns one
+// rare bug into a full outage.
 process.on('unhandledRejection', (reason) => {
   const detail = reason && reason.code ? `${reason.code} ${reason.message}` : reason;
   console.error('[process] unhandledRejection:', detail);
 });
+
+// An uncaughtException is different: Node's own docs say it is not safe to
+// resume normal operation after one — the process may be in a state no
+// longer consistent with how it was written to run (a throw mid-callback can
+// leave internal bookkeeping half-updated, locks unreleased, etc.). Log it
+// (no secrets) and exit, after a short delay so the log line above actually
+// flushes, so Render restarts a clean process instead of one left running in
+// an unknown state.
 process.on('uncaughtException', (error) => {
   console.error('[process] uncaughtException:', error && error.code ? `${error.code} ${error.message}` : error);
+  setTimeout(() => process.exit(1), 1000);
 });
 
 function logMemoryUsage(label) {

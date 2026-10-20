@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { db, purgeByTag, api, serverReachable, createStudent } = require('./helpers');
+const { NO_READABLE_TEXT_MESSAGE } = require('../../src/services/resourceTextExtraction');
 
 // Drives aiService.generateChatResponse in-process against the real local DB
 // with a stubbed Gemini — same convention as chatIntent.test.js (re-require
@@ -74,11 +75,12 @@ test('chat attachments (resource grounding)', async (t) => {
   const resourceA = await makeResource(A.id, 'A\'s Networking Notes', 'Subnets divide a network into smaller segments.');
   const resourceA2 = await makeResource(A.id, 'A\'s OS Notes', 'A process is a running instance of a program.');
   const resourceB = await makeResource(B.id, 'B\'s Private Notes', 'This belongs only to B.');
+  const resourceEmpty = await makeResource(A.id, 'A\'s Scanned Handout', null);
 
   t.after(async () => {
     await db.query('DELETE FROM chat_messages WHERE conversation_id IN (SELECT id FROM chat_conversations WHERE user_id IN (?, ?))', [A.id, B.id]).catch(() => {});
     await db.query('DELETE FROM chat_conversations WHERE user_id IN (?, ?)', [A.id, B.id]).catch(() => {});
-    await db.query('DELETE FROM resources WHERE id IN (?, ?, ?)', [resourceA, resourceA2, resourceB]).catch(() => {});
+    await db.query('DELETE FROM resources WHERE id IN (?, ?, ?, ?)', [resourceA, resourceA2, resourceB, resourceEmpty]).catch(() => {});
     await purgeByTag(TAG);
     await db.pool.end();
   });
@@ -130,6 +132,20 @@ test('chat attachments (resource grounding)', async (t) => {
       (err) => err.statusCode === 404 && /could not be found|access/i.test(err.message)
     );
     assert.equal(calls.length, 0, 'rejected before any Gemini call — no wasted work, no accidental grounding');
+  });
+
+  await t.test('attaching a resource with no readable text at all returns the friendly message without ever calling Gemini for the reply', async () => {
+    const { aiService, calls } = installGeminiStub('should never be used for the reply');
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'Summarize the attached file for me.', conversationId: null, resourceId: resourceEmpty,
+    });
+
+    assert.equal(result.response, NO_READABLE_TEXT_MESSAGE);
+    // A first message also triggers an unrelated title-generation Gemini call
+    // (see systemInstructionOf's doc comment) — what matters here is that no
+    // call carries a systemInstruction, i.e. the actual chat-reply call
+    // (the one that would have been grounded) never happened at all.
+    assert.equal(systemInstructionOf(calls), '', 'the friendly message is deterministic — it never needs a Gemini call for the reply itself');
   });
 
   await t.test('removing the attachment (explicit null) detaches it and stops grounding, owner only', async () => {

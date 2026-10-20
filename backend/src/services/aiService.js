@@ -8,7 +8,8 @@ const chatIntentService = require('./chatIntentService');
 const { callGemini, getResponseText } = require('./geminiClient');
 const { DEFAULT_ITEMS } = require('../utils/chatIntent');
 const { getStudentContext, buildContextSummaryText } = require('./studentContextService');
-const { truncateForAi } = require('../utils/pdfText');
+const { MAX_CHARS_FOR_AI } = require('../utils/pdfText');
+const { getResourceChunks, selectRelevantChunks, NO_READABLE_TEXT_MESSAGE } = require('./resourceTextExtraction');
 
 const MAX_HISTORY_MESSAGES = 20;
 const TITLE_MAX_LENGTH = 60;
@@ -117,7 +118,35 @@ function summarizeHistoryMessage(row) {
   return '[Generated interactive content]';
 }
 
-async function buildSystemInstruction(userId, resourceId) {
+// Returns the resource-grounding text for the system instruction, plus a
+// `resourceNote` the caller uses to shape the actual chat response:
+//   - null: no resource attached, or grounding is unavailable (best-effort).
+//   - 'no-text': the resource has literally no extractable text — the caller
+//     should tell the student plainly instead of answering ungrounded.
+//   - 'truncated': the document didn't fit whole — the caller appends a
+//     one-line notice so the student knows only part of it was used.
+async function buildResourceGrounding(resourceId, userId, questionText) {
+  if (!resourceId) return { text: '', resourceNote: null };
+
+  try {
+    const resource = await resourceModel.getResourceById(resourceId, userId);
+    if (!resource) return { text: '', resourceNote: null };
+
+    const chunks = await getResourceChunks(resource);
+    if (!chunks.length) return { text: '', resourceNote: 'no-text' };
+
+    const { text, truncated } = selectRelevantChunks(chunks, questionText, MAX_CHARS_FOR_AI);
+    return {
+      text: `\n\nThe student is asking about a specific document they uploaded. Answer using ONLY the following document content — if the answer isn't in the document, say so instead of guessing:\n\n${text}`,
+      resourceNote: truncated ? 'truncated' : null,
+    };
+  } catch {
+    // Grounding is best-effort — chat still works without it.
+    return { text: '', resourceNote: null };
+  }
+}
+
+async function buildSystemInstruction(userId, resourceGroundingText) {
   let instruction = SYSTEM_PROMPT;
 
   if (userId) {
@@ -132,21 +161,18 @@ async function buildSystemInstruction(userId, resourceId) {
     }
   }
 
-  if (resourceId) {
-    try {
-      const extractedText = await resourceModel.getExtractedText(resourceId, userId);
-      if (extractedText) {
-        instruction += `\n\nThe student is asking about a specific document they uploaded. Answer using ONLY the following document content — if the answer isn't in the document, say so instead of guessing:\n\n${truncateForAi(extractedText, 8000)}`;
-      }
-    } catch {
-      // grounding is best-effort, chat still works without it
-    }
-  }
-
-  return instruction;
+  return instruction + resourceGroundingText;
 }
 
+const RESOURCE_TRUNCATED_NOTE = 'This file is long, so AILA used the most relevant parts.';
+
 async function callGeminiChat(prompt, priorMessages, userId, resourceId) {
+  const { text: resourceGroundingText, resourceNote } = await buildResourceGrounding(resourceId, userId, prompt);
+
+  if (resourceNote === 'no-text') {
+    return NO_READABLE_TEXT_MESSAGE;
+  }
+
   const contents = [
     ...priorMessages.slice(-MAX_HISTORY_MESSAGES).map((row) => ({
       role: row.sender === 'user' ? 'user' : 'model',
@@ -155,7 +181,7 @@ async function callGeminiChat(prompt, priorMessages, userId, resourceId) {
     { role: 'user', parts: [{ text: prompt }] },
   ];
 
-  const systemInstruction = await buildSystemInstruction(userId, resourceId);
+  const systemInstruction = await buildSystemInstruction(userId, resourceGroundingText);
 
   const payload = await callGemini({
     systemInstruction,
@@ -167,7 +193,8 @@ async function callGeminiChat(prompt, priorMessages, userId, resourceId) {
     },
   });
 
-  return getResponseText(payload);
+  const responseText = getResponseText(payload);
+  return resourceNote === 'truncated' ? `${responseText}\n\n*${RESOURCE_TRUNCATED_NOTE}*` : responseText;
 }
 
 // Personalization for an in-chat quiz request — the same structured context

@@ -6,11 +6,12 @@ const { colorForId } = require('../utils/palette');
 const { logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
 const { callGemini, getResponseText } = require('./geminiClient');
-const { extractPdfText, truncateForAi } = require('../utils/pdfText');
-const { extractOfficeText } = require('../utils/officeText');
+const { truncateForAi } = require('../utils/pdfText');
 const { assertFetchableExternalUrl } = require('../utils/safeUrl');
 const { deleteStoredFile, getStoredFile, storeResourceFile } = require('./storageService');
 const { logAdminAction } = require('../utils/adminAudit');
+const { extractChunksFromFile, joinChunks } = require('./resourceTextExtraction');
+const resourceTextCache = require('./resourceTextCache');
 
 const ANALYSIS_SCHEMA = {
   type: 'OBJECT',
@@ -47,51 +48,23 @@ function stripExtension(filename) {
   return filename.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ').trim() || filename;
 }
 
-// Keeps AI analysis memory bounded regardless of the 200 MB upload limit.
-// Text extraction only needs a prefix of the file (full-document accuracy
-// isn't required for a summary/keywords pass); images are analyzed whole, so
-// oversized ones are skipped rather than read in full.
-const MAX_TEXT_EXTRACTION_BYTES = 8 * 1024 * 1024;
+// Images are analyzed whole (sent to Gemini as inline image data), so an
+// oversized one is skipped rather than read in full; text documents go
+// through resourceTextExtraction instead, which reads the WHOLE file
+// regardless of size without ever buffering it entirely (see that module).
 const MAX_IMAGE_ANALYSIS_BYTES = 15 * 1024 * 1024;
 
-async function readUploadBufferForAnalysis(file, type) {
-  try {
-    if (type === 'image') {
-      if (file.size > MAX_IMAGE_ANALYSIS_BYTES) {
-        console.warn(`[resourceService] skipping AI image analysis: ${file.size} bytes exceeds the ${MAX_IMAGE_ANALYSIS_BYTES} byte cap`);
-        return null;
-      }
-      return await fs.promises.readFile(file.path);
-    }
-
-    const cap = Math.min(file.size, MAX_TEXT_EXTRACTION_BYTES);
-    const handle = await fs.promises.open(file.path, 'r');
-    try {
-      const buffer = Buffer.alloc(cap);
-      await handle.read(buffer, 0, cap, 0);
-      return buffer;
-    } finally {
-      await handle.close();
-    }
-  } catch (error) {
-    console.error(`[resourceService] could not read uploaded file for AI analysis: ${error.message}`);
+async function readImageBufferForAnalysis(file) {
+  if (file.size > MAX_IMAGE_ANALYSIS_BYTES) {
+    console.warn(`[resourceService] skipping AI image analysis: ${file.size} bytes exceeds the ${MAX_IMAGE_ANALYSIS_BYTES} byte cap`);
     return null;
   }
-}
-
-async function extractTextForType(type, buffer) {
-  if (type === 'pdf') {
-    return extractPdfText(buffer);
+  try {
+    return await fs.promises.readFile(file.path);
+  } catch (error) {
+    console.error(`[resourceService] could not read uploaded image for AI analysis: ${error.message}`);
+    return null;
   }
-  if (type === 'doc' || type === 'docx' || type === 'pptx' || type === 'ppt') {
-    try {
-      return await extractOfficeText(buffer, type);
-    } catch (error) {
-      console.error(`[resourceService] Office text extraction failed for a .${type} upload: ${error.message}`);
-      return '';
-    }
-  }
-  return '';
 }
 
 async function analyzeText(extractedText) {
@@ -266,9 +239,10 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
   await assertSubjectOwnership(userId, subjectId);
 
   const title = stripExtension(file.originalname);
-  // Read before storeResourceFile: for R2 it deletes the temp file right
-  // after streaming it up, so the raw upload is only ever readable here.
-  const analysisBuffer = await readUploadBufferForAnalysis(file, type);
+  // Read/extract before storeResourceFile: for R2 it deletes the temp file
+  // right after streaming it up, so the raw upload is only ever readable here.
+  const imageBuffer = type === 'image' ? await readImageBufferForAnalysis(file) : null;
+  const textChunks = type === 'image' ? null : (await extractChunksFromFile(file.path, type)).chunks;
   const storedFile = await storeResourceFile(userId, file);
   let resourceId;
 
@@ -292,31 +266,35 @@ async function uploadResource(userId, file, type, { subjectId } = {}) {
     throw error;
   }
 
+  if (textChunks) {
+    // The file is already fully extracted — prime the cache now so an Ask
+    // AILA / Generate Quiz request about this brand-new resource doesn't
+    // immediately re-read and re-parse it.
+    resourceTextCache.set(resourceId, textChunks);
+  }
+
   try {
-    if (!analysisBuffer) {
-      // Oversized image, or the upload file couldn't be read back — the file
-      // itself is already saved and usable, just without AI analysis.
-    } else if (type === 'image') {
-      const analysis = await analyzeImage(analysisBuffer, file.mimetype);
-      await resourceModel.updateResourceAnalysis(resourceId, {
-        extractedText: analysis.transcript || '',
-        summary: analysis.summary,
-        keywords: analysis.keywords,
-        topic: analysis.topic,
-        difficulty: normalizeDifficulty(analysis.difficulty),
-      });
-    } else {
-      const extractedText = await extractTextForType(type, analysisBuffer);
-      if (extractedText) {
-        const analysis = await analyzeText(extractedText);
+    if (type === 'image') {
+      if (imageBuffer) {
+        const analysis = await analyzeImage(imageBuffer, file.mimetype);
         await resourceModel.updateResourceAnalysis(resourceId, {
-          extractedText,
+          extractedText: analysis.transcript || '',
           summary: analysis.summary,
           keywords: analysis.keywords,
           topic: analysis.topic,
           difficulty: normalizeDifficulty(analysis.difficulty),
         });
       }
+    } else if (textChunks && textChunks.length) {
+      const extractedText = joinChunks(textChunks);
+      const analysis = await analyzeText(extractedText);
+      await resourceModel.updateResourceAnalysis(resourceId, {
+        extractedText,
+        summary: analysis.summary,
+        keywords: analysis.keywords,
+        topic: analysis.topic,
+        difficulty: normalizeDifficulty(analysis.difficulty),
+      });
     }
   } catch (error) {
     // Analysis is best-effort; the file itself is already saved and usable.

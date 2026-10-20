@@ -69,20 +69,6 @@ async function updateResourceAnalysis(resourceId, { extractedText, summary, keyw
   );
 }
 
-async function getExtractedText(resourceId, userId) {
-  const rows = await query(
-    `
-      SELECT r.extracted_text
-      FROM resources r
-      LEFT JOIN users u ON u.id = r.uploaded_by
-      WHERE r.id = ? AND r.deleted_at IS NULL AND (r.uploaded_by = ? OR u.role_id = 2)
-      LIMIT 1
-    `,
-    [resourceId, userId]
-  );
-  return rows[0]?.extracted_text || null;
-}
-
 async function getResourceSubjectsMap() {
   const rows = await query(
     `
@@ -107,7 +93,7 @@ async function listSubjectsLite(userId) {
 async function getResourceById(resourceId, userId) {
   const rows = await query(
     `
-      SELECT r.id, r.title, r.type, r.file_path, r.external_url, r.uploaded_by
+      SELECT r.id, r.title, r.type, r.file_path, r.external_url, r.uploaded_by, r.extracted_text
       FROM resources r
       LEFT JOIN users u ON u.id = r.uploaded_by
       WHERE r.id = ? AND r.deleted_at IS NULL AND (r.uploaded_by = ? OR u.role_id = 2)
@@ -230,7 +216,6 @@ module.exports = {
   createUploadedResource,
   createLinkResource,
   updateResourceAnalysis,
-  getExtractedText,
   getResourceSubjectsMap,
   listSubjectsLite,
   getResourceById,

@@ -10,8 +10,26 @@ const studentContextService = require('./studentContextService');
 const achievementService = require('./achievementService');
 const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
-const { truncateForAi } = require('../utils/pdfText');
+const { truncateForAi, MAX_CHARS_FOR_AI } = require('../utils/pdfText');
 const { logAdminAction } = require('../utils/adminAudit');
+const { getResourceChunks, selectSpreadChunks, NO_READABLE_TEXT_MESSAGE } = require('./resourceTextExtraction');
+
+// Builds the 'quiz_source_material' block for a resource-sourced quiz —
+// chunks are spread across the WHOLE document (not just the start) so a
+// large nursing-lecture-deck quiz ends up covering the whole file. Returns
+// resourceNote: 'no-text' when the file has no extractable text at all (the
+// caller turns this into a friendly error instead of generating an
+// ungrounded quiz), or 'truncated' when the document didn't fit whole.
+async function buildResourceQuizContext(sourceId, userId) {
+  const resource = await resourceModel.getResourceById(sourceId, userId);
+  if (!resource) return { text: '', resourceNote: null };
+
+  const chunks = await getResourceChunks(resource);
+  if (!chunks.length) return { text: '', resourceNote: 'no-text' };
+
+  const { text, truncated } = selectSpreadChunks(chunks, MAX_CHARS_FOR_AI);
+  return { text, resourceNote: truncated ? 'truncated' : null };
+}
 
 const QUIZ_SYSTEM_RULES = [
   'You generate college quizzes as JSON only.',
@@ -22,6 +40,7 @@ const QUIZ_SYSTEM_RULES = [
 ].join(' ');
 
 const QUIZ_XP_MAX = 20;
+const RESOURCE_TRUNCATED_NOTE = 'This file is long, so AILA used the most relevant parts.';
 
 // Gemini 3's thinkingLevel draws from the SAME maxOutputTokens budget as the
 // visible output — thinking tokens are spent first, so a tight cap can leave
@@ -243,7 +262,7 @@ function buildQuizSourceContextBlock(sourceContext) {
   return lines.join('\n');
 }
 
-async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium', sourceText = null, sourceContextText = '', personalizationText = '' }) {
+async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium', sourceContextText = '', isDocumentSource = false, personalizationText = '' }) {
   const typeLabel = QUIZ_TYPE_LABELS[quizType] || QUIZ_TYPE_LABELS.multiple_choice;
   const difficultyLabel = DIFFICULTY_LABELS[difficulty] || DIFFICULTY_LABELS.medium;
 
@@ -252,18 +271,17 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
     : QUIZ_SYSTEM_RULES;
 
   const prompt = [
-    sourceText
-      ? `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz based ONLY on the following document content. Base every question on facts actually present in the document.`
+    isDocumentSource
+      ? `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz based ONLY on the document content in quiz_source_material below. Base every question on facts actually present in the document.`
       : `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz for a college student on the topic below.`,
     personalizationService.delimitStudentText('topic', topic),
     sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
-    sourceContextText
+    sourceContextText && !isDocumentSource
       ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above. Do not drift to a different subject or field, even if the topic title alone could plausibly apply elsewhere.'
       : '',
     QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
     'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
     'Do not include any text outside the JSON object.',
-    sourceText ? `\n\nDocument content:\n${truncateForAi(sourceText, 10000)}` : '',
   ].filter(Boolean).join('\n');
 
   const generationConfig = {
@@ -531,16 +549,22 @@ function gradeQuiz(quiz, answerByQuestionId) {
 }
 
 async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficulty = 'medium', sourceType, sourceId }) {
-  let sourceText = null;
-  if (sourceType === 'resource' && sourceId) {
-    sourceText = await resourceModel.getExtractedText(sourceId, userId).catch(() => null);
-  }
-
   // Lesson/topic quizzes are grounded in the actual course/module/topic
   // (and, for a lesson, its own content) rather than trusting whatever bare
   // topic string the frontend sent — see quizModel.getQuizSourceContext.
   const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
-  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  let sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  let resourceNote = null;
+
+  if (sourceType === 'resource' && sourceId) {
+    const resourceGrounding = await buildResourceQuizContext(sourceId, userId).catch(() => ({ text: '', resourceNote: null }));
+    if (resourceGrounding.resourceNote === 'no-text') {
+      throw new ApiError(400, NO_READABLE_TEXT_MESSAGE);
+    }
+    sourceContextText = resourceGrounding.text;
+    resourceNote = resourceGrounding.resourceNote;
+  }
+
   const effectiveTopic = sourceContext?.lessonTitle || sourceContext?.topicTitle || topic;
 
   // Personalize the formal quiz to the student's context, scoped to the source
@@ -562,8 +586,8 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
     quizType,
     itemCount,
     difficulty,
-    sourceText,
     sourceContextText,
+    isDocumentSource: sourceType === 'resource',
     personalizationText: personalizationService.formatPersonalizationPrompt(context),
   });
 
@@ -594,7 +618,9 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
     body: `AILA generated a ${generated.items.length}-item quiz on "${quiz.topic}".`,
   });
 
-  return formatQuizForTake(quiz);
+  return resourceNote === 'truncated'
+    ? { ...formatQuizForTake(quiz), sourceNote: RESOURCE_TRUNCATED_NOTE }
+    : formatQuizForTake(quiz);
 }
 
 // --- Batched generation (practice quizzes above SINGLE_CALL_MAX_ITEMS) -----
@@ -758,7 +784,18 @@ async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, 
   const numBatches = Math.ceil(target / BATCH_MAX_ITEMS);
 
   const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
-  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  let sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  let resourceNote = null;
+
+  if (sourceType === 'resource' && sourceId) {
+    const resourceGrounding = await buildResourceQuizContext(sourceId, userId).catch(() => ({ text: '', resourceNote: null }));
+    if (resourceGrounding.resourceNote === 'no-text') {
+      throw new ApiError(400, NO_READABLE_TEXT_MESSAGE);
+    }
+    sourceContextText = resourceGrounding.text;
+    resourceNote = resourceGrounding.resourceNote;
+  }
+
   const effectiveTopic = sourceContext?.lessonTitle || sourceContext?.topicTitle || topic;
 
   let context = null;
@@ -789,6 +826,7 @@ async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, 
     target,
     batchSize: BATCH_MAX_ITEMS,
     subtopics,
+    ...(resourceNote === 'truncated' ? { sourceNote: RESOURCE_TRUNCATED_NOTE } : {}),
   };
 }
 
@@ -823,7 +861,15 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
   const countToRequest = Math.min(BATCH_MAX_ITEMS, remaining, Math.max(1, Math.trunc(Number(requestedCount) || BATCH_MAX_ITEMS)));
 
   const sourceContext = await quizModel.getQuizSourceContext(state.source_type, state.source_id).catch(() => null);
-  const sourceContextText = buildQuizSourceContextBlock(sourceContext);
+  let sourceContextText = buildQuizSourceContextBlock(sourceContext);
+
+  if (state.source_type === 'resource' && state.source_id) {
+    // The quiz already exists (started successfully), so a resource-text
+    // hiccup on a later batch degrades to an ungrounded batch rather than
+    // failing an otherwise in-progress quiz.
+    const resourceGrounding = await buildResourceQuizContext(state.source_id, userId).catch(() => ({ text: '' }));
+    sourceContextText = resourceGrounding.text || '';
+  }
 
   let context = null;
   try {

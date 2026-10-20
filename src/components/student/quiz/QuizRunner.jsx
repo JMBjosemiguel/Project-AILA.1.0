@@ -196,6 +196,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
         topic: request.topic, quizType, itemCount: count, difficulty,
         sourceType: request.sourceType, sourceId: request.sourceId,
       });
+      if (started.sourceNote) toast.success(started.sourceNote);
       setBatchProgress({ target: started.target, completed: 0 });
       const jobs = started.subtopics.map((subtopic) => ({ subtopic }));
       await runBatchJobs(started.quizId, jobs, batchCancelledRef, (res) => {
@@ -227,6 +228,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
         topic: request.topic, quizType, itemCount: count, difficulty,
         sourceType: request.sourceType, sourceId: request.sourceId,
       });
+      if (generated.sourceNote) toast.success(generated.sourceNote);
       await beginAttempt(generated.id);
     } catch (err) {
       setError(err.message || 'Could not generate a quiz right now.');

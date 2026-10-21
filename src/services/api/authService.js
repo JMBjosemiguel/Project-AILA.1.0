@@ -1,6 +1,44 @@
 import { ApiClientError, apiClient, tokenStorage } from './client';
 import { API_ENDPOINTS } from './endpoints';
 
+// Render's free tier can take close to a minute to wake a sleeping instance.
+// POSTs are never auto-retried by the shared apiClient (see client.js) since
+// repeating one that the server actually received could double it — but a
+// login that never got a response at all (no error.response, i.e. the
+// request never reached/was never answered by the server) is safe to retry:
+// nothing server-side could have happened yet. A login the server DID
+// answer (wrong password, 429, etc.) must still fail immediately.
+const LOGIN_RETRY_BUDGET_MS = 75000;
+
+function gotNoResponse(error) {
+  return error instanceof ApiClientError && error.status === null;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
+async function loginWithRetry(attempt, onRetrying) {
+  const startedAt = Date.now();
+  let retryCount = 0;
+
+  for (;;) {
+    try {
+      const result = await attempt();
+      onRetrying?.(false);
+      return result;
+    } catch (error) {
+      if (!gotNoResponse(error) || Date.now() - startedAt >= LOGIN_RETRY_BUDGET_MS) {
+        onRetrying?.(false);
+        throw error;
+      }
+      retryCount += 1;
+      onRetrying?.(true);
+      await wait(Math.min(1000 * 2 ** retryCount, 8000));
+    }
+  }
+}
+
 function normalizeSession(data) {
   if (!data?.user) return null;
 
@@ -47,11 +85,14 @@ export const authService = {
     }
   },
 
-  async login(credentials) {
-    const data = await apiClient.post(API_ENDPOINTS.auth.login, {
-      email: credentials.email,
-      password: credentials.password,
-    });
+  async login(credentials, { onRetrying } = {}) {
+    const data = await loginWithRetry(
+      () => apiClient.post(API_ENDPOINTS.auth.login, {
+        email: credentials.email,
+        password: credentials.password,
+      }),
+      onRetrying
+    );
     const session = normalizeSession(data);
 
     if (!session?.token || !session?.user) {

@@ -69,6 +69,30 @@ describe('LoginPage', () => {
     expect(resendVerification).toHaveBeenCalledWith('ada@example.com');
   });
 
+  it('shows the "waking up" message while login reports it is retrying, and clears it once it succeeds', async () => {
+    const user = userEvent.setup();
+    let settle;
+    login.mockImplementation((_credentials, { onRetrying } = {}) => {
+      onRetrying?.(true);
+      return new Promise((resolve) => {
+        settle = () => {
+          onRetrying?.(false);
+          resolve({ user: { role: 'student' } });
+        };
+      });
+    });
+    const onAuthenticated = vi.fn();
+    render(<LoginPage onAuthenticated={onAuthenticated} onGoToRegister={vi.fn()} />);
+
+    await fillAndSubmit(user);
+
+    await waitFor(() => expect(screen.getByText(/AILA is waking up/i)).toBeInTheDocument());
+
+    settle();
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalledWith('student'));
+    expect(screen.queryByText(/AILA is waking up/i)).not.toBeInTheDocument();
+  });
+
   it('resend failure on the login page shows an error message', async () => {
     const user = userEvent.setup();
     login.mockRejectedValue({ message: 'unverified', details: { code: 'EMAIL_NOT_VERIFIED' } });

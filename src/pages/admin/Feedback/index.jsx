@@ -50,6 +50,7 @@ export default function AdminFeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [analyticsError, setAnalyticsError] = useState(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [rating, setRating] = useState('all');
@@ -71,7 +72,10 @@ export default function AdminFeedbackPage() {
 
   useEffect(load, [search, status, rating, archived, sort, page]);
   useEffect(() => { setPage(1); }, [search, status, rating, archived, sort]);
-  useEffect(() => { getAdminFeedbackAnalytics().then(setAnalytics).catch(() => setAnalytics(null)); }, []);
+  useEffect(() => {
+    setAnalyticsError(null);
+    getAdminFeedbackAnalytics().then(setAnalytics).catch((err) => { setAnalytics(null); setAnalyticsError(err); });
+  }, []);
 
   const handleArchiveToggle = async (item) => {
     try {
@@ -141,7 +145,7 @@ export default function AdminFeedbackPage() {
           items={f.deleted_at ? [
             { label: 'Restore', icon: <RotateCcw size={14} />, onClick: () => handleRestore(f) },
           ] : [
-            { label: 'Reply / Resolve', icon: <MessageSquare size={14} />, onClick: () => setReplyTarget(f) },
+            { label: 'Add note / Resolve', icon: <MessageSquare size={14} />, onClick: () => setReplyTarget(f) },
             f.is_archived
               ? { label: 'Unarchive', icon: <ArchiveRestore size={14} />, onClick: () => handleArchiveToggle(f) }
               : { label: 'Archive', icon: <Archive size={14} />, onClick: () => handleArchiveToggle(f) },
@@ -154,6 +158,12 @@ export default function AdminFeedbackPage() {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-5">
+      {analyticsError && (
+        <p className="text-xs text-rose-600">
+          Couldn&apos;t load the feedback summary: {analyticsError.message || 'Something went wrong.'}
+        </p>
+      )}
+
       {analytics && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>

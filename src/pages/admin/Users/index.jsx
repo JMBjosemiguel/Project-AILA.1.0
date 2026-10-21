@@ -114,6 +114,7 @@ export default function AdminUsersPage() {
       title: 'Promote this student to admin?',
       message: `"${user.first_name} ${user.last_name}" will become an admin. This can't be undone from the app, and they will lose access to the student side (their progress is kept, just no longer reachable as a student).`,
       confirmLabel: 'Promote',
+      variant: 'primary',
     });
     if (!ok) return;
 

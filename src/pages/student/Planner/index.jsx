@@ -12,6 +12,7 @@ import { TASK_STATUS } from '../../../constants/ui';
 import { usePlannerData } from '../../../hooks/usePlannerData';
 import { useLearningHubData } from '../../../hooks/useLearningHubData';
 import { createStudyTask, deleteStudyTask, duplicateStudyTask, updateStudyTask } from '../../../services/api/plannerService';
+import { formatDate } from '../../../utils/formatDate';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -181,6 +182,14 @@ export default function PlannerPage() {
 
   const pending = filtered.filter((task) => task.status !== TASK_STATUS.COMPLETED);
   const completed = filtered.filter((task) => task.status === TASK_STATUS.COMPLETED);
+
+  const examReminders = tasks
+    .filter((task) => {
+      const priority = (task.priority?.label || task.priority_label || '').toLowerCase();
+      return priority === 'high' && task.deadline && !task.is_overdue && task.status !== TASK_STATUS.COMPLETED;
+    })
+    .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+    .slice(0, 5);
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
@@ -392,7 +401,18 @@ export default function PlannerPage() {
         <div className="flex flex-col gap-5">
           <Card>
             <CardHeader title="Exam reminders" />
-            <EmptyState title="No upcoming exams" message="Tasks marked High priority with a deadline will show up here as your exams approach." />
+            {examReminders.length ? (
+              <div className="flex flex-col divide-y divide-ink-50">
+                {examReminders.map((task) => (
+                  <div key={task.id} className="py-2 flex items-center justify-between gap-2 text-sm">
+                    <span className="truncate min-w-0 text-ink-700 font-medium">{task.title}</span>
+                    <span className="flex-shrink-0 text-xs text-ink-400">{formatDate(task.deadline)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="No upcoming exams" message="Tasks marked High priority with a deadline will show up here as your exams approach." />
+            )}
           </Card>
 
           <Card>

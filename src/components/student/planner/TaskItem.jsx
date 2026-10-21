@@ -31,7 +31,11 @@ export default function TaskItem({ task, onToggle, onDelete, onEdit, onDuplicate
         onClick={() => onToggle(task.id)}
         aria-label={isDone ? 'Mark task incomplete' : 'Mark task complete'}
         className={[
-          'w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+          // Visible circle stays 20px (w-5 h-5) — the ::before pseudo-element
+          // just extends the actual tappable area to ~40x40px without
+          // affecting layout (absolutely positioned, invisible).
+          'relative w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+          "before:content-[''] before:absolute before:-inset-2.5",
           isDone ? 'bg-primary border-primary' : 'border-ink-200 hover:border-primary',
         ].join(' ')}
       >

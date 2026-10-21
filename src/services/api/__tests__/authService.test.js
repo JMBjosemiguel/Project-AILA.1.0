@@ -58,3 +58,63 @@ describe('authService.refreshSession', () => {
     expect(tokenStorage.get()).toBe('a-valid-looking-token');
   });
 });
+
+describe('authService.login (cold-start retry)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tokenStorage.remove();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries a login that never got a response, then succeeds once the server answers', async () => {
+    apiClient.post
+      .mockRejectedValueOnce(new ApiClientError('Unable to reach the server. Please try again.'))
+      .mockResolvedValueOnce({ token: 'tok-123', user: { id: 1, role: 'student' } });
+    const onRetrying = vi.fn();
+
+    const session = await authService.login({ email: 'ada@example.com', password: 'secret' }, { onRetrying });
+
+    expect(session.token).toBe('tok-123');
+    expect(apiClient.post).toHaveBeenCalledTimes(2);
+    expect(onRetrying).toHaveBeenCalledWith(true);
+    expect(onRetrying).toHaveBeenLastCalledWith(false);
+  });
+
+  it('never retries once the server actually answered (e.g. a wrong password) — fails immediately', async () => {
+    apiClient.post.mockRejectedValue(new ApiClientError('Invalid email or password.', { status: 401 }));
+    const onRetrying = vi.fn();
+
+    await expect(
+      authService.login({ email: 'ada@example.com', password: 'wrong' }, { onRetrying })
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+    expect(onRetrying).not.toHaveBeenCalledWith(true);
+  });
+
+  it('gives up after the ~75s retry budget and still rejects with a "no response" error', async () => {
+    vi.useFakeTimers();
+    apiClient.post.mockRejectedValue(new ApiClientError('Unable to reach the server. Please try again.'));
+
+    const pending = authService.login({ email: 'ada@example.com', password: 'secret' }, { onRetrying: () => {} });
+    const assertion = expect(pending).rejects.toMatchObject({ status: null });
+
+    for (let i = 0; i < 90; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+
+    await assertion;
+  }, 15000);
+
+  it('register is never retried on a response-less failure (login-only retry)', async () => {
+    apiClient.post.mockRejectedValue(new ApiClientError('Unable to reach the server. Please try again.'));
+
+    await expect(authService.register({ email: 'a@b.com', password: 'secret', first_name: 'A', last_name: 'B' })).rejects.toBeInstanceOf(ApiClientError);
+
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+});

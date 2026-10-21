@@ -66,14 +66,15 @@ export default function FeedbackReplyDialog({ feedback, onClose, onSaved }) {
           </div>
 
           <div>
-            <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-1.5">Admin reply / notes</div>
+            <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-1.5">Internal note</div>
             <textarea
               value={adminNotes}
               onChange={(event) => setAdminNotes(event.target.value)}
               rows={4}
-              placeholder="Add an internal note or reply for this feedback..."
+              placeholder="Add an internal note for this feedback..."
               className="w-full text-sm border border-ink-100 rounded-xl px-3 py-2.5 outline-none focus:border-primary-300 resize-none"
             />
+            <p className="mt-1 text-xs text-ink-400">Only administrators can see this note.</p>
           </div>
         </div>
 

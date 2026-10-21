@@ -189,8 +189,15 @@ export default function StudentTopbar({ active, sidebarOpen, onMenuClick, onNavi
       cancelLabel: 'Cancel',
     });
     if (!ok) return;
-    await logout();
-    onNavigate('/login');
+    try {
+      await logout();
+    } catch {
+      // Best-effort — the student is leaving the page regardless (see
+      // AuthContext.logout, which already clears the session locally even
+      // when the request itself fails).
+    } finally {
+      onNavigate('/login');
+    }
   };
 
   useEffect(() => {

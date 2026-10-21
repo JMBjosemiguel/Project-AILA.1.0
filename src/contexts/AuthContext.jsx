@@ -54,10 +54,10 @@ export function AuthProvider({ children }) {
       loading,
       isReady: !loading,
       error,
-      async login(credentials) {
+      async login(credentials, options) {
         setError(null);
         try {
-          const nextSession = await authService.login(credentials);
+          const nextSession = await authService.login(credentials, options);
           setSession(nextSession);
           return nextSession;
         } catch (loginError) {
@@ -75,8 +75,15 @@ export function AuthProvider({ children }) {
         }
       },
       async logout() {
-        await authService.logout();
-        setSession(null);
+        try {
+          await authService.logout();
+        } finally {
+          // authService.logout() already clears the stored token in its own
+          // finally even if the POST fails — the session must clear here
+          // too, so a dropped connection at logout time never leaves the
+          // student stuck looking signed in on a token that's already gone.
+          setSession(null);
+        }
       },
       // Neither of these touches the session — verification happens while
       // signed out, and resend never authenticates anyone.

@@ -15,6 +15,7 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
   const [resendMessage, setResendMessage] = useState('');
+  const [isWakingUp, setIsWakingUp] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -30,13 +31,14 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
 
     try {
       setIsSubmitting(true);
-      const session = await login({ email, password });
+      const session = await login({ email, password }, { onRetrying: setIsWakingUp });
       setError('');
       onAuthenticated(session.user.role);
     } catch (authError) {
       setError(authError.message);
       setNeedsVerification(authError.details?.code === 'EMAIL_NOT_VERIFIED');
     } finally {
+      setIsWakingUp(false);
       setIsSubmitting(false);
     }
   };
@@ -82,6 +84,10 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
 
         {error && <p className="text-xs text-rose-600 -mt-1">{error}</p>}
 
+        {isWakingUp && (
+          <p className="text-xs text-ink-500 -mt-1">AILA is waking up. This can take up to a minute…</p>
+        )}
+
         {needsVerification && (
           <div className="-mt-1 flex flex-col gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-3">
             <button
@@ -98,7 +104,7 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
           </div>
         )}
 
-        <Button type="submit" full disabled={isSubmitting}>{isSubmitting ? 'Signing in...' : 'Sign in'}</Button>
+        <Button type="submit" full disabled={isSubmitting}>{isWakingUp ? 'Waking up...' : isSubmitting ? 'Signing in...' : 'Sign in'}</Button>
 
         <div className="flex items-center gap-3 text-xs text-ink-400 my-1">
           <div className="flex-1 h-px bg-ink-100" />or<div className="flex-1 h-px bg-ink-100" />

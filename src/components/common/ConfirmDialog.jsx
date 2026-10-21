@@ -4,12 +4,17 @@ import Button from './Button';
 
 const ConfirmContext = createContext(() => Promise.resolve(false));
 
+const ICON_STYLE = {
+  danger: 'bg-rose-50 text-rose-500',
+  primary: 'bg-primary-50 text-primary',
+};
+
 export function ConfirmProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const resolverRef = useRef(null);
 
-  const confirm = useCallback(({ title = 'Are you sure?', message = '', confirmLabel = 'Delete', cancelLabel = 'Cancel' } = {}) => {
-    setDialog({ title, message, confirmLabel, cancelLabel });
+  const confirm = useCallback(({ title = 'Are you sure?', message = '', confirmLabel = 'Delete', cancelLabel = 'Cancel', variant = 'danger' } = {}) => {
+    setDialog({ title, message, confirmLabel, cancelLabel, variant });
     return new Promise((resolve) => {
       resolverRef.current = resolve;
     });
@@ -33,7 +38,7 @@ export function ConfirmProvider({ children }) {
         >
           <div className="w-full max-w-sm bg-surface border border-ink-100 rounded-2xl shadow-soft p-5">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center flex-shrink-0">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${ICON_STYLE[dialog.variant] || ICON_STYLE.danger}`}>
                 <AlertTriangle size={16} />
               </div>
               <div className="min-w-0">
@@ -43,7 +48,7 @@ export function ConfirmProvider({ children }) {
             </div>
             <div className="flex justify-end gap-2 mt-5">
               <Button variant="outline" size="sm" onClick={() => settle(false)}>{dialog.cancelLabel}</Button>
-              <Button variant="danger" size="sm" onClick={() => settle(true)}>{dialog.confirmLabel}</Button>
+              <Button variant={dialog.variant} size="sm" onClick={() => settle(true)}>{dialog.confirmLabel}</Button>
             </div>
           </div>
         </div>

@@ -471,4 +471,18 @@ describe('StudentTopbar logout confirmation', () => {
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith('/login');
   });
+
+  it('still navigates to /login even if the logout request itself fails', async () => {
+    const user = userEvent.setup();
+    const { onNavigate } = renderTopbar();
+    logoutMock.mockClear();
+    logoutMock.mockRejectedValueOnce(new Error('Unable to reach the server. Please try again.'));
+
+    await user.click(screen.getByTitle('Log out'));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Log out' }));
+
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('/login');
+  });
 });

@@ -326,7 +326,11 @@ export default function QuizCard({
                   onClick={() => jumpToQuestion(i)}
                   aria-label={`Question ${i + 1}${answered ? ', answered' : ', unanswered'}${current ? ', current' : ''}`}
                   className={[
-                    'w-7 h-7 flex items-center justify-center rounded-md text-[0.7rem] font-semibold border transition-colors',
+                    // Visible square stays 28px (w-7 h-7) — the ::before
+                    // pseudo-element extends the tappable area to ~40x40px
+                    // without affecting layout (absolutely positioned, invisible).
+                    'relative w-7 h-7 flex items-center justify-center rounded-md text-[0.7rem] font-semibold border transition-colors',
+                    "before:content-[''] before:absolute before:-inset-1.5",
                     answered ? 'bg-primary-50 border-primary-200 text-primary' : 'bg-surface border-ink-100 text-ink-400',
                     current ? 'ring-2 ring-primary ring-offset-1' : '',
                   ].join(' ')}

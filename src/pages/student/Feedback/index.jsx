@@ -3,6 +3,7 @@ import { MessageSquareText, Trash2 } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import ProgressBar from '../../../components/common/ProgressBar';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -13,21 +14,27 @@ import { formatDateTime } from '../../../utils/formatDate';
 
 export default function FeedbackPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data } = useFeedbackData(refreshVersion);
+  const { data, loading, error } = useFeedbackData(refreshVersion);
   const [overall, setOverall] = useState(0);
   const [contextType, setContextType] = useState('');
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [mine, setMine] = useState([]);
+  const [mineError, setMineError] = useState(null);
   const confirm = useConfirm();
   const toast = useToast();
 
   useEffect(() => {
-    getMyFeedback().then((result) => setMine(result.feedback ?? [])).catch(() => {});
+    setMineError(null);
+    getMyFeedback()
+      .then((result) => setMine(result.feedback ?? []))
+      .catch((err) => setMineError(err));
   }, [refreshVersion]);
 
   const submit = async () => {
-    if (!overall) return;
+    if (!overall || submitting) return;
+    setSubmitting(true);
     try {
       await submitFeedback({
         rating: overall,
@@ -44,6 +51,8 @@ export default function FeedbackPage() {
       setTimeout(() => setSubmitted(false), 3000);
     } catch (error) {
       toast.error(error.message || 'Could not submit your feedback.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -62,6 +71,18 @@ export default function FeedbackPage() {
       toast.error(error.message || 'Could not delete that feedback.');
     }
   };
+
+  if (!loading && error) {
+    return (
+      <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
+        <LoadError
+          title="Couldn't load feedback"
+          message={error.message || 'Something went wrong loading this page. Please try again.'}
+          onRetry={() => setRefreshVersion((version) => version + 1)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl mx-auto animate-fadeUp">
@@ -97,15 +118,22 @@ export default function FeedbackPage() {
                 />
               </Field>
 
-              <Button onClick={submit} className="self-start">
-                {submitted ? 'Thank you' : 'Submit feedback'}
+              <Button onClick={submit} disabled={submitting} className="self-start">
+                {submitting ? 'Submitting...' : submitted ? 'Thank you' : 'Submit feedback'}
               </Button>
             </div>
           </Card>
 
           <Card>
             <CardHeader title="Your feedback" subtitle="Submissions you've sent, most recent first." />
-            {mine.length ? (
+            {mineError ? (
+              <LoadError
+                bare
+                title="Couldn't load your submissions"
+                message={mineError.message || 'Something went wrong. Please try again.'}
+                onRetry={() => setRefreshVersion((version) => version + 1)}
+              />
+            ) : mine.length ? (
               <div className="flex flex-col divide-y divide-ink-50">
                 {mine.map((entry) => (
                   <div key={entry.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">

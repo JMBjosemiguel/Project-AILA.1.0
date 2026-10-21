@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, Circle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Loader2, X } from 'lucide-react';
 import { getAdminCourseDetail } from '../../services/api/adminService';
+import Button from '../common/Button';
+import EmptyState from '../common/EmptyState';
 import { SkeletonList } from '../common/Skeleton';
 
 function Row({ label, value }) {
@@ -16,15 +18,20 @@ function Row({ label, value }) {
 export default function CourseDetailDialog({ courseId, onClose }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let active = true;
     setLoading(true);
+    setError(null);
     getAdminCourseDetail(courseId)
       .then((result) => { if (active) setDetail(result); })
+      .catch((err) => { if (active) setError(err); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [courseId]);
+
+  useEffect(load, [load]);
 
   const course = detail?.course;
   const allLessons = course?.modules?.flatMap((module_) => module_.topics.flatMap((topic) => topic.lessons)) ?? [];
@@ -38,7 +45,7 @@ export default function CourseDetailDialog({ courseId, onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="course-detail-title" className="text-[0.95rem] font-semibold text-ink-800">
-              {loading ? 'Loading course...' : course?.name}
+              {loading ? 'Loading course...' : error ? 'Course details' : course?.name}
             </h3>
             <p className="text-xs text-ink-400 mt-0.5">{detail?.owner ? `${detail.owner.first_name} ${detail.owner.last_name} · ${detail.owner.email}` : ''}</p>
           </div>
@@ -52,6 +59,13 @@ export default function CourseDetailDialog({ courseId, onClose }) {
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
               <Loader2 size={16} className="animate-spin" /> Loading course details...
             </div>
+          ) : error ? (
+            <EmptyState
+              icon={AlertTriangle}
+              title="Couldn't load this course"
+              message={error.message || 'Something went wrong. Please try again.'}
+              action={<Button size="sm" variant="outline" onClick={load}>Retry</Button>}
+            />
           ) : course ? (
             <div className="flex flex-col gap-5">
               <div>

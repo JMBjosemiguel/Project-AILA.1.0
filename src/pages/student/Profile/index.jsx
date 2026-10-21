@@ -3,6 +3,7 @@ import { Eye, EyeOff, Pencil } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
+import LoadError from '../../../components/common/LoadError';
 import Switch from '../../../components/common/Switch';
 import { useToast } from '../../../components/common/Toast';
 import { useProfileData } from '../../../hooks/useProfileData';
@@ -14,7 +15,7 @@ const PASSWORD_MAX = 72;
 
 export default function ProfilePage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const { data } = useProfileData(refreshVersion);
+  const { data, loading, error } = useProfileData(refreshVersion);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ program: '', year_level: '', bio: '' });
@@ -97,6 +98,18 @@ export default function ProfilePage() {
       setChangingPassword(false);
     }
   };
+
+  if (!loading && error) {
+    return (
+      <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
+        <LoadError
+          title="Couldn't load your profile"
+          message={error.message || 'Something went wrong loading your profile. Please try again.'}
+          onRetry={() => setRefreshVersion((version) => version + 1)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">

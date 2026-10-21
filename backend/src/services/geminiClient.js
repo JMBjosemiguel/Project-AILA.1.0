@@ -4,7 +4,9 @@ const ApiError = require('../utils/ApiError');
 // capacity-throttled by Google (HTTP 503 "the model is experiencing high
 // demand"), which surfaced in production as "Gemini is temporarily unavailable".
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 15000);
+// 30000 to match .env.example / docs/DEPLOYMENT.md's documented production
+// value — this default only matters when GEMINI_TIMEOUT_MS isn't set at all.
+const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 30000);
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const RETRYABLE_STATUSES = new Set([500, 502, 503, 504]);
 const RETRY_BACKOFF_MS = 1000;

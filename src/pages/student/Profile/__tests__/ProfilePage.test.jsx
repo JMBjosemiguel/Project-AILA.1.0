@@ -23,6 +23,8 @@ const data = {
 beforeEach(() => {
   updateProfile.mockClear();
   profileState.data = data;
+  profileState.loading = false;
+  profileState.error = null;
 });
 
 describe('Profile leaderboard opt-in', () => {
@@ -48,5 +50,30 @@ describe('Profile leaderboard opt-in', () => {
   it('does not leak what is shared — the helper text names the hidden fields', () => {
     render(<ProfilePage />);
     expect(screen.getByText(/email, program, year, and scores are never shown/i)).toBeInTheDocument();
+  });
+});
+
+describe('Profile load failure', () => {
+  it('shows an error state with a Retry button instead of silently rendering placeholder "Pending" text', () => {
+    profileState.data = null;
+    profileState.loading = false;
+    profileState.error = new Error('Unable to reach the server. Please try again.');
+
+    render(<ProfilePage />);
+
+    expect(screen.getByText(/couldn't load your profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/unable to reach the server/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByText('Profile pending')).not.toBeInTheDocument();
+  });
+
+  it('while still loading, does not show the error state even if a stale error is present', () => {
+    profileState.data = null;
+    profileState.loading = true;
+    profileState.error = new Error('stale error from a previous attempt');
+
+    render(<ProfilePage />);
+
+    expect(screen.queryByText(/couldn't load your profile/i)).not.toBeInTheDocument();
   });
 });

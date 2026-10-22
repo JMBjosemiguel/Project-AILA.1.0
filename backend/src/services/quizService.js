@@ -326,12 +326,15 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
   return { topic: resolvedTopic, quizType, items };
 }
 
-async function generateFlashcards({ topic, count }) {
+async function generateFlashcards({ topic, count, sourceContextText = '' }) {
   const prompt = [
-    `Generate ${count} question-and-answer flashcards about "${topic}" for a college student.`,
+    sourceContextText
+      ? `Generate ${count} question-and-answer flashcards for a college student, based ONLY on the document content in quiz_source_material below.`
+      : `Generate ${count} question-and-answer flashcards about "${topic}" for a college student.`,
+    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
     'Keep each question focused on a single concept and each answer concise (1-2 sentences).',
     'Do not include any text outside the JSON object.',
-  ].join(' ');
+  ].filter(Boolean).join('\n');
 
   const generationConfig = {
     maxOutputTokens: quizOutputBudget(count),
@@ -1267,6 +1270,28 @@ async function getAttempt(userId, attemptId) {
 }
 
 /**
+ * Resolves a 'quiz_completed' dashboard_activity_log row (Recent activity's
+ * "View" button) to the attempt it refers to, without any schema change —
+ * see quizModel.findAttemptForQuizActivity for the timestamp-matching
+ * rationale. Returns only the id; the caller re-fetches the actual review
+ * through the existing getAttempt()/GET /quizzes/attempts/:id path, so there
+ * is exactly one place that formats a review.
+ */
+async function getAttemptForActivity(userId, activityId) {
+  const activity = await quizModel.getActivityLogEntry(Number(activityId), userId);
+  if (!activity || activity.activity_type !== 'quiz_completed') {
+    throw new ApiError(404, 'This quiz is no longer available.');
+  }
+
+  const attemptId = await quizModel.findAttemptForQuizActivity(activity.reference_id, userId, activity.created_at);
+  if (!attemptId) {
+    throw new ApiError(404, 'This quiz is no longer available.');
+  }
+
+  return { attemptId };
+}
+
+/**
  * Submit an in-progress attempt. Grades the SAVED answers server-side, freezes
  * the attempt (status -> submitted, active_slot -> NULL), awards XP once, and
  * returns the review. Atomic; a double submit gets a 409.
@@ -1503,6 +1528,7 @@ module.exports = {
   startAttempt,
   saveAttemptAnswer,
   getAttempt,
+  getAttemptForActivity,
   submitAttempt,
   submitQuizAnswers,
   listActiveAttempts,
@@ -1513,6 +1539,8 @@ module.exports = {
   formatQuizForTake,
   formatAttemptForResume,
   formatAttemptReview,
+  gradeQuiz,
+  buildResourceQuizContext,
   CHECKPOINT_ITEMS,
   FINAL_ITEMS,
   DEFAULT_PASSING_SCORE,

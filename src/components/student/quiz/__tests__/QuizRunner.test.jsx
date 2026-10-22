@@ -15,12 +15,19 @@ vi.mock('../../../../services/api/quizService', () => ({
 vi.mock('../../../common/Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
+vi.mock('../../../../services/api/shareService', () => ({
+  getShareStatus: vi.fn(),
+  createShare: vi.fn(),
+  revokeShare: vi.fn(),
+  absoluteShareUrl: vi.fn((path) => `https://aila.local${path}`),
+}));
 
 import QuizRunner from '../QuizRunner.jsx';
 import {
   generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt,
   startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration,
 } from '../../../../services/api/quizService';
+import { getShareStatus } from '../../../../services/api/shareService';
 
 const ITEMS = [
   { id: 10, question: 'Capital of France?', options: ['Paris', 'Berlin'], orderIndex: 0 },
@@ -48,6 +55,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   saveAttemptAnswer.mockResolvedValue({ saved: true, attemptId: 77, currentIndex: 0 });
   submitAttempt.mockResolvedValue(REVIEW);
+  getShareStatus.mockResolvedValue({ visibility: 'private', shared: false });
 });
 
 describe('QuizRunner — resumable formal quiz', () => {
@@ -412,5 +420,37 @@ describe('QuizRunner — batched generation (counts above 20)', () => {
     await waitFor(() => expect(screen.getByText('AILA made 45 of 75 questions.')).toBeInTheDocument());
     // "D" and "E" were never dispatched because Cancel stopped new pickups.
     expect(appendQuizBatch).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('QuizRunner — Share button (same component the Resource Library quiz uses)', () => {
+  it('shows "Share this quiz" for a quiz generated from a Resource Library document, and it opens ShareDialog', async () => {
+    const user = userEvent.setup();
+    generateQuiz.mockResolvedValue({
+      id: 42, topic: 'Cell biology', quizType: 'multiple_choice', difficulty: 'medium', items: ITEMS,
+    });
+    startQuizAttempt.mockResolvedValue({
+      attempt: { id: 500, quizId: 42, status: 'in_progress', currentIndex: 0 },
+      quiz: { id: 42, topic: 'Cell biology', quizType: 'multiple_choice', difficulty: 'medium', assessmentKind: 'practice' },
+      items: ITEMS,
+      answers: [],
+    });
+
+    render(
+      <QuizRunner
+        request={{ topic: 'Cell biology', sourceType: 'resource', sourceId: 7 }}
+        onClose={vi.fn()}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: /Generate Quiz/i }));
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+
+    expect(generateQuiz).toHaveBeenCalledWith(expect.objectContaining({ sourceType: 'resource', sourceId: 7 }));
+
+    const shareButton = screen.getByRole('button', { name: /Share this quiz/i });
+    await user.click(shareButton);
+
+    await waitFor(() => expect(screen.getByRole('dialog', { name: /Share this quiz/i })).toBeInTheDocument());
+    expect(getShareStatus).toHaveBeenCalledWith('quiz', 42);
   });
 });

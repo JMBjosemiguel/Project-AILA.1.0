@@ -216,6 +216,50 @@ async function buildChatQuizPersonalization(userId) {
   };
 }
 
+// classifyIntent couldn't resolve a real topic — it was either a bare
+// pronoun/back-reference ("this", "the document") or genuinely nothing
+// stated (clarificationReason: 'no_topic', never 'ambiguous_topic' — several
+// distinct topics discussed still has to be asked about regardless of a
+// linked resource). When the conversation has a linked resource, that IS
+// the topic: generate from it using the exact same resource-grounding
+// quizService.generateAndSaveQuiz uses for the Resource Library's "Generate
+// Quiz from a file" (buildResourceQuizContext — chunks spread across the
+// whole document, via the update-123 whole-file extraction), never a second
+// pipeline. Returns null (meaning: ask the clarification question as usual)
+// when there's no resource to fall back to.
+async function generateFromLinkedResource(type, userId, resourceId, decision) {
+  const resource = await resourceModel.getResourceById(resourceId, userId);
+  if (!resource) return null;
+
+  const { text: sourceContextText, resourceNote } = await quizService.buildResourceQuizContext(resourceId, userId);
+  if (resourceNote === 'no-text') {
+    return { messageType: 'text', data: null, responseText: NO_READABLE_TEXT_MESSAGE, nextPendingIntent: null };
+  }
+
+  if (type === 'quiz') {
+    const personalization = await buildChatQuizPersonalization(userId);
+    const quiz = await quizService.generateQuiz({
+      topic: resource.title,
+      quizType: decision.quizType || 'multiple_choice',
+      itemCount: decision.itemCount || DEFAULT_ITEMS,
+      difficulty: decision.difficulty || personalization.preferredDifficulty || undefined,
+      personalizationText: personalization.text,
+      sourceContextText,
+      isDocumentSource: true,
+    });
+    if (resourceNote === 'truncated') quiz.sourceNote = RESOURCE_TRUNCATED_NOTE;
+    return { messageType: 'quiz', data: quiz, responseText: JSON.stringify(quiz), nextPendingIntent: null };
+  }
+
+  const flashcards = await quizService.generateFlashcards({
+    topic: resource.title,
+    count: decision.itemCount || DEFAULT_ITEMS,
+    sourceContextText,
+  });
+  if (resourceNote === 'truncated') flashcards.sourceNote = RESOURCE_TRUNCATED_NOTE;
+  return { messageType: 'flashcards', data: flashcards, responseText: JSON.stringify(flashcards), nextPendingIntent: null };
+}
+
 /**
  * Decide what the student wants and produce the reply. Returns
  * `nextPendingIntent` alongside the reply so the caller can persist (or
@@ -227,6 +271,12 @@ async function generateReply(prompt, priorMessages, userId, resourceId, pendingI
   const decision = await chatIntentService.classifyIntent({ prompt, priorMessages, pendingIntent });
 
   if (decision.needsClarification) {
+    if (decision.clarificationReason === 'no_topic' && resourceId && (decision.type === 'quiz' || decision.type === 'flashcards')) {
+      const fromResource = await generateFromLinkedResource(decision.type, userId, resourceId, decision);
+      if (fromResource) return fromResource;
+      // Resource lookup failed unexpectedly — fall through to the normal
+      // clarification question rather than losing the reply entirely.
+    }
     return {
       messageType: 'text',
       data: null,

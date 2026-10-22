@@ -80,6 +80,19 @@ function cleanTopic(message) {
   return message.trim().replace(/[.?!]+$/, '').trim();
 }
 
+// A bare pronoun or back-reference ("this", "that", "the document") is never
+// a real topic on its own — it refers to something else the caller has to
+// resolve (the conversation's linked resource, or the subject of AILA's last
+// explanation). Anchored to the WHOLE (already-cleaned) string so a genuine
+// topic that merely contains one of these words — "the above-ground biomass
+// of a forest" — is never falsely flagged.
+const VAGUE_REFERENCE_PATTERN = /^(it|this|that|these|those|the above|(this|that|these|those|the)\s+(attached|uploaded|linked)?\s*(document|file|pdf|slides?|module|material|resource|attachment)s?)$/i;
+
+function isVagueReference(topic) {
+  if (!topic || !topic.trim()) return true;
+  return VAGUE_REFERENCE_PATTERN.test(topic.trim());
+}
+
 // Exact-template fast path for the chat's own "Generate Quiz" / "Generate
 // Flashcards" buttons (see ChatInput.jsx's useTemplate() calls) — a message
 // that IS the button's template with a topic typed in is unambiguous, so it
@@ -93,11 +106,16 @@ const FLASHCARDS_TEMPLATE_PATTERN = /^generate (\d+) flashcards about\s+(.+)$/i;
 function matchButtonTemplate(message) {
   const trimmed = message.trim();
 
+  // A vague topic here ("...quiz about this") is NOT treated as unmatched —
+  // it falls through to the mentionsQuiz/classifier path below instead,
+  // because resolving it (from the linked resource or recent conversation)
+  // is exactly what that path already does; duplicating that resolution
+  // here would be a second pipeline.
   const quiz = trimmed.match(QUIZ_TEMPLATE_PATTERN);
   if (quiz) {
     const count = Number(quiz[1]);
     const topic = cleanTopic(quiz[2]);
-    if (topic && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
+    if (topic && !isVagueReference(topic) && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
       return { type: 'quiz', topic, itemCount: count };
     }
   }
@@ -106,7 +124,7 @@ function matchButtonTemplate(message) {
   if (flashcards) {
     const count = Number(flashcards[1]);
     const topic = cleanTopic(flashcards[2]);
-    if (topic && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
+    if (topic && !isVagueReference(topic) && Number.isInteger(count) && count >= 1 && count <= MAX_ITEMS) {
       return { type: 'flashcards', topic, itemCount: count };
     }
   }
@@ -127,4 +145,5 @@ module.exports = {
   looksLikeTopicAnswer,
   cleanTopic,
   matchButtonTemplate,
+  isVagueReference,
 };

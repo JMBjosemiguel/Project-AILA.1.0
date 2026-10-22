@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { db, api, serverReachable, purgeByTag } = require('./helpers');
+const { db, api, serverReachable, purgeByTag, createStudent } = require('./helpers');
 
 const shareService = require('../../src/services/materialShareService');
 
@@ -48,6 +48,48 @@ async function makeQuiz(userId) {
     [q.insertId, JSON.stringify(['right-one', 'wrong-one']), q.insertId, JSON.stringify(['three', 'four'])]
   );
   return q.insertId;
+}
+
+async function makeIdentificationQuiz(userId) {
+  const q = await db.query(
+    "INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, item_count) VALUES (?, ?, 'identification', 'medium', 1)",
+    [userId, `${TAG} ID Quiz`]
+  );
+  await db.query(
+    "INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation, order_index) VALUES (?, 'Name the device.', NULL, 'Vacuum Tube', 'A historical electronic component.', 0)",
+    [q.insertId]
+  );
+  return q.insertId;
+}
+
+async function makeTrueFalseQuiz(userId) {
+  const q = await db.query(
+    "INSERT INTO quizzes (user_id, topic, quiz_type, difficulty, item_count) VALUES (?, ?, 'true_false', 'medium', 1)",
+    [userId, `${TAG} TF Quiz`]
+  );
+  await db.query(
+    "INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation, order_index) VALUES (?, 'The sky appears blue due to Rayleigh scattering.', ?, 'True', 'Shorter wavelengths scatter more.', 0)",
+    [q.insertId, JSON.stringify(['True', 'False'])]
+  );
+  return q.insertId;
+}
+
+// Global counts across every table a quiz attempt / XP award / notification /
+// audit entry / progress update could possibly touch — snapshotting these
+// (not scoped to any one user) is the strongest proof the check endpoint
+// writes NOTHING anywhere, on a database that already has real data in it.
+const WRITE_SENSITIVE_TABLES = [
+  'quiz_attempts', 'quiz_attempt_answers', 'xp_events', 'notifications', 'notification_recipients',
+  'admin_audit_log', 'dashboard_activity_log', 'learning_progress', 'lesson_progress', 'user_achievements', 'learning_streaks',
+];
+
+async function snapshotCounts() {
+  const counts = {};
+  for (const table of WRITE_SENSITIVE_TABLES) {
+    const rows = await db.query(`SELECT COUNT(*) c FROM ${table}`);
+    counts[table] = Number(rows[0].c);
+  }
+  return counts;
 }
 
 async function wipeCourse(subjectId) {
@@ -139,6 +181,77 @@ test('generated-material sharing', async (t) => {
     assert.doesNotMatch(s, KEY_FIELDS);
     assert.doesNotMatch(s, /SECRET_EXPLANATION|because math/);
     assert.doesNotMatch(s, OWNER_INTERNALS);
+  });
+
+  await t.test('CHECK: grades multiple choice, true/false and identification correctly (including update-116 normalization), and never writes anything', async () => {
+    const before = await snapshotCounts();
+
+    const mcShare = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+    const mc = await shareService.checkSharedQuizAnswers(mcShare.token, [
+      { index: 0, answer: 'right-one' }, // correct
+      { index: 1, answer: 'three' }, // wrong (correct is 'four')
+    ]);
+    assert.equal(mc.total, 2);
+    assert.equal(mc.score, 1);
+    assert.equal(mc.percent, 50);
+    assert.equal(mc.results[0].isCorrect, true);
+    assert.equal(mc.results[0].correctAnswer, 'right-one');
+    assert.equal(mc.results[0].explanation, 'SECRET_EXPLANATION');
+    assert.equal(mc.results[1].isCorrect, false);
+    assert.equal(mc.results[1].yourAnswer, 'three');
+
+    const tfId = await makeTrueFalseQuiz(A.id);
+    const tfShare = await shareService.createShare(A.id, 'quiz', tfId, 'unlisted');
+    const tf = await shareService.checkSharedQuizAnswers(tfShare.token, [{ index: 0, answer: 'True' }]);
+    assert.equal(tf.score, 1);
+
+    const idQuizId = await makeIdentificationQuiz(A.id);
+    const idShare = await shareService.createShare(A.id, 'quiz', idQuizId, 'unlisted');
+    // "vacuum tubes." vs stored "Vacuum Tube": case + trailing punctuation +
+    // simple plural — the exact normalization added in update 116.
+    const id = await shareService.checkSharedQuizAnswers(idShare.token, [{ index: 0, answer: 'vacuum tubes.' }]);
+    assert.equal(id.score, 1, 'identification grading must apply the same case/punctuation/plural normalization as a real attempt');
+    assert.equal(id.results[0].isCorrect, true);
+
+    const after = await snapshotCounts();
+    assert.deepEqual(after, before, 'checking shared quizzes must never write to quiz_attempts, xp_events, notifications, audit log, or any progress table');
+  });
+
+  await t.test('CHECK: unanswered items count as incorrect', async () => {
+    const share = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+    const result = await shareService.checkSharedQuizAnswers(share.token, [{ index: 0, answer: 'right-one' }]); // index 1 omitted
+    assert.equal(result.score, 1);
+    assert.equal(result.total, 2);
+    assert.equal(result.results[1].isCorrect, false);
+    assert.equal(result.results[1].yourAnswer, '');
+  });
+
+  await t.test('CHECK: a shared COURSE token is out of scope — same opaque 404 as a bad token', async () => {
+    const created = await shareService.createShare(A.id, 'subject', course.subjectId, 'unlisted');
+    await assert.rejects(
+      () => shareService.checkSharedQuizAnswers(created.token, [{ index: 0, answer: 'x' }]),
+      (e) => e.statusCode === 404 && e.message === 'This shared material is no longer available.'
+    );
+  });
+
+  await t.test('CHECK: garbage / revoked quiz tokens return the same opaque 404', async () => {
+    for (const bad of ['1', 'x', 'abc', '../secret', 'y'.repeat(300)]) {
+      await assert.rejects(
+        () => shareService.checkSharedQuizAnswers(bad, [{ index: 0, answer: 'x' }]),
+        (e) => e.statusCode === 404 && e.message === 'This shared material is no longer available.'
+      );
+    }
+    const created = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+    await shareService.revokeShare(A.id, 'quiz', quizId);
+    await assert.rejects(() => shareService.checkSharedQuizAnswers(created.token, []), (e) => e.statusCode === 404);
+  });
+
+  await t.test('CHECK: an index past the end of the quiz is a 422, not a crash', async () => {
+    const share = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+    await assert.rejects(
+      () => shareService.checkSharedQuizAnswers(share.token, [{ index: 99, answer: 'x' }]),
+      (e) => e.statusCode === 422
+    );
   });
 
   await t.test('VIEW: garbage / revoked tokens all return the same opaque 404', async () => {
@@ -233,5 +346,53 @@ test('generated-material sharing', async (t) => {
 
     assert.equal((await api('GET', '/share/1')).status, 404);
     assert.equal((await api('GET', `/materials/quiz/${quizId}/share`)).status, 401, 'owner endpoints require auth');
+  });
+
+  await t.test('HTTP: checking a shared quiz needs no auth, ignores any Authorization header sent, and still writes nothing — even once with a valid student token', async () => {
+    if (!(await serverReachable())) { return; }
+    const created = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+    // Created BEFORE the snapshot — register+login themselves write an
+    // admin_audit_log row (student actions are logged too), which would
+    // otherwise show up as a false mismatch in the before/after diff below.
+    // Cleanup: handled by purgeByTag(TAG) in the outer t.after, like every
+    // other fixture in this file.
+    const student = await createStudent(TAG, 'checktok');
+
+    const before = await snapshotCounts();
+
+    const anon = await api('POST', `/share/${created.token}/check`, { body: { answers: [{ index: 0, answer: 'right-one' }] } });
+    assert.equal(anon.status, 200);
+    assert.equal(anon.json.data.score, 1);
+    assert.doesNotMatch(JSON.stringify(anon.json), OWNER_INTERNALS);
+
+    // A real student's token sent along must change nothing about the
+    // response or the outcome — it's simply never read.
+    const withToken = await api('POST', `/share/${created.token}/check`, { token: student.token, body: { answers: [{ index: 0, answer: 'right-one' }] } });
+    assert.equal(withToken.status, 200);
+    assert.deepEqual(withToken.json.data, anon.json.data);
+
+    const after = await snapshotCounts();
+    assert.deepEqual(after, before, 'no auth header, real or absent, should ever cause a write from this endpoint');
+  });
+
+  await t.test('HTTP: invalid check bodies return 422 in the normal error envelope', async () => {
+    if (!(await serverReachable())) { return; }
+    const created = await shareService.createShare(A.id, 'quiz', quizId, 'unlisted');
+
+    const missing = await api('POST', `/share/${created.token}/check`, { body: {} });
+    assert.equal(missing.status, 422);
+    assert.equal(missing.json.success, false);
+
+    const notArray = await api('POST', `/share/${created.token}/check`, { body: { answers: 'nope' } });
+    assert.equal(notArray.status, 422);
+
+    const badIndex = await api('POST', `/share/${created.token}/check`, { body: { answers: [{ index: -1, answer: 'x' }] } });
+    assert.equal(badIndex.status, 422);
+
+    const dup = await api('POST', `/share/${created.token}/check`, { body: { answers: [{ index: 0, answer: 'a' }, { index: 0, answer: 'b' }] } });
+    assert.equal(dup.status, 422);
+
+    const tooLong = await api('POST', `/share/${created.token}/check`, { body: { answers: [{ index: 0, answer: 'x'.repeat(501) }] } });
+    assert.equal(tooLong.status, 422);
   });
 });

@@ -38,6 +38,10 @@ const chatMessageIdParamValidator = [
   param('messageId').isInt({ min: 1 }).withMessage('Invalid message id.'),
 ];
 
+const activityIdParamValidator = [
+  param('activityId').isInt({ min: 1 }).withMessage('Invalid activity id.'),
+];
+
 const searchQuizzesValidator = [
   query('search').optional().trim().isLength({ max: 200 }),
 ];
@@ -64,6 +68,7 @@ module.exports = {
   quizIdParamValidator,
   attemptIdParamValidator,
   chatMessageIdParamValidator,
+  activityIdParamValidator,
   submitAttemptValidator,
   saveAnswerValidator,
   searchQuizzesValidator,

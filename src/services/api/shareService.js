@@ -29,6 +29,12 @@ export function copySharedMaterial(token) {
   return apiClient.post(API_ENDPOINTS.share.copy(token));
 }
 
+// Stateless, anonymous grading of a shared quiz — never authenticated, never
+// recorded. `answers` is [{ index, answer }].
+export function checkSharedQuizAnswers(token, answers) {
+  return apiClient.post(API_ENDPOINTS.share.check(token), { answers });
+}
+
 // Build the full, shareable URL from a relative share path.
 export function absoluteShareUrl(sharePath) {
   return `${window.location.origin}${sharePath}`;

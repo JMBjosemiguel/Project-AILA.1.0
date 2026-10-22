@@ -3,6 +3,7 @@ const { transaction } = require('../config/database');
 const shareModel = require('../models/materialShareModel');
 const copyModel = require('../models/materialCopyModel');
 const { generateShareToken, hashShareToken, looksLikeShareToken } = require('../utils/shareToken');
+const { gradeQuiz } = require('./quizService');
 
 // Frontend read-only route. Kept relative so the client builds an absolute URL
 // with its own origin — the backend never assumes a public host.
@@ -198,6 +199,56 @@ async function copySharedMaterial(recipientId, rawToken) {
   return { materialType: 'quiz', materialId: newId, name: quiz.topic };
 }
 
+/**
+ * Anonymous, stateless grading for a shared practice quiz — a visitor (no
+ * account, or any logged-in one, including an admin) answers the quiz and
+ * gets graded on the spot. Reads the quiz and grades it with the exact same
+ * server-side grader (quizService.gradeQuiz / isAnswerMatch, including the
+ * update-116 identification normalization) real quiz attempts use — nothing
+ * is written anywhere: no quiz_attempts row, no XP, no progress, no
+ * notification, no audit log entry. `answers` is `[{ index, answer }]`
+ * where `index` is the position in the shared view's `items` array, which is
+ * the same order (order_index ASC) getQuizForShare already returns.
+ */
+async function checkSharedQuizAnswers(rawToken, answers) {
+  const share = await resolveToken(rawToken);
+  // Shared COURSES are out of scope for this endpoint — a course-type token
+  // gets the same opaque "unavailable" response as a bad token (the visitor
+  // already knows it's a course link either way, so this leaks nothing new).
+  if (share.material_type !== 'quiz') throw new ApiError(404, UNAVAILABLE);
+
+  const quiz = await shareModel.getQuizForShare(share.material_id);
+  if (!quiz || quiz.visibility !== 'unlisted') throw new ApiError(404, UNAVAILABLE);
+
+  const total = quiz.questions.length;
+  if (answers.length > total) {
+    throw new ApiError(422, 'There are more answers than questions in this quiz.');
+  }
+  for (const { index } of answers) {
+    if (index >= total) {
+      throw new ApiError(422, `Answer index ${index} is out of range for this quiz.`);
+    }
+  }
+
+  const answerByQuestionId = new Map(answers.map(({ index, answer }) => [quiz.questions[index].id, answer]));
+  const { gradedAnswers, score, total: gradedTotal } = gradeQuiz(quiz, answerByQuestionId);
+  const gradedByQuestionId = new Map(gradedAnswers.map((g) => [g.questionId, g]));
+
+  const results = quiz.questions.map((question, index) => {
+    const graded = gradedByQuestionId.get(question.id);
+    return {
+      index,
+      isCorrect: graded.isCorrect,
+      yourAnswer: graded.selectedAnswer,
+      correctAnswer: question.correct_answer,
+      explanation: question.explanation,
+    };
+  });
+
+  const percent = gradedTotal > 0 ? Math.round((score / gradedTotal) * 100) : 0;
+  return { score, total: gradedTotal, percent, results };
+}
+
 module.exports = {
   MATERIAL_TYPES,
   getShareStatus,
@@ -205,6 +256,7 @@ module.exports = {
   revokeShare,
   viewSharedMaterial,
   copySharedMaterial,
+  checkSharedQuizAnswers,
   serializeSharedSubject,
   serializeSharedQuiz,
 };

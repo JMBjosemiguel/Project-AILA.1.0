@@ -19,8 +19,10 @@ function textPayload(text) {
 
 // Routes each Gemini call to the right canned response by inspecting its
 // systemInstruction — the three callers in this flow (classifier, quiz
-// generation, normal chat reply) each have a distinctive one.
-function installGeminiStub({ classify, quiz, chat } = {}) {
+// generation, normal chat reply) each have a distinctive one. Flashcards
+// generation sends no systemInstruction at all, so it's identified instead
+// by its responseSchema shape (the only caller whose schema has `cards`).
+function installGeminiStub({ classify, quiz, flashcards, chat } = {}) {
   const gemini = require('../../src/services/geminiClient');
   const calls = [];
   gemini.callGemini = async (body) => {
@@ -34,6 +36,10 @@ function installGeminiStub({ classify, quiz, chat } = {}) {
     if (instr.includes('You generate college quizzes')) {
       if (!quiz) throw new Error('unexpected quiz-generation call — no `quiz` stub provided');
       return jsonPayload(quiz);
+    }
+    if (body.generationConfig?.responseSchema?.properties?.cards) {
+      if (!flashcards) throw new Error('unexpected flashcards-generation call — no `flashcards` stub provided');
+      return jsonPayload(flashcards);
     }
     if (!chat) throw new Error('unexpected normal-chat call — no `chat` stub provided');
     return textPayload(chat);
@@ -67,6 +73,17 @@ async function pendingIntentFor(conversationId) {
   const rows = await db.query('SELECT pending_intent FROM chat_conversations WHERE id = ?', [conversationId]);
   const raw = rows[0]?.pending_intent;
   return raw ? JSON.parse(raw) : null;
+}
+
+// No file_path — resourceTextExtraction.getResourceChunks falls back to this
+// stored snapshot (same fixture shape as chatAttachment.test.js), which is
+// all generateFromLinkedResource needs: a resource row + its extracted text.
+async function makeResourceWithText(ownerId, title, extractedText) {
+  const res = await db.query(
+    "INSERT INTO resources (uploaded_by, title, type, extracted_text) VALUES (?, ?, 'pdf', ?)",
+    [ownerId, title, extractedText]
+  );
+  return res.insertId;
 }
 
 test('chatbot quiz intent', async (t) => {
@@ -284,5 +301,121 @@ test('chatbot quiz intent', async (t) => {
       () => aiService2.generateChatResponse({ userId: B.id, message: 'Operating Systems', conversationId: aChat.conversationId }),
       (err) => err.statusCode === 404
     );
+  });
+
+  // --- Part B: "this"/"that"/"it" and a linked resource must never become
+  // the topic itself, and a linked resource stands in for a missing one. ---
+
+  await t.test('"about this" after a REST explanation resolves to REST, not the literal word "this" (the chat UI\'s own quiz-button template)', async () => {
+    const { aiService } = installGeminiStub({ chat: 'REST stands for Representational State Transfer.' });
+    const first = await aiService.generateChatResponse({ userId: A.id, message: 'What is REST?', conversationId: null });
+
+    // Before the fix, this exact button-generated message ("generate a
+    // N-item multiple choice quiz about <topic>") skipped the classifier
+    // entirely via matchButtonTemplate and used "this" as the topic
+    // verbatim. Now a vague topic there falls through to the classifier —
+    // which actually sees the prior REST explanation and can resolve it.
+    const { aiService: aiService2, calls } = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: 'REST APIs', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: 'REST APIs', quizType: 'multiple_choice', items: [
+        { question: 'What does REST stand for?', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const second = await aiService2.generateChatResponse({
+      userId: A.id, message: 'Generate a 10-item multiple choice quiz about this', conversationId: first.conversationId,
+    });
+
+    assert.equal(second.messageType, 'quiz');
+    assert.equal(second.data.topic, 'REST APIs');
+    assert.ok(calls.some((c) => (c.systemInstruction || '').includes('intent classifier for AILA')), 'the vague button-template topic must reach the classifier, not bypass it');
+  });
+
+  await t.test('a resource-linked chat with no topic generates the quiz from that resource, not a clarification question', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} Networking Notes`, 'Subnets divide a network into smaller segments.');
+    const { aiService, calls } = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} Networking Notes`, quizType: 'multiple_choice', items: [
+        { question: 'What do subnets do?', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'Generate a quiz about', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.messageType, 'quiz');
+    assert.equal(result.data.topic, `${TAG} Networking Notes`);
+    const quizCall = calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.match(JSON.stringify(quizCall), /Subnets divide a network/, 'the resource text must reach the quiz-generation prompt');
+    assert.equal(await pendingIntentFor(result.conversationId), null, 'resolved via the resource — nothing left pending');
+  });
+
+  await t.test('a resource-linked chat asking "quiz about this document" also generates from the resource (vague reference, not a real topic)', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} OS Notes`, 'A process is a running instance of a program.');
+    const { aiService, calls } = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: 'this document', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} OS Notes`, quizType: 'multiple_choice', items: [
+        { question: 'What is a process?', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'Quiz me about this document.', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.messageType, 'quiz');
+    const quizCall = calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.match(JSON.stringify(quizCall), /A process is a running instance/);
+  });
+
+  await t.test('a resource-linked chat asking for flashcards with no topic generates from the resource too', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} OS Flash Notes`, 'A thread is the smallest unit of CPU scheduling.');
+    const { aiService, calls } = installGeminiStub({
+      classify: { intent: 'REQUEST_FLASHCARDS', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      flashcards: { topic: `${TAG} OS Flash Notes`, cards: [{ question: 'What is a thread?', answer: 'The smallest unit of CPU scheduling.' }] },
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'Make flashcards about', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.messageType, 'flashcards');
+    const flashcardsCall = calls.find((c) => c.generationConfig?.responseSchema?.properties?.cards);
+    assert.match(JSON.stringify(flashcardsCall), /smallest unit of CPU scheduling/);
+  });
+
+  await t.test('an explicit topic overrides a linked resource entirely', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} Networking Notes 2`, 'Subnets divide a network into smaller segments.');
+    const { aiService, calls } = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: 'photosynthesis', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: 'Photosynthesis', quizType: 'multiple_choice', items: [
+        { question: 'What pigment captures light?', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'Quiz me about photosynthesis.', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.data.topic, 'Photosynthesis');
+    const quizCall = calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.doesNotMatch(JSON.stringify(quizCall), /Subnets divide a network/, 'an explicit topic must not pull in the linked resource');
+  });
+
+  // Already covered by the existing "'what is a quiz?' ... answer, they do
+  // not generate one" test above — re-asserted here with a resource linked,
+  // since B4 requires this to hold even when a resource is attached.
+  await t.test('"what is a quiz" with a resource linked still does not generate a quiz', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} Irrelevant Notes`, 'Irrelevant content.');
+    const { aiService } = installGeminiStub({
+      classify: { intent: 'REQUEST_EXPLANATION', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      chat: 'A quiz is a short set of questions used to check understanding.',
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'What is a quiz?', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.messageType, 'text');
   });
 });

@@ -58,11 +58,30 @@ test('chatIntentService.classifyIntent', async (t) => {
     const decision = await service.classifyIntent({ prompt: 'Quiz me.', priorMessages: [] });
 
     assert.equal(decision.needsClarification, true);
+    assert.equal(decision.clarificationReason, 'no_topic');
     assert.match(decision.clarificationQuestion, /topic/i);
     assert.equal(decision.nextPendingIntent.type, 'quiz');
   });
 
-  await t.test('REQUEST_QUIZ with an ambiguous topic lists the candidates in the clarification question', async () => {
+  // The exact reported bug: the classifier itself returning the pronoun
+  // back as the "resolved" topic must not be trusted — it's treated exactly
+  // like topicConfidence 'none' (clarificationReason 'no_topic'), which is
+  // what lets aiService fall back to a linked resource instead of asking.
+  await t.test('REQUEST_QUIZ where the classifier returns a bare pronoun as the "clear" topic is rejected, not generated', async () => {
+    for (const vague of ['this', 'that', 'it', 'this document', 'the attached file']) {
+      stubClassifierResponse({ intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: vague, quizType: '', itemCount: 0, difficulty: '' });
+      const service = loadService();
+
+      // eslint-disable-next-line no-await-in-loop
+      const decision = await service.classifyIntent({ prompt: 'quiz me about this', priorMessages: [] });
+
+      assert.equal(decision.needsClarification, true, vague);
+      assert.equal(decision.clarificationReason, 'no_topic', vague);
+      assert.equal(decision.topic, null, vague);
+    }
+  });
+
+  await t.test('REQUEST_QUIZ with an ambiguous topic lists the candidates in the clarification question, reason "ambiguous_topic"', async () => {
     stubClassifierResponse({
       intent: 'REQUEST_QUIZ', topicConfidence: 'ambiguous', topic: '',
       candidateTopics: ['subnetting', 'REST APIs'], quizType: '', itemCount: 0, difficulty: '',
@@ -72,6 +91,7 @@ test('chatIntentService.classifyIntent', async (t) => {
     const decision = await service.classifyIntent({ prompt: 'Quiz me on that.', priorMessages: [] });
 
     assert.equal(decision.needsClarification, true);
+    assert.equal(decision.clarificationReason, 'ambiguous_topic');
     assert.match(decision.clarificationQuestion, /subnetting/i);
     assert.match(decision.clarificationQuestion, /rest apis/i);
     assert.deepEqual(decision.nextPendingIntent.candidateTopics, ['subnetting', 'REST APIs']);

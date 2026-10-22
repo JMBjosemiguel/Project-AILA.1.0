@@ -86,7 +86,7 @@ export default function UserDetailDialog({ userId, onClose }) {
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Recent activity</div>
                 {detail.recentActivity?.length ? (
-                  <ActivityList activities={detail.recentActivity} />
+                  <ActivityList activities={detail.recentActivity} showQuizView={false} />
                 ) : <p className="text-sm text-ink-400">No recent activity.</p>}
               </div>
 

@@ -26,6 +26,7 @@ const {
   looksLikeTopicAnswer,
   cleanTopic,
   matchButtonTemplate,
+  isVagueReference,
 } = require('../utils/chatIntent');
 
 const MAX_HISTORY_FOR_CLASSIFIER = 8;
@@ -147,6 +148,7 @@ function emptyChatDecision() {
   return {
     type: 'chat',
     needsClarification: false,
+    clarificationReason: null,
     clarificationQuestion: null,
     candidateTopics: [],
     topic: null,
@@ -161,6 +163,7 @@ function resolvedDecision(type, { topic, quizType, itemCount, difficulty }) {
   return {
     type,
     needsClarification: false,
+    clarificationReason: null,
     clarificationQuestion: null,
     candidateTopics: [],
     topic,
@@ -171,6 +174,10 @@ function resolvedDecision(type, { topic, quizType, itemCount, difficulty }) {
   };
 }
 
+// `reason` ('no_topic' | 'ambiguous_topic') is exposed on the returned
+// decision so the caller (aiService.generateReply) can tell "nothing to go
+// on" apart from "several distinct things to choose between" — only the
+// former defers to a linked resource instead of actually asking the student.
 function clarificationDecision(type, { reason, candidateTopics = [], quizType, itemCount, difficulty }) {
   const noun = type === 'flashcards' ? 'flashcards' : 'quiz';
   const question = reason === 'ambiguous_topic'
@@ -180,6 +187,7 @@ function clarificationDecision(type, { reason, candidateTopics = [], quizType, i
   return {
     type,
     needsClarification: true,
+    clarificationReason: reason,
     clarificationQuestion: question,
     candidateTopics,
     topic: null,
@@ -219,7 +227,7 @@ async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null
   }
 
   if (pendingIntent && (pendingIntent.type === 'quiz' || pendingIntent.type === 'flashcards')) {
-    if (looksLikeTopicAnswer(prompt)) {
+    if (looksLikeTopicAnswer(prompt) && !isVagueReference(cleanTopic(prompt))) {
       return resolvedDecision(pendingIntent.type, {
         topic: cleanTopic(prompt),
         quizType: pendingIntent.quizType,
@@ -260,7 +268,12 @@ async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null
     difficulty: classification.difficulty,
   };
 
-  if (topicConfidence === 'clear' && typeof classification.topic === 'string' && classification.topic.trim()) {
+  if (
+    topicConfidence === 'clear'
+    && typeof classification.topic === 'string'
+    && classification.topic.trim()
+    && !isVagueReference(cleanTopic(classification.topic))
+  ) {
     return resolvedDecision(type, { topic: cleanTopic(classification.topic), ...params });
   }
 

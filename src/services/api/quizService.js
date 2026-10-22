@@ -78,6 +78,13 @@ export function getQuizAttempt(attemptId) {
   return apiClient.get(API_ENDPOINTS.quizzes.attempt(attemptId));
 }
 
+// Recent activity's "View" button — resolves a dashboard_activity_log row to
+// the attempt it refers to. Returns { attemptId }; the caller then opens
+// QuizRunner with reviewAttemptId, which fetches the review itself.
+export function getAttemptIdForActivity(activityId) {
+  return apiClient.get(API_ENDPOINTS.quizzes.attemptForActivity(activityId));
+}
+
 // Legacy one-shot submission — still used by the informal chatbot practice quiz.
 export function submitQuizAttempt(quizId, answers) {
   return apiClient.post(API_ENDPOINTS.quizzes.attempts(quizId), { answers });

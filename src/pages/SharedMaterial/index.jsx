@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, Copy, GraduationCap, Loader2, LogIn, Sparkles } from 'lucide-react';
+import { BookOpen, CheckCircle2, ClipboardList, Copy, GraduationCap, ListChecks, Loader2, LogIn, RotateCcw, Sparkles, XCircle } from 'lucide-react';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import EmptyState from '../../components/common/EmptyState';
 import MarkdownRenderer from '../../components/chatbot/MarkdownRenderer';
+import { useConfirm } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
-import { viewSharedMaterial, copySharedMaterial } from '../../services/api/shareService';
+import { viewSharedMaterial, copySharedMaterial, checkSharedQuizAnswers } from '../../services/api/shareService';
 
 const DIFFICULTY_LABEL = {
   beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced',
@@ -60,7 +61,131 @@ function SharedCourse({ data }) {
   );
 }
 
-function SharedQuiz({ data }) {
+function normalize(value) {
+  return (value ?? '').toString().trim().toLowerCase();
+}
+
+function QuizItemAnswer({ item, index, answer, onAnswer, graded }) {
+  const submitted = Boolean(graded);
+  const isCorrect = Boolean(graded?.isCorrect);
+  const hasOptions = item.options?.length > 0;
+
+  return (
+    <div className="border border-ink-100 rounded-xl p-3.5">
+      <p className="text-sm font-medium text-ink-800 mb-2.5">{index + 1}. {item.question}</p>
+
+      {hasOptions ? (
+        <div className="flex flex-col gap-1.5">
+          {item.options.map((option) => {
+            const selected = answer === option;
+            const showCorrect = submitted && normalize(option) === normalize(graded?.correctAnswer);
+            const showWrong = submitted && selected && !showCorrect;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onAnswer(option)}
+                disabled={submitted}
+                className={[
+                  'text-left text-sm px-3 py-2 min-h-[40px] rounded-lg border transition-colors',
+                  showCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : '',
+                  showWrong ? 'border-rose-400 bg-rose-50 text-rose-700' : '',
+                  !submitted && selected ? 'border-primary bg-primary-50 text-primary' : '',
+                  !submitted && !selected ? 'border-ink-100 text-ink-600 hover:border-primary-300' : '',
+                  submitted && !showCorrect && !showWrong ? 'border-ink-100 text-ink-400' : '',
+                ].join(' ')}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={answer}
+          onChange={(event) => onAnswer(event.target.value)}
+          disabled={submitted}
+          placeholder="Type your answer"
+          className={[
+            'w-full text-sm px-3 py-2 min-h-[40px] rounded-lg border outline-none',
+            submitted
+              ? isCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-rose-400 bg-rose-50 text-rose-700'
+              : 'border-ink-100 focus:border-primary-300',
+          ].join(' ')}
+        />
+      )}
+
+      {submitted && (
+        <div className="mt-2.5 flex items-start gap-1.5 text-xs">
+          {isCorrect ? (
+            <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+          ) : (
+            <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
+          )}
+          <span className="text-ink-500">
+            <span className="font-semibold text-ink-700">{isCorrect ? 'Correct. ' : 'Incorrect. '}</span>
+            {!isCorrect && (
+              <span className="font-medium text-ink-700">Your answer: {graded.yourAnswer || '(blank)'}. Correct answer: {graded.correctAnswer}. </span>
+            )}
+            {graded.explanation}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SharedQuiz({ data, token }) {
+  const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState(null);
+  const confirm = useConfirm();
+
+  const setAnswer = (index, value) => {
+    if (result) return;
+    setAnswers((current) => ({ ...current, [index]: value }));
+  };
+
+  const handleCheck = async () => {
+    if (checking) return;
+    const payload = data.items
+      .map((_, index) => ({ index, answer: (answers[index] || '').trim() }))
+      .filter((a) => a.answer);
+    const unanswered = data.items.length - payload.length;
+
+    if (unanswered > 0) {
+      const ok = await confirm({
+        title: 'Check anyway?',
+        message: `You have ${unanswered} unanswered question${unanswered === 1 ? '' : 's'}. Check anyway?`,
+        confirmLabel: 'Check anyway',
+        variant: 'primary',
+      });
+      if (!ok) return;
+    }
+
+    setChecking(true);
+    setCheckError(null);
+    try {
+      const response = await checkSharedQuizAnswers(token, payload);
+      setResult(response);
+    } catch (err) {
+      // Inline, not a toast — a retried click after a failure (e.g. the
+      // backend waking up) must replace the message, never stack another one.
+      setCheckError(err.message || 'Could not check your answers right now.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleTryAgain = () => {
+    setAnswers({});
+    setResult(null);
+    setCheckError(null);
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -71,24 +196,47 @@ function SharedQuiz({ data }) {
         <p className="text-sm text-ink-500 mt-1">
           {DIFFICULTY_LABEL[data.difficulty] || data.difficulty} · {data.questionCount} question{data.questionCount === 1 ? '' : 's'}
         </p>
-        <p className="text-xs text-ink-400 mt-1">Copy this quiz to your materials to take it and get graded.</p>
+        <p className="text-xs text-ink-400 mt-1 italic">Practice only — your answers aren&apos;t saved and don&apos;t count toward any AILA progress.</p>
       </div>
+
+      {result && (
+        <Card className="text-center">
+          <p className="text-3xl font-display font-extrabold text-ink-800">{result.score}/{result.total}</p>
+          <p className="text-sm text-ink-500 mt-1">{result.percent}% correct</p>
+        </Card>
+      )}
+
       <Card>
         <div className="flex flex-col gap-4">
-          {data.items.map((item, i) => (
-            <div key={i} className="border border-ink-100 rounded-xl p-3.5">
-              <p className="text-sm font-medium text-ink-800 mb-2">{i + 1}. {item.question}</p>
-              {item.options?.length > 0 && (
-                <ul className="flex flex-col gap-1.5">
-                  {item.options.map((opt, oi) => (
-                    <li key={oi} className="text-sm text-ink-500 px-3 py-1.5 rounded-lg border border-ink-100">{opt}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          {data.items.map((item, index) => (
+            <QuizItemAnswer
+              key={index}
+              item={item}
+              index={index}
+              answer={answers[index] || ''}
+              onAnswer={(value) => setAnswer(index, value)}
+              graded={result?.results[index]}
+            />
           ))}
         </div>
       </Card>
+
+      {checkError && <p className="text-xs text-rose-600">{checkError}</p>}
+
+      {result ? (
+        <Button variant="outline" icon={<RotateCcw size={14} />} onClick={handleTryAgain} className="self-start">
+          Try Again
+        </Button>
+      ) : (
+        <Button
+          disabled={checking}
+          icon={checking ? <Loader2 size={14} className="animate-spin" /> : <ListChecks size={14} />}
+          onClick={handleCheck}
+          className="self-start"
+        >
+          {checking ? 'Checking...' : 'Check Answers'}
+        </Button>
+      )}
     </div>
   );
 }
@@ -146,18 +294,20 @@ export default function SharedMaterialPage({ token, isAuthenticated, onNavigate,
         {!loading && data && (
           <>
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-ink-400">Shared by {data.sharedBy} · read-only</p>
-              {isAuthenticated ? (
-                <Button size="sm" disabled={copying} icon={copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} onClick={handleCopy}>
-                  Copy to my materials
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" icon={<LogIn size={14} />} onClick={onGoToLogin}>
-                  Log in to copy
-                </Button>
+              <p className="text-xs text-ink-400">Shared by {data.sharedBy} · {data.shareType === 'quiz' ? 'practice quiz' : 'read-only'}</p>
+              {data.shareType !== 'quiz' && (
+                isAuthenticated ? (
+                  <Button size="sm" disabled={copying} icon={copying ? <Loader2 size={14} className="animate-spin" /> : <Copy size={14} />} onClick={handleCopy}>
+                    Copy to my materials
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" icon={<LogIn size={14} />} onClick={onGoToLogin}>
+                    Log in to copy
+                  </Button>
+                )
               )}
             </div>
-            {data.shareType === 'subject' ? <SharedCourse data={data} /> : <SharedQuiz data={data} />}
+            {data.shareType === 'subject' ? <SharedCourse data={data} /> : <SharedQuiz data={data} token={token} />}
           </>
         )}
       </main>

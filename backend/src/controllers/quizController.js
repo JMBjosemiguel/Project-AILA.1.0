@@ -109,6 +109,11 @@ const getAttempt = asyncHandler(async (req, res) => {
   sendSuccess(res, attempt, 200, 'Quiz attempt retrieved.');
 });
 
+const getAttemptForActivity = asyncHandler(async (req, res) => {
+  const result = await quizService.getAttemptForActivity(req.auth.user.id, req.params.activityId);
+  sendSuccess(res, result, 200, 'Attempt resolved.');
+});
+
 const deleteAttempt = asyncHandler(async (req, res) => {
   await quizService.deleteAttempt(req.auth.user.id, req.params.attemptId);
   sendSuccess(res, null, 200, 'Quiz attempt deleted.');
@@ -129,5 +134,6 @@ module.exports = {
   search,
   listChatQuizzes,
   getAttempt,
+  getAttemptForActivity,
   deleteAttempt,
 };

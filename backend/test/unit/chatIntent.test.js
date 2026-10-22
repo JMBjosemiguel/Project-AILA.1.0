@@ -14,6 +14,7 @@ const {
   looksLikeTopicAnswer,
   cleanTopic,
   matchButtonTemplate,
+  isVagueReference,
 } = require('../../src/utils/chatIntent');
 
 test('chatIntent (deterministic helpers)', async (t) => {
@@ -130,6 +131,32 @@ test('chatIntent (deterministic helpers)', async (t) => {
 
   await t.test('matchButtonTemplate never matches a message merely ABOUT a quiz', () => {
     for (const msg of ['what is a quiz', 'generate a quiz', 'I need a 10 item quiz', 'can you make flashcards about Scientists']) {
+      assert.equal(matchButtonTemplate(msg), null, msg);
+    }
+  });
+
+  await t.test('isVagueReference flags bare pronouns and document back-references, never a real topic', () => {
+    for (const topic of ['this', 'that', 'it', 'these', 'those', 'the above', 'This', 'THAT', '  it  ', 'this document', 'that file', 'the pdf', 'the slides', 'these modules', 'the material', 'the resource', 'the attachment', '', '   ', null, undefined]) {
+      assert.equal(isVagueReference(topic), true, JSON.stringify(topic));
+    }
+    for (const topic of ['subnetting', 'REST APIs', "the 'this' keyword in JavaScript", 'photosynthesis', 'TCP and UDP', 'the above-ground biomass of a forest', 'document management systems']) {
+      assert.equal(isVagueReference(topic), false, topic);
+    }
+  });
+
+  // This is the exact case from the reported bug: the chat UI's own
+  // "Generate a quiz about <topic>" button template filled in with a bare
+  // pronoun must NOT be accepted as the topic — it has to fall through to
+  // the classifier instead (see chatIntentService), which can actually try
+  // to resolve it from conversation context or a linked resource.
+  await t.test('matchButtonTemplate does not match when the typed-in topic is a vague reference — falls through instead of accepting it verbatim', () => {
+    for (const msg of [
+      'Generate a 10-item multiple choice quiz about this',
+      'Generate a 10-item multiple choice quiz about that',
+      'Generate a 10-item multiple choice quiz about this document',
+      'Generate 10 flashcards about it',
+      'Generate 10 flashcards about the attached file',
+    ]) {
       assert.equal(matchButtonTemplate(msg), null, msg);
     }
   });

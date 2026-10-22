@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
     startAttempt: (id) => `/quizzes/${id}/attempts/start`,
     history: '/quizzes/history',
     attempt: (id) => `/quizzes/attempts/${id}`,
+    attemptForActivity: (activityId) => `/quizzes/activity/${activityId}/attempt`,
     attemptAnswers: (id) => `/quizzes/attempts/${id}/answers`,
     submitAttempt: (id) => `/quizzes/attempts/${id}/submit`,
   },
@@ -56,6 +57,7 @@ export const API_ENDPOINTS = {
   share: {
     view: (token) => `/share/${token}`,
     copy: (token) => `/share/${token}/copy`,
+    check: (token) => `/share/${token}/check`,
   },
   chatbot: {
     conversations: '/chat/conversations',

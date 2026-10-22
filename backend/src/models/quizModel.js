@@ -249,6 +249,42 @@ async function getAttemptById(attemptId, userId, connection = null) {
   return rows[0] || null;
 }
 
+// --- Recent-activity "View" button (dashboard_activity_log -> attempt) ----
+
+// dashboard_activity_log has no attempt_id column — logActivity() stores the
+// quiz's own id as reference_id (see submitAttempt in quizService.js), the
+// same value for every retake of that quiz. Ownership-scoped so an activity
+// id belonging to another user is simply not found, same as every other
+// lookup in this file.
+async function getActivityLogEntry(activityId, userId, connection = null) {
+  const rows = await execute(
+    connection,
+    `SELECT id, activity_type, reference_id, created_at
+       FROM dashboard_activity_log
+      WHERE id = ? AND user_id = ?
+      LIMIT 1`,
+    [activityId, userId]
+  );
+  return rows[0] || null;
+}
+
+// The attempt that produced a given quiz_completed activity row: this user's
+// SUBMITTED attempt for that quiz with completed_at closest to the activity's
+// created_at. A "most recent attempt" lookup would be wrong once a quiz has
+// been retaken, since each submission logs its own activity row at its own
+// timestamp.
+async function findAttemptForQuizActivity(quizId, userId, activityCreatedAt, connection = null) {
+  const rows = await execute(
+    connection,
+    `SELECT id FROM quiz_attempts
+      WHERE quiz_id = ? AND user_id = ? AND status = 'submitted'
+      ORDER BY ABS(TIMESTAMPDIFF(SECOND, completed_at, ?)) ASC, completed_at DESC
+      LIMIT 1`,
+    [quizId, userId, activityCreatedAt]
+  );
+  return rows[0]?.id ?? null;
+}
+
 // Row-locking read used inside the submit transaction to serialize concurrent
 // submissions of the same attempt.
 async function lockAttemptStatus(attemptId, connection) {
@@ -499,6 +535,8 @@ module.exports = {
   findActiveAttempt,
   createInProgressAttempt,
   getAttemptById,
+  getActivityLogEntry,
+  findAttemptForQuizActivity,
   lockAttemptStatus,
   getSavedAnswers,
   upsertAttemptAnswer,

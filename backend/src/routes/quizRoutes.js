@@ -13,6 +13,7 @@ const {
   saveAnswerValidator,
   chatMessageIdParamValidator,
   searchQuizzesValidator,
+  activityIdParamValidator,
 } = require('../validators/quizValidator');
 
 const router = express.Router();
@@ -39,6 +40,11 @@ router.post('/attempts/:attemptId/submit', authenticate, attemptIdParamValidator
 
 router.get('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.getAttempt);
 router.delete('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.deleteAttempt);
+
+// Recent activity's "View" button (quiz rows only) — resolves a
+// dashboard_activity_log row to the attempt it refers to; the frontend then
+// fetches the review via the existing GET /attempts/:attemptId above.
+router.get('/activity/:activityId/attempt', authenticate, activityIdParamValidator, validateRequest, quizController.getAttemptForActivity);
 
 // Legacy one-shot submission — kept for backward compatibility.
 router.post('/:quizId/attempts', authenticate, quizIdParamValidator, submitAttemptValidator, validateRequest, quizController.submitLegacyAttempt);

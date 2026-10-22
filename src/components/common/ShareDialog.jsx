@@ -88,7 +88,9 @@ export default function ShareDialog({ materialType, materialId, materialName, on
                 <Lock size={14} className="text-ink-400" /> This material is <span className="font-semibold">private</span>.
               </div>
               <p className="text-xs text-ink-400 mb-4">
-                Create an unlisted link. Anyone with the link can view a read-only copy — no scores, no answer keys, no personal data. You can revoke it any time.
+                {materialType === 'quiz'
+                  ? "Create an unlisted link. Anyone with the link can view and answer the quiz — no account needed, and their answers aren't saved. No personal data is shared. You can revoke it any time."
+                  : 'Create an unlisted link. Anyone with the link can view a read-only copy — no scores, no answer keys, no personal data. You can revoke it any time.'}
               </p>
               <Button full disabled={busy} icon={busy ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} onClick={handleCreate}>
                 Create share link

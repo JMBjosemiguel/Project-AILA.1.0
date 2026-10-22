@@ -32,4 +32,13 @@ const copy = asyncHandler(async (req, res) => {
   sendSuccess(res, data, 201, 'Copied to your materials.');
 });
 
-module.exports = { status, create, revoke, view, copy };
+// POST /api/share/:token/check — PUBLIC, stateless: grade answers to a shared
+// quiz without creating an attempt or recording anything. Never authenticated
+// (no `authenticate` on this route — see materialShareRoutes.js), so any
+// Authorization header sent is simply never read.
+const check = asyncHandler(async (req, res) => {
+  const data = await materialShareService.checkSharedQuizAnswers(req.params.token, req.body.answers);
+  sendSuccess(res, data, 200, 'Answers checked.');
+});
+
+module.exports = { status, create, revoke, view, copy, check };

@@ -204,6 +204,124 @@ test('chatIntentService.classifyIntent', async (t) => {
     assert.equal(decision.quizType, null);
     assert.equal(decision.difficulty, null);
   });
+
+  // BUG 1: the classifier (low reasoning) is not reliable enough to trust
+  // alone for a count/type already spelled out in the CURRENT message — a
+  // deterministic read of the message itself must win, regardless of what
+  // the classifier echoed back. This is what was silently losing an
+  // explicit "20 items" down to the 10-item default when the vague-
+  // reference path fell back to a linked resource (aiService.
+  // generateFromLinkedResource trusts decision.itemCount completely).
+  await t.test('an explicit item count in the message wins over the classifier even when the classifier missed it (vague-topic / no_topic case)', async () => {
+    stubClassifierResponse({ intent: 'REQUEST_QUIZ', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' });
+    const service = loadService();
+
+    const decision = await service.classifyIntent({ prompt: 'make me a 20 items quiz about this', priorMessages: [] });
+
+    assert.equal(decision.needsClarification, true);
+    assert.equal(decision.clarificationReason, 'no_topic');
+    assert.equal(decision.itemCount, 20, 'the explicit count in the message is never lost to the classifier missing it');
+  });
+
+  await t.test('an explicit item count in the message wins even when the classifier returns a different (wrong) count', async () => {
+    stubClassifierResponse({ intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: 'DNS', quizType: '', itemCount: 5, difficulty: '' });
+    const service = loadService();
+
+    const decision = await service.classifyIntent({ prompt: 'quiz me about DNS, 20 questions', priorMessages: [] });
+
+    assert.equal(decision.itemCount, 20);
+  });
+
+  await t.test('an explicit quiz type in the message wins over the classifier', async () => {
+    stubClassifierResponse({ intent: 'REQUEST_QUIZ', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' });
+    const service = loadService();
+
+    const decision = await service.classifyIntent({ prompt: 'make me a true or false quiz about this', priorMessages: [] });
+
+    assert.equal(decision.quizType, 'true_false');
+  });
+
+  // BUG 2a: "another one" never says "quiz"/"flashcards" itself, so without
+  // this it would never reach the classifier at all and would silently fall
+  // to normal chat (see mentionsQuiz's gate). It must resolve from the
+  // PREVIOUS quiz/flashcards message's own stored settings, not a fresh
+  // guess, and never call the classifier to do it.
+  function quizRow(topic, quizType, itemCount, sourceResourceId = null) {
+    return {
+      sender: 'bot',
+      message_type: 'quiz',
+      message_text: JSON.stringify({ topic, quizType, items: Array.from({ length: itemCount }, () => ({})), sourceResourceId }),
+    };
+  }
+
+  await t.test('"another one" right after a quiz resolves to a fresh quiz with the SAME topic/type/count, no classifier call', async () => {
+    let called = false;
+    global.fetch = async () => { called = true; return jsonResponse(200, {}); };
+    const service = loadService();
+
+    const decision = await service.classifyIntent({
+      prompt: 'another one',
+      priorMessages: [
+        { sender: 'user', message_type: 'text', message_text: 'quiz me about subnetting' },
+        quizRow('subnetting', 'multiple_choice', 10),
+      ],
+    });
+
+    assert.equal(decision.type, 'quiz');
+    assert.equal(decision.needsClarification, false);
+    assert.equal(decision.topic, 'subnetting');
+    assert.equal(decision.quizType, 'multiple_choice');
+    assert.equal(decision.itemCount, 10);
+    assert.equal(decision.sourceResourceId, null);
+    assert.equal(called, false, 'resolving a follow-up is fully deterministic — no Gemini call needed');
+  });
+
+  await t.test('"another one" carries forward the resource a quiz was grounded in', async () => {
+    const service = loadService();
+
+    const decision = await service.classifyIntent({
+      prompt: 'one more',
+      priorMessages: [quizRow('Networking Notes.pdf', 'multiple_choice', 10, 42)],
+    });
+
+    assert.equal(decision.sourceResourceId, 42);
+  });
+
+  await t.test('"another one" works for flashcards too', async () => {
+    const service = loadService();
+
+    const decision = await service.classifyIntent({
+      prompt: 'again',
+      priorMessages: [{
+        sender: 'bot', message_type: 'flashcards',
+        message_text: JSON.stringify({ topic: 'OS scheduling', cards: [{}, {}, {}] }),
+      }],
+    });
+
+    assert.equal(decision.type, 'flashcards');
+    assert.equal(decision.topic, 'OS scheduling');
+    assert.equal(decision.itemCount, 3);
+  });
+
+  await t.test('"another one" with NO previous quiz/flashcards falls through to normal chat, never fabricates one', async () => {
+    const service = loadService();
+
+    const decision = await service.classifyIntent({
+      prompt: 'another one',
+      priorMessages: [{ sender: 'bot', message_type: 'text', message_text: 'Sure, happy to help with that.' }],
+    });
+
+    assert.equal(decision.type, 'chat');
+    assert.equal(decision.needsClarification, false);
+  });
+
+  await t.test('"another one" as the very first message (no history at all) falls through to normal chat', async () => {
+    const service = loadService();
+
+    const decision = await service.classifyIntent({ prompt: 'another one', priorMessages: [] });
+
+    assert.equal(decision.type, 'chat');
+  });
 });
 
 test('chatIntentService INTENT_SCHEMA', async (t) => {

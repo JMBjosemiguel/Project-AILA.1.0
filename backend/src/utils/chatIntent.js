@@ -93,6 +93,17 @@ function isVagueReference(topic) {
   return VAGUE_REFERENCE_PATTERN.test(topic.trim());
 }
 
+// A short "do that again" right after AILA generated a quiz/flashcards never
+// says "quiz" or "flashcards" itself, so it would otherwise never reach the
+// classifier at all (see mentionsQuiz below) and fall straight to normal
+// chat. Anchored to the WHOLE message — a real sentence that happens to
+// contain "again" elsewhere never matches.
+const QUIZ_FOLLOWUP_PATTERN = /^(another one|one more|again|another (quiz|one|set|round)|more (questions|items|flashcards|cards)|do (it|that) again)\s*(please)?[.!]?$/i;
+
+function isQuizFollowupPhrase(message) {
+  return QUIZ_FOLLOWUP_PATTERN.test(String(message || '').trim());
+}
+
 // Exact-template fast path for the chat's own "Generate Quiz" / "Generate
 // Flashcards" buttons (see ChatInput.jsx's useTemplate() calls) — a message
 // that IS the button's template with a topic typed in is unambiguous, so it
@@ -146,4 +157,5 @@ module.exports = {
   cleanTopic,
   matchButtonTemplate,
   isVagueReference,
+  isQuizFollowupPhrase,
 };

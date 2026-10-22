@@ -418,4 +418,147 @@ test('chatbot quiz intent', async (t) => {
 
     assert.equal(result.messageType, 'text');
   });
+
+  // BUG 1 — an explicit item count stated in the current message must survive
+  // all the way to generation, even on the vague-reference / resource-
+  // fallback path, regardless of what the classifier itself extracted.
+  await t.test('BUG FIX: "make me a 20 items quiz about this" with a linked resource keeps the requested 20 items', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} Big Notes`, 'Subnets divide a network into smaller segments.');
+    const { aiService, calls } = installGeminiStub({
+      // The classifier missing the count entirely (itemCount: 0) is exactly
+      // the failure mode this fixes — the deterministic extractor must win.
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} Big Notes`, quizType: 'multiple_choice', items: Array.from({ length: 20 }, (_, i) => (
+        { question: `Q${i}`, options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' }
+      )) },
+    });
+
+    const result = await aiService.generateChatResponse({
+      userId: A.id, message: 'make me a 20 items quiz about this', conversationId: null, resourceId,
+    });
+
+    assert.equal(result.messageType, 'quiz');
+    const quizCall = calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.match(JSON.stringify(quizCall), /20-item/, 'the requested count must reach the generation prompt, not the 10-item default');
+  });
+
+  // BUG 2 — "another one" after a quiz/flashcards card.
+  await t.test('BUG FIX: "another one" after a quiz regenerates one with the same topic/settings, no classifier call', async () => {
+    const stub1 = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: `${TAG} subnetting`, quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} subnetting`, quizType: 'multiple_choice', items: [
+        { question: 'Q1', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+        { question: 'Q2', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const first = await stub1.aiService.generateChatResponse({
+      userId: A.id, message: `Quiz me about ${TAG} subnetting`, conversationId: null,
+    });
+    assert.equal(first.messageType, 'quiz');
+    assert.equal(first.data.items.length, 2);
+
+    // Deliberately no `classify` stub — if the follow-up incorrectly fell
+    // through to the classifier instead of resolving deterministically,
+    // installGeminiStub's own guard throws instead of silently passing.
+    const stub2 = installGeminiStub({
+      quiz: { topic: `${TAG} subnetting`, quizType: 'multiple_choice', items: [
+        { question: 'Q3', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+        { question: 'Q4', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const second = await stub2.aiService.generateChatResponse({
+      userId: A.id, message: 'another one', conversationId: first.conversationId,
+    });
+
+    assert.equal(second.messageType, 'quiz');
+    assert.equal(second.data.topic, `${TAG} subnetting`);
+    const quizCall = stub2.calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.match(JSON.stringify(quizCall), /2-item/, 'the remembered item count (2) is reused, not the 10-item default');
+    assert.equal(
+      stub2.calls.some((c) => (c.systemInstruction || '').includes('intent classifier for AILA')),
+      false,
+      'a recognized follow-up resolves deterministically — the classifier is never called'
+    );
+  });
+
+  await t.test('BUG FIX: "another one" after a RESOURCE-grounded quiz regenerates from that same resource', async () => {
+    const resourceId = await makeResourceWithText(A.id, `${TAG} Followup Notes`, 'A thread is the smallest unit of CPU scheduling.');
+    const stub1 = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} Followup Notes`, quizType: 'multiple_choice', items: [
+        { question: 'Q1', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const first = await stub1.aiService.generateChatResponse({
+      userId: A.id, message: 'quiz me about this', conversationId: null, resourceId,
+    });
+    assert.equal(first.messageType, 'quiz');
+
+    const stub2 = installGeminiStub({
+      quiz: { topic: `${TAG} Followup Notes`, quizType: 'multiple_choice', items: [
+        { question: 'Q2', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const second = await stub2.aiService.generateChatResponse({
+      userId: A.id, message: 'one more', conversationId: first.conversationId,
+    });
+
+    assert.equal(second.messageType, 'quiz');
+    const quizCall = stub2.calls.find((c) => (c.systemInstruction || '').includes('You generate college quizzes'));
+    assert.match(JSON.stringify(quizCall), /smallest unit of CPU scheduling/, 'the follow-up must be grounded in the SAME document again');
+  });
+
+  await t.test('BUG FIX: "another one" with no previous quiz/flashcards in the conversation falls through to normal chat', async () => {
+    const stub1 = installGeminiStub({ chat: 'Hi! How can I help today?' });
+    const first = await stub1.aiService.generateChatResponse({ userId: A.id, message: 'hello', conversationId: null });
+    assert.equal(first.messageType, 'text');
+
+    const stub2 = installGeminiStub({ chat: "I'm not sure what you'd like another one of — could you clarify?" });
+    const second = await stub2.aiService.generateChatResponse({ userId: A.id, message: 'another one', conversationId: first.conversationId });
+
+    assert.equal(second.messageType, 'text');
+    assert.doesNotMatch(second.response, /\[Generated/);
+  });
+
+  await t.test('BUG FIX: the history summary (both to the classifier and to normal chat) carries the ACTUAL item count', async () => {
+    const stub1 = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: `${TAG} DNS`, quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} DNS`, quizType: 'multiple_choice', items: [
+        { question: 'Q1', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+        { question: 'Q2', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+        { question: 'Q3', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const first = await stub1.aiService.generateChatResponse({ userId: A.id, message: `Quiz me about ${TAG} DNS`, conversationId: null });
+    assert.equal(first.data.items.length, 3);
+
+    const stub2 = installGeminiStub({
+      classify: { intent: 'NORMAL_CHAT', topicConfidence: 'none', topic: '', quizType: '', itemCount: 0, difficulty: '' },
+      chat: 'It covers the basics well.',
+    });
+    await stub2.aiService.generateChatResponse({ userId: A.id, message: 'was that quiz hard to make?', conversationId: first.conversationId });
+
+    const classifyCall = stub2.calls.find((c) => (c.systemInstruction || '').includes('intent classifier for AILA'));
+    const classifyCallText = JSON.stringify(classifyCall);
+    assert.match(classifyCallText, /3-item quiz about/, 'the classifier sees the real count, not a guess');
+    assert.match(classifyCallText, new RegExp(`${TAG} DNS`), 'and the right topic');
+  });
+
+  await t.test('BUG FIX: a normal-chat reply that echoes a bracketed history placeholder is sanitized before reaching the student', async () => {
+    const stub1 = installGeminiStub({
+      classify: { intent: 'REQUEST_QUIZ', topicConfidence: 'clear', topic: `${TAG} REST`, quizType: '', itemCount: 0, difficulty: '' },
+      quiz: { topic: `${TAG} REST`, quizType: 'multiple_choice', items: [
+        { question: 'Q1', options: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'x' },
+      ] },
+    });
+    const first = await stub1.aiService.generateChatResponse({ userId: A.id, message: `Quiz me about ${TAG} REST`, conversationId: null });
+
+    const stub2 = installGeminiStub({
+      chat: `Sure! [Generated a 20-item multiple_choice quiz about "${TAG} REST"] Let me know if you want anything else.`,
+    });
+    const second = await stub2.aiService.generateChatResponse({ userId: A.id, message: 'what did you just make?', conversationId: first.conversationId });
+
+    assert.equal(second.messageType, 'text');
+    assert.doesNotMatch(second.response, /\[Generated/, 'the bracketed placeholder must never reach the student even if Gemini echoes it verbatim');
+  });
 });

@@ -15,6 +15,7 @@ const {
   cleanTopic,
   matchButtonTemplate,
   isVagueReference,
+  isQuizFollowupPhrase,
 } = require('../../src/utils/chatIntent');
 
 test('chatIntent (deterministic helpers)', async (t) => {
@@ -158,6 +159,15 @@ test('chatIntent (deterministic helpers)', async (t) => {
       'Generate 10 flashcards about the attached file',
     ]) {
       assert.equal(matchButtonTemplate(msg), null, msg);
+    }
+  });
+
+  await t.test('isQuizFollowupPhrase matches short "do that again" phrasings, never a real sentence', () => {
+    for (const msg of ['another one', 'Another one!', 'one more', 'again', 'another quiz', 'another quiz.', 'more questions', 'more flashcards', 'do it again', 'do that again', 'another one please']) {
+      assert.equal(isQuizFollowupPhrase(msg), true, msg);
+    }
+    for (const msg of ['', 'another one about photosynthesis', 'I have a quiz again tomorrow', 'quiz me about this again', 'what is a quiz']) {
+      assert.equal(isQuizFollowupPhrase(msg), false, msg);
     }
   });
 });

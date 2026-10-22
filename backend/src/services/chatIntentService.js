@@ -27,6 +27,9 @@ const {
   cleanTopic,
   matchButtonTemplate,
   isVagueReference,
+  isQuizFollowupPhrase,
+  extractExplicitQuizType,
+  extractExplicitItemCount,
 } = require('../utils/chatIntent');
 
 const MAX_HISTORY_FOR_CLASSIFIER = 8;
@@ -109,16 +112,59 @@ const INTENT_SCHEMA = {
   required: ['intent', 'topicConfidence'],
 };
 
-function summarizeForClassifier(row) {
-  if (row.message_type === 'text') return row.message_text;
+// Parses a stored quiz/flashcards chat message back into the settings it was
+// generated with — null for anything else (plain text, or unparseable JSON).
+// `sourceResourceId` is set by aiService.generateFromLinkedResource on the
+// object before it's stringified, so a document-grounded quiz/flashcards
+// message can be told apart from a plain-topic one later (see
+// findLastGeneratedItem below — the "another one" follow-up fix).
+function parseGeneratedRow(row) {
+  if (row.message_type !== 'quiz' && row.message_type !== 'flashcards') return null;
   try {
     const parsed = JSON.parse(row.message_text);
-    if (row.message_type === 'quiz') return `[Generated a quiz about "${parsed.topic}"]`;
-    if (row.message_type === 'flashcards') return `[Generated flashcards about "${parsed.topic}"]`;
+    const itemCount = row.message_type === 'quiz'
+      ? (Array.isArray(parsed.items) ? parsed.items.length : null)
+      : (Array.isArray(parsed.cards) ? parsed.cards.length : null);
+    return {
+      type: row.message_type,
+      topic: parsed.topic || null,
+      quizType: row.message_type === 'quiz' ? (parsed.quizType || null) : null,
+      itemCount,
+      sourceResourceId: parsed.sourceResourceId || null,
+    };
   } catch {
-    // fall through
+    return null;
+  }
+}
+
+// The real item count (not guessed) keeps this placeholder from being the
+// thing Gemini quotes back with the WRONG count if it ever paraphrases this
+// line in a later reply (see aiService.callGeminiChat's own sanitizing for
+// the other half of that fix).
+function summarizeForClassifier(row) {
+  if (row.message_type === 'text') return row.message_text;
+  const generated = parseGeneratedRow(row);
+  if (generated) {
+    const countPrefix = generated.itemCount ? `${generated.itemCount}-item ` : '';
+    return row.message_type === 'quiz'
+      ? `[Generated a ${countPrefix}quiz about "${generated.topic}"]`
+      : `[Generated ${countPrefix}flashcards about "${generated.topic}"]`;
   }
   return '[Generated interactive content]';
+}
+
+// "Another one" / "one more" right after AILA generated a quiz or flashcards
+// means "do that again" — only when the MOST RECENT bot message (whatever it
+// is) was actually a quiz/flashcards. A plain chat reply in between means the
+// quiz is no longer "the previous AILA message", so this intentionally does
+// not search further back.
+function findLastGeneratedItem(priorMessages) {
+  for (let i = priorMessages.length - 1; i >= 0; i -= 1) {
+    const row = priorMessages[i];
+    if (row.sender === 'user') continue;
+    return parseGeneratedRow(row);
+  }
+  return null;
 }
 
 async function runClassifier(prompt, priorMessages) {
@@ -155,11 +201,16 @@ function emptyChatDecision() {
     quizType: null,
     itemCount: null,
     difficulty: null,
+    sourceResourceId: null,
     nextPendingIntent: null,
   };
 }
 
-function resolvedDecision(type, { topic, quizType, itemCount, difficulty }) {
+// `sourceResourceId` is only ever set by the "another one" follow-up path
+// below (recovered from the previous quiz/flashcards message) — every other
+// caller of resolvedDecision leaves it null, meaning "generate from the
+// topic string", same as before this field existed.
+function resolvedDecision(type, { topic, quizType, itemCount, difficulty, sourceResourceId = null }) {
   return {
     type,
     needsClarification: false,
@@ -170,6 +221,7 @@ function resolvedDecision(type, { topic, quizType, itemCount, difficulty }) {
     quizType: normalizeQuizType(quizType),
     itemCount: itemCount ? clampCount(itemCount) : null,
     difficulty: normalizeDifficulty(difficulty),
+    sourceResourceId,
     nextPendingIntent: null,
   };
 }
@@ -194,6 +246,7 @@ function clarificationDecision(type, { reason, candidateTopics = [], quizType, i
     quizType: normalizeQuizType(quizType),
     itemCount: itemCount ? clampCount(itemCount) : null,
     difficulty: normalizeDifficulty(difficulty),
+    sourceResourceId: null,
     nextPendingIntent: {
       type,
       quizType: normalizeQuizType(quizType),
@@ -240,6 +293,29 @@ async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null
     // pending_intent unless this classification asks for clarification again.
   }
 
+  // "Another one" / "one more" never says "quiz" or "flashcards" itself, so
+  // without this it would never even reach the mentionsQuiz gate below and
+  // would silently fall to normal chat. Resolved deterministically from the
+  // previous quiz/flashcards message's own stored settings — not re-asked of
+  // the classifier — so "same topic/resource, same settings" is exact rather
+  // than an LLM's guess from a one-line history summary. extractExplicit*
+  // still takes priority over the remembered value on the rare phrasing that
+  // both matches the follow-up pattern AND states its own count/type.
+  if (isQuizFollowupPhrase(prompt)) {
+    const last = findLastGeneratedItem(priorMessages);
+    if (last) {
+      return resolvedDecision(last.type, {
+        topic: last.topic,
+        quizType: extractExplicitQuizType(prompt) || last.quizType,
+        itemCount: extractExplicitItemCount(prompt) || last.itemCount,
+        difficulty: null,
+        sourceResourceId: last.sourceResourceId,
+      });
+    }
+    // Nothing to follow up on — "another one" alone doesn't mention
+    // quiz/flashcards either, so the gate below correctly sends it to chat.
+  }
+
   if (!mentionsQuiz(prompt) && !mentionsFlashcards(prompt)) {
     return emptyChatDecision();
   }
@@ -262,9 +338,17 @@ async function classifyIntent({ prompt, priorMessages = [], pendingIntent = null
   }
 
   const topicConfidence = classification.topicConfidence;
+  // The classifier (low reasoning, asked to just echo back a number/word
+  // already present in the message) isn't reliable enough to trust alone —
+  // a deterministic regex read of the CURRENT message wins whenever it finds
+  // one explicitly stated, exactly like matchButtonTemplate's own itemCount
+  // already does. This is what was silently losing an explicit "20 items"
+  // down to the default count whenever the classifier's own extraction
+  // missed it (e.g. a vague-reference quiz resolved against a linked
+  // resource — see aiService.generateFromLinkedResource).
   const params = {
-    quizType: classification.quizType,
-    itemCount: classification.itemCount,
+    quizType: extractExplicitQuizType(prompt) || classification.quizType,
+    itemCount: extractExplicitItemCount(prompt) || classification.itemCount,
     difficulty: classification.difficulty,
   };
 

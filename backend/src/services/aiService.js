@@ -54,6 +54,10 @@ const SYSTEM_PROMPT = [
   '  that does not exist (e.g. "select the quiz tool from your dashboard") — the only real ways',
   '  are the Generate Quiz / Flashcards button below the chat, or just asking in words.',
   '- Never encourage cheating. Never generate harmful content.',
+  '- Earlier turns that generated a quiz or flashcards appear in this history as a bracketed',
+  '  note like [Generated a 10-item quiz about "X"] — that note is context for YOU only,',
+  '  describing what happened. Never quote, copy, or paraphrase that bracketed note back to',
+  '  the student; if they ask what you just made, describe it in your own words instead.',
   '',
   'Respond in a friendly, professional, academic tone — helpful tutor, not an automatic',
   'feature-trigger bot.',
@@ -105,17 +109,40 @@ function summarizeHistoryMessage(row) {
 
   try {
     const parsed = JSON.parse(row.message_text);
+    // The ACTUAL item count, never guessed — this is the exact string
+    // Gemini has been seen paraphrasing back into a normal chat reply with a
+    // wrong count attached, hence also the reply sanitizing in
+    // callGeminiChat below. Getting this right narrows that failure to "the
+    // placeholder leaked" rather than "and the count was wrong too".
     if (row.message_type === 'quiz') {
-      return `[Generated a ${parsed.quizType} quiz about "${parsed.topic}"]`;
+      const count = Array.isArray(parsed.items) ? parsed.items.length : null;
+      return count
+        ? `[Generated a ${count}-item ${parsed.quizType} quiz about "${parsed.topic}"]`
+        : `[Generated a ${parsed.quizType} quiz about "${parsed.topic}"]`;
     }
     if (row.message_type === 'flashcards') {
-      return `[Generated flashcards about "${parsed.topic}"]`;
+      const count = Array.isArray(parsed.cards) ? parsed.cards.length : null;
+      return count
+        ? `[Generated ${count} flashcards about "${parsed.topic}"]`
+        : `[Generated flashcards about "${parsed.topic}"]`;
     }
   } catch {
     // fall through to generic summary below
   }
 
   return '[Generated interactive content]';
+}
+
+// Backstop for callGeminiChat: normal chat must never actually print one of
+// the bracketed `[Generated ...]` history placeholders above — Gemini has
+// been seen paraphrasing one back verbatim (sometimes with a wrong count) as
+// though it were answering "what did you just make me". The system prompt
+// below already tells it not to; this strips one out if it slips through
+// anyway, rather than relying on the instruction alone.
+const HISTORY_PLACEHOLDER_PATTERN = /\[Generated[^\]]*\]/g;
+
+function stripHistoryPlaceholders(text) {
+  return typeof text === 'string' ? text.replace(HISTORY_PLACEHOLDER_PATTERN, '').trim() : text;
 }
 
 // Returns the resource-grounding text for the system instruction, plus a
@@ -193,7 +220,7 @@ async function callGeminiChat(prompt, priorMessages, userId, resourceId) {
     },
   });
 
-  const responseText = getResponseText(payload);
+  const responseText = stripHistoryPlaceholders(getResponseText(payload));
   return resourceNote === 'truncated' ? `${responseText}\n\n*${RESOURCE_TRUNCATED_NOTE}*` : responseText;
 }
 
@@ -248,6 +275,10 @@ async function generateFromLinkedResource(type, userId, resourceId, decision) {
       isDocumentSource: true,
     });
     if (resourceNote === 'truncated') quiz.sourceNote = RESOURCE_TRUNCATED_NOTE;
+    // Recorded on the stored message so a later "another one" follow-up (see
+    // chatIntentService.findLastGeneratedItem) knows to regenerate from this
+    // SAME document again, not from "resource.title" as a bare topic string.
+    quiz.sourceResourceId = resourceId;
     return { messageType: 'quiz', data: quiz, responseText: JSON.stringify(quiz), nextPendingIntent: null };
   }
 
@@ -257,6 +288,7 @@ async function generateFromLinkedResource(type, userId, resourceId, decision) {
     sourceContextText,
   });
   if (resourceNote === 'truncated') flashcards.sourceNote = RESOURCE_TRUNCATED_NOTE;
+  flashcards.sourceResourceId = resourceId;
   return { messageType: 'flashcards', data: flashcards, responseText: JSON.stringify(flashcards), nextPendingIntent: null };
 }
 
@@ -285,19 +317,30 @@ async function generateReply(prompt, priorMessages, userId, resourceId, pendingI
     };
   }
 
-  if (decision.type === 'quiz') {
-    const personalization = await buildChatQuizPersonalization(userId);
-    const quiz = await quizService.generateQuiz({
-      topic: decision.topic,
-      quizType: decision.quizType || 'multiple_choice',
-      itemCount: decision.itemCount || DEFAULT_ITEMS,
-      difficulty: decision.difficulty || personalization.preferredDifficulty || undefined,
-      personalizationText: personalization.text,
-    });
-    return { messageType: 'quiz', data: quiz, responseText: JSON.stringify(quiz), nextPendingIntent: null };
-  }
+  if (decision.type === 'quiz' || decision.type === 'flashcards') {
+    // A "another one" follow-up on a previously document-grounded quiz/
+    // flashcards carries the resource it came from (see
+    // generateFromLinkedResource above) — regenerate from that SAME
+    // document again rather than from its title as a bare topic string.
+    if (decision.sourceResourceId) {
+      const fromResource = await generateFromLinkedResource(decision.type, userId, decision.sourceResourceId, decision);
+      if (fromResource) return fromResource;
+      // That resource is gone/inaccessible now — fall through to a plain
+      // quiz/flashcards on the remembered topic below rather than failing.
+    }
 
-  if (decision.type === 'flashcards') {
+    if (decision.type === 'quiz') {
+      const personalization = await buildChatQuizPersonalization(userId);
+      const quiz = await quizService.generateQuiz({
+        topic: decision.topic,
+        quizType: decision.quizType || 'multiple_choice',
+        itemCount: decision.itemCount || DEFAULT_ITEMS,
+        difficulty: decision.difficulty || personalization.preferredDifficulty || undefined,
+        personalizationText: personalization.text,
+      });
+      return { messageType: 'quiz', data: quiz, responseText: JSON.stringify(quiz), nextPendingIntent: null };
+    }
+
     const flashcards = await quizService.generateFlashcards({
       topic: decision.topic,
       count: decision.itemCount || DEFAULT_ITEMS,

@@ -44,6 +44,21 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (form.year_level && (Number(form.year_level) < 1 || Number(form.year_level) > 4)) {
+      setError('Year level must be between 1 and 4.');
+      return;
+    }
+
+    if (!form.program.trim()) {
+      setError('Please enter your program.');
+      return;
+    }
+
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
@@ -154,7 +169,10 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
 
   return (
     <AuthLayout title="Create your account" subtitle="Set up your student profile">
-      <form className="flex flex-col gap-4" onSubmit={submit}>
+      {/* noValidate: the Year input's native min/max constraint would otherwise
+          silently block the browser's submit event (and our own validation
+          error message) in favor of an unstyled native tooltip. */}
+      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <AuthInput label="First name" icon={User} placeholder="First name" value={form.first_name} onChange={update('first_name')} />
           <AuthInput label="Last name" placeholder="Last name" value={form.last_name} onChange={update('last_name')} />
@@ -164,10 +182,10 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-3">
           <AuthInput label="Student number" icon={Hash} placeholder="Optional" value={form.student_number} onChange={update('student_number')} />
-          <AuthInput label="Year" type="number" min="1" max="6" placeholder="1" value={form.year_level} onChange={update('year_level')} />
+          <AuthInput label="Year" type="number" min="1" max="4" placeholder="1" value={form.year_level} onChange={update('year_level')} />
         </div>
 
-        <AuthInput label="Program (optional)" icon={GraduationCap} placeholder="Example: Bachelor of Science in Nursing" value={form.program} onChange={update('program')} />
+        <AuthInput label="Program" icon={GraduationCap} placeholder="Example: Bachelor of Science in Nursing" value={form.program} onChange={update('program')} />
 
         <AuthInput
           label="Password"

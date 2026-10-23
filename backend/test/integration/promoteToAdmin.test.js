@@ -30,6 +30,7 @@ async function registerUnverified(suffix) {
       email,
       password: 'ItestPassw0rd!',
       student_number: `IT-UV-${Date.now()}`.slice(0, 30),
+      program: 'Computer Science',
     },
   });
   if (reg.status !== 201) throw new Error(`register ${suffix} failed: ${reg.status} ${JSON.stringify(reg.json)}`);

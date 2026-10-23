@@ -26,6 +26,7 @@ async function registerRaw(email, extra = {}) {
       last_name: 'Verify',
       email,
       password: 'ItestPassw0rd!',
+      program: 'Computer Science',
       ...extra,
     },
   });

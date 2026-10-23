@@ -57,7 +57,7 @@ async function createStudent(tag, suffix) {
   // student_number column is limited to 30 chars by the register validator
   const studentNumber = `IT-${Math.random().toString(36).slice(2, 10)}-${suffix}`.slice(0, 30);
   const reg = await api('POST', '/auth/register', {
-    body: { first_name: 'ITest', last_name: suffix, email, password, student_number: studentNumber },
+    body: { first_name: 'ITest', last_name: suffix, email, password, student_number: studentNumber, program: 'Computer Science' },
   });
   if (reg.status !== 201) throw new Error(`register ${suffix} failed: ${reg.status} ${JSON.stringify(reg.json)}`);
   // Registration now leaves the account unverified until the emailed link is

@@ -93,6 +93,7 @@ test('student actions appear in the audit log', async (t) => {
         email,
         password: 'ItestPassw0rd!',
         student_number: `IT-VF-${Date.now()}`.slice(0, 30),
+        program: 'Computer Science',
       },
     });
     assert.equal(reg.status, 201, JSON.stringify(reg.json));

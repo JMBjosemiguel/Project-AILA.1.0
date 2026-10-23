@@ -10,11 +10,11 @@ const registerValidator = [
     .custom((value, { req }) => value === req.body.password)
     .withMessage('Password confirmation does not match.'),
   body('student_number').optional({ values: 'falsy' }).trim().isLength({ max: 30 }),
-  body('program').optional({ values: 'falsy' }).trim().isLength({ max: 150 }),
+  body('program').trim().notEmpty().withMessage('Please enter your program.').isLength({ max: 150 }),
   body('year_level')
-    .optional({ values: 'falsy' })
-    .isInt({ min: 1, max: 6 })
-    .withMessage('Year level must be between 1 and 6.'),
+    .optional({ values: 'null' })
+    .isInt({ min: 1, max: 4 })
+    .withMessage('Year level must be between 1 and 4.'),
 ];
 
 const loginValidator = [

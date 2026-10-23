@@ -161,25 +161,27 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
         </div>
 
         <AuthInput label="Email" icon={Mail} type="email" placeholder="you@university.edu" value={form.email} onChange={update('email')} />
-        <AuthInput label="Student number" icon={Hash} placeholder="Optional" value={form.student_number} onChange={update('student_number')} />
-        <AuthInput label="Program" icon={GraduationCap} placeholder="Optional" value={form.program} onChange={update('program')} />
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-3">
-          <AuthInput
-            label="Password"
-            icon={Lock}
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Min. 8 characters"
-            value={form.password}
-            onChange={update('password')}
-            rightElement={
-              <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="text-ink-400 hover:text-primary">
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            }
-          />
+          <AuthInput label="Student number" icon={Hash} placeholder="Optional" value={form.student_number} onChange={update('student_number')} />
           <AuthInput label="Year" type="number" min="1" max="6" placeholder="1" value={form.year_level} onChange={update('year_level')} />
         </div>
+
+        <AuthInput label="Program (optional)" icon={GraduationCap} placeholder="Example: Bachelor of Science in Nursing" value={form.program} onChange={update('program')} />
+
+        <AuthInput
+          label="Password"
+          icon={Lock}
+          type={showPassword ? 'text' : 'password'}
+          placeholder="Min. 8 characters"
+          value={form.password}
+          onChange={update('password')}
+          rightElement={
+            <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="text-ink-400 hover:text-primary">
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          }
+        />
 
         <AuthInput
           label="Confirm password"

@@ -121,7 +121,7 @@ describe('LoginPage', () => {
       expect(onGoToForgotPassword).toHaveBeenCalled();
     });
 
-    it('after a wrong email/password (401), a SECOND "Forgot password?" link appears under the error', async () => {
+    it('after a wrong email/password (401), only ONE "Forgot password?" link shows — under the error, not under the password field', async () => {
       const user = userEvent.setup();
       login.mockRejectedValue({ message: 'Invalid email or password.', details: null, status: 401 });
       render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={vi.fn()} />);
@@ -129,7 +129,11 @@ describe('LoginPage', () => {
       await fillAndSubmit(user);
 
       await waitFor(() => expect(screen.getByText('Invalid email or password.')).toBeInTheDocument());
-      expect(screen.getAllByRole('button', { name: /Forgot password\?/i })).toHaveLength(2);
+      const links = screen.getAllByRole('button', { name: /Forgot password\?/i });
+      expect(links).toHaveLength(1);
+      // The remaining link is the one rendered right after the error text,
+      // not the always-visible one under the password field.
+      expect(links[0].previousElementSibling).toHaveTextContent('Invalid email or password.');
     });
 
     it('does NOT add the extra link for the empty-fields validation message', async () => {

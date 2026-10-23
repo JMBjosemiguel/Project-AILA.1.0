@@ -92,11 +92,13 @@ export default function LoginPage({ onAuthenticated, onGoToRegister, onGoToForgo
           }
         />
 
-        <div className="flex justify-end -mt-2">
-          <button type="button" onClick={onGoToForgotPassword} className="text-xs font-semibold text-primary hover:underline">
-            Forgot password?
-          </button>
-        </div>
+        {!showForgotPasswordHint && (
+          <div className="flex justify-end -mt-2">
+            <button type="button" onClick={onGoToForgotPassword} className="text-xs font-semibold text-primary hover:underline">
+              Forgot password?
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="-mt-1 flex flex-col gap-1">

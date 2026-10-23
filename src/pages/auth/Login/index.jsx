@@ -5,7 +5,7 @@ import Button from '../../../components/common/Button';
 import { useAuth } from '../../../contexts/AuthContext';
 import AuthLayout from '../../../layouts/AuthLayout/AuthLayout';
 
-export default function LoginPage({ onAuthenticated, onGoToRegister }) {
+export default function LoginPage({ onAuthenticated, onGoToRegister, onGoToForgotPassword }) {
   const { login, resendVerification } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -13,6 +13,7 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [showForgotPasswordHint, setShowForgotPasswordHint] = useState(false);
   const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
   const [resendMessage, setResendMessage] = useState('');
   const [isWakingUp, setIsWakingUp] = useState(false);
@@ -22,10 +23,13 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
 
     if (!email.trim() || !password.trim()) {
       setError('Enter your email and password to continue.');
+      setNeedsVerification(false);
+      setShowForgotPasswordHint(false);
       return;
     }
 
     setNeedsVerification(false);
+    setShowForgotPasswordHint(false);
     setResendState('idle');
     setResendMessage('');
 
@@ -36,7 +40,13 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
       onAuthenticated(session.user.role);
     } catch (authError) {
       setError(authError.message);
-      setNeedsVerification(authError.details?.code === 'EMAIL_NOT_VERIFIED');
+      const notVerified = authError.details?.code === 'EMAIL_NOT_VERIFIED';
+      setNeedsVerification(notVerified);
+      // login() only ever throws 401 for a wrong email or password (see
+      // authService.login) — 403 is EMAIL_NOT_VERIFIED, which keeps its own
+      // Resend option instead, and anything else (429, network, 5xx) is a
+      // real problem a reset link wouldn't fix.
+      setShowForgotPasswordHint(!notVerified && authError.status === 401);
     } finally {
       setIsWakingUp(false);
       setIsSubmitting(false);
@@ -82,7 +92,22 @@ export default function LoginPage({ onAuthenticated, onGoToRegister }) {
           }
         />
 
-        {error && <p className="text-xs text-rose-600 -mt-1">{error}</p>}
+        <div className="flex justify-end -mt-2">
+          <button type="button" onClick={onGoToForgotPassword} className="text-xs font-semibold text-primary hover:underline">
+            Forgot password?
+          </button>
+        </div>
+
+        {error && (
+          <div className="-mt-1 flex flex-col gap-1">
+            <p className="text-xs text-rose-600">{error}</p>
+            {showForgotPasswordHint && (
+              <button type="button" onClick={onGoToForgotPassword} className="text-xs font-semibold text-primary hover:underline self-start">
+                Forgot password?
+              </button>
+            )}
+          </div>
+        )}
 
         {isWakingUp && (
           <p className="text-xs text-ink-500 -mt-1">AILA is waking up. This can take up to a minute…</p>

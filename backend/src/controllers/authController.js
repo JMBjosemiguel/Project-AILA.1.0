@@ -76,6 +76,18 @@ const resendVerification = asyncHandler(async (req, res) => {
   );
 });
 
+const GENERIC_FORGOT_PASSWORD_MESSAGE = 'If an account exists for that email, we sent a reset link.';
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  await authService.forgotPassword(req.body.email);
+  sendSuccess(res, null, 200, GENERIC_FORGOT_PASSWORD_MESSAGE);
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  await authService.resetPassword(req.body.token, req.body.password);
+  sendSuccess(res, null, 200, 'Your password has been updated. You can now sign in.');
+});
+
 module.exports = {
   register,
   login,
@@ -83,4 +95,6 @@ module.exports = {
   me,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
 };

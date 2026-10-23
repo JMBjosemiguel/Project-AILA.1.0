@@ -3,11 +3,14 @@ const authController = require('../controllers/authController');
 const { authenticate } = require('../middlewares/authenticate');
 const { validateRequest } = require('../middlewares/validateRequest');
 const { emailVerificationRateLimiter } = require('../middlewares/emailVerificationRateLimiter');
+const { passwordResetRateLimiter } = require('../middlewares/passwordResetRateLimiter');
 const {
   loginValidator,
   registerValidator,
   verifyEmailValidator,
   resendVerificationValidator,
+  forgotPasswordValidator,
+  resetPasswordValidator,
 } = require('../validators/authValidator');
 
 const router = express.Router();
@@ -28,5 +31,13 @@ router.post(
   validateRequest,
   authController.resendVerification
 );
+router.post(
+  '/forgot-password',
+  passwordResetRateLimiter,
+  forgotPasswordValidator,
+  validateRequest,
+  authController.forgotPassword
+);
+router.post('/reset-password', resetPasswordValidator, validateRequest, authController.resetPassword);
 
 module.exports = router;

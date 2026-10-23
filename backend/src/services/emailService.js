@@ -150,6 +150,48 @@ async function sendVerificationEmail(user, verifyUrl) {
   return sendEmail({ to: user.email, subject, html, text });
 }
 
+// Same "distinct per-send subject/body" reasoning as buildVerificationEmail —
+// a second forgot-password request groups into the same email thread as the
+// first, so the send time keeps them visually distinct.
+function buildPasswordResetEmail({ firstName, resetUrl, sentAt = new Date() }) {
+  const greetName = firstName ? `, ${firstName}` : '';
+  const sentLabel = appDateTimeStr(sentAt);
+  const text = [
+    `Hi${greetName},`,
+    '',
+    'We received a request to reset your AILA password.',
+    '',
+    `Reset your password: ${resetUrl}`,
+    '',
+    `Sent ${sentLabel}.`,
+    '',
+    "This link expires in about 30 minutes and can only be used once. If you didn't request this, you can safely ignore this email — your password will not change.",
+  ].join('\n');
+
+  const html = `
+    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
+      <h2 style="margin-bottom: 4px;">Reset your AILA password${greetName}.</h2>
+      <p>We received a request to reset your password.</p>
+      <p style="margin: 24px 0;">
+        <a href="${resetUrl}" style="background:#2563eb;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">
+          Reset Password
+        </a>
+      </p>
+      <p style="font-size: 12px; color: #9ca3af;">Sent ${sentLabel}.</p>
+      <p style="font-size: 13px; color: #6b7280;">
+        This link expires in about 30 minutes and can only be used once. If you didn't request this, you can safely ignore this email — your password will not change.
+      </p>
+    </div>
+  `;
+
+  return { subject: `Reset your AILA password (${appTimeStr(sentAt)})`, html, text };
+}
+
+async function sendPasswordResetEmail(user, resetUrl) {
+  const { subject, html, text } = buildPasswordResetEmail({ firstName: user.first_name, resetUrl });
+  return sendEmail({ to: user.email, subject, html, text });
+}
+
 // Safe, presence-only startup diagnostic — never logs a credential VALUE,
 // only whether each var is set. Intended to be called once at boot so a
 // misconfiguration (missing SMTP var, or the console driver left on in
@@ -178,6 +220,8 @@ module.exports = {
   maskEmail,
   sendEmail,
   sendVerificationEmail,
+  sendPasswordResetEmail,
   // exposed for unit tests only — not part of the intended public surface
   buildVerificationEmail,
+  buildPasswordResetEmail,
 };

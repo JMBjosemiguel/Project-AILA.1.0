@@ -142,6 +142,18 @@ async function findPasswordHashById(userId) {
   return rows[0]?.password_hash || null;
 }
 
+// Minimal fields resetPassword needs: the CURRENT password hash (to check a
+// reset token's fingerprint still matches — see utils/passwordResetToken)
+// and whether the account is still active. deleted_at IS NULL for the same
+// reason every other lookup here excludes soft-deleted rows.
+async function findUserForPasswordReset(userId) {
+  const rows = await query(
+    'SELECT id, password_hash, is_active FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    [userId]
+  );
+  return rows[0] || null;
+}
+
 async function getRoleIdByName(roleName) {
   const rows = await query('SELECT id FROM roles WHERE name = ? LIMIT 1', [roleName]);
   return rows[0]?.id || null;
@@ -220,6 +232,7 @@ module.exports = {
   findUserByEmail,
   findUserByStudentNumber,
   findPasswordHashById,
+  findUserForPasswordReset,
   getRoleIdByName,
   updateLastLogin,
   updateProfileFields,

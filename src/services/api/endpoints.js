@@ -6,6 +6,8 @@ export const API_ENDPOINTS = {
     register: '/auth/register',
     verifyEmail: '/auth/verify-email',
     resendVerification: '/auth/resend-verification',
+    forgotPassword: '/auth/forgot-password',
+    resetPassword: '/auth/reset-password',
   },
   dashboard: {
     summary: '/dashboard/summary',

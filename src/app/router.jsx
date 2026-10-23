@@ -17,8 +17,10 @@ import AdminKnowledgeBasePage from '../pages/admin/KnowledgeBase';
 import AdminResourcesPage from '../pages/admin/Resources';
 import AdminSettingsPage from '../pages/admin/Settings';
 import AdminUsersPage from '../pages/admin/Users';
+import ForgotPasswordPage from '../pages/auth/ForgotPassword';
 import LoginPage from '../pages/auth/Login';
 import RegisterPage from '../pages/auth/Register';
+import ResetPasswordPage from '../pages/auth/ResetPassword';
 import VerifyEmailPage from '../pages/auth/VerifyEmail';
 import SharedMaterialPage from '../pages/SharedMaterial';
 
@@ -87,9 +89,10 @@ export default function AppRouter() {
     // Public unlisted share links render for anyone, logged in or not — no redirects.
     if (pathname.startsWith(SHARE_PREFIX)) return;
 
-    // Email verification links work whether or not the student is signed in
-    // (they usually aren't yet) — never redirect away from this page.
-    if (pathname === AUTH_PATHS.VERIFY_EMAIL) return;
+    // Email verification and password-reset links work whether or not the
+    // student is signed in (they usually aren't yet) — never redirect away
+    // from these pages.
+    if (pathname === AUTH_PATHS.VERIFY_EMAIL || pathname === AUTH_PATHS.FORGOT_PASSWORD || pathname === AUTH_PATHS.RESET_PASSWORD) return;
 
     const isAuthPath = pathname === AUTH_PATHS.LOGIN || pathname === AUTH_PATHS.REGISTER;
 
@@ -132,10 +135,23 @@ export default function AppRouter() {
     );
   }
 
-  // Verify-email works for a signed-in or signed-out student — render before
-  // the sign-in gate below.
+  // Verify-email and the password-reset pages work for a signed-in or
+  // signed-out student — render before the sign-in gate below.
   if (pathname === AUTH_PATHS.VERIFY_EMAIL) {
     return <VerifyEmailPage onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)} />;
+  }
+
+  if (pathname === AUTH_PATHS.FORGOT_PASSWORD) {
+    return <ForgotPasswordPage onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)} />;
+  }
+
+  if (pathname === AUTH_PATHS.RESET_PASSWORD) {
+    return (
+      <ResetPasswordPage
+        onGoToLogin={() => navigate(AUTH_PATHS.LOGIN)}
+        onGoToForgotPassword={() => navigate(AUTH_PATHS.FORGOT_PASSWORD)}
+      />
+    );
   }
 
   if (!isAuthenticated) {
@@ -150,6 +166,7 @@ export default function AppRouter() {
       <LoginPage
         onAuthenticated={(nextRole) => navigate(nextRole === ROLES.ADMIN ? ADMIN_ROUTE_IDS.DASHBOARD : STUDENT_ROUTE_IDS.DASHBOARD)}
         onGoToRegister={() => navigate(AUTH_PATHS.REGISTER)}
+        onGoToForgotPassword={() => navigate(AUTH_PATHS.FORGOT_PASSWORD)}
       />
     );
   }

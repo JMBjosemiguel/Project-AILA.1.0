@@ -16,6 +16,8 @@ const AuthContext = createContext({
   refreshSession: async () => {},
   verifyEmail: async () => {},
   resendVerification: async () => {},
+  forgotPassword: async () => {},
+  resetPassword: async () => {},
 });
 
 export function AuthProvider({ children }) {
@@ -92,6 +94,12 @@ export function AuthProvider({ children }) {
       },
       async resendVerification(email) {
         return authService.resendVerification(email);
+      },
+      async forgotPassword(email) {
+        return authService.forgotPassword(email);
+      },
+      async resetPassword({ token, password }) {
+        return authService.resetPassword({ token, password });
       },
       async getCurrentUser() {
         try {

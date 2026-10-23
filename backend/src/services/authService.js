@@ -7,15 +7,18 @@ const {
   findUserByEmail,
   findUserById,
   findUserByStudentNumber,
+  findUserForPasswordReset,
   getRoleIdByName,
   updateLastLogin,
+  updatePasswordHash,
   findDeletedIdentityConflicts,
   releaseDeletedIdentity,
 } = require('../models/userModel');
-const { createSession, deleteSession } = require('../models/sessionModel');
+const { createSession, deleteSession, deleteAllSessionsForUser } = require('../models/sessionModel');
 const emailVerificationModel = require('../models/emailVerificationModel');
 const emailService = require('../services/emailService');
 const { generateVerificationToken, hashVerificationToken, looksLikeVerificationToken } = require('../utils/verificationToken');
+const { signPasswordResetToken, verifyPasswordResetToken, matchesCurrentPasswordHash } = require('../utils/passwordResetToken');
 const { logAdminAction } = require('../utils/adminAudit');
 
 // Audit logging is best-effort — it must never turn an already-successful
@@ -369,11 +372,67 @@ async function resendVerification(rawEmail) {
   return { sent: true };
 }
 
+function buildResetUrl(rawToken) {
+  const base = (process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  return `${base}/reset-password?token=${encodeURIComponent(rawToken)}`;
+}
+
+// Always resolves the same way — never reveals whether an account exists for
+// the given email (same anti-enumeration shape as resendVerification). A
+// real send is only ever attempted for an existing, ACTIVE account; a
+// best-effort send failure there is swallowed rather than becoming an error
+// that would otherwise leak "this account exists but the email bounced".
+async function forgotPassword(rawEmail) {
+  const email = String(rawEmail || '').trim().toLowerCase();
+  const user = await findUserByEmailWithPassword(email);
+
+  if (user && user.is_active) {
+    const rawToken = signPasswordResetToken(user);
+    try {
+      await emailService.sendPasswordResetEmail(user, buildResetUrl(rawToken));
+    } catch (emailError) {
+      console.error(`[authService] password reset email failed to send for user ${user.id}: ${emailError.message}`);
+    }
+  }
+
+  return { sent: true };
+}
+
+// The token's signature/expiry/purpose are checked first (utils/
+// passwordResetToken), then its password-hash fingerprint against the
+// user's CURRENT hash — a mismatch means either the account is gone or the
+// password already changed since this link was issued, which is exactly
+// the single-use guarantee: no "used" flag to set anywhere.
+async function resetPassword(rawToken, newPassword) {
+  let payload;
+  try {
+    payload = verifyPasswordResetToken(rawToken);
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      throw new ApiError(410, 'This password reset link has expired. Please request a new one.', { code: 'TOKEN_EXPIRED' });
+    }
+    throw new ApiError(400, 'This password reset link is invalid.', { code: 'TOKEN_INVALID' });
+  }
+
+  const userId = Number(payload.sub);
+  const target = await findUserForPasswordReset(userId);
+  if (!target || !target.is_active || !matchesCurrentPasswordHash(payload, target.password_hash)) {
+    throw new ApiError(400, 'This password reset link is invalid or has already been used.', { code: 'TOKEN_INVALID' });
+  }
+
+  const newHash = await bcrypt.hash(newPassword, Number(process.env.BCRYPT_SALT_ROUNDS || 10));
+  await updatePasswordHash(userId, newHash);
+  await deleteAllSessionsForUser(userId);
+  await logAuditSafe(userId, 'user.reset_password', userId);
+}
+
 module.exports = {
   register,
   login,
   logout,
   verifyEmail,
   resendVerification,
+  forgotPassword,
+  resetPassword,
   normalizeBcryptHash,
 };

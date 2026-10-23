@@ -131,6 +131,18 @@ export const authService = {
     return apiClient.post(API_ENDPOINTS.auth.resendVerification, { email });
   },
 
+  // Same anti-enumeration shape as resendVerification — always resolves with
+  // the same generic message regardless of whether the email has an account.
+  async forgotPassword(email) {
+    return apiClient.post(API_ENDPOINTS.auth.forgotPassword, { email });
+  },
+
+  // Throws an ApiClientError with `.details.code` (TOKEN_INVALID |
+  // TOKEN_EXPIRED) for a bad/used/expired link, same pattern as verifyEmail.
+  async resetPassword({ token, password }) {
+    return apiClient.post(API_ENDPOINTS.auth.resetPassword, { token, password });
+  },
+
   async logout() {
     try {
       if (tokenStorage.get()) {

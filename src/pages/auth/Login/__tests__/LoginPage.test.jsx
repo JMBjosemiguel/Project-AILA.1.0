@@ -105,4 +105,53 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(screen.getByText(/too many times/i)).toBeInTheDocument());
   });
+
+  describe('Forgot password link', () => {
+    it('is always visible under the password field, even with no error', () => {
+      render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /Forgot password\?/i })).toBeInTheDocument();
+    });
+
+    it('clicking the always-visible link calls onGoToForgotPassword', async () => {
+      const user = userEvent.setup();
+      const onGoToForgotPassword = vi.fn();
+      render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={onGoToForgotPassword} />);
+
+      await user.click(screen.getByRole('button', { name: /Forgot password\?/i }));
+      expect(onGoToForgotPassword).toHaveBeenCalled();
+    });
+
+    it('after a wrong email/password (401), a SECOND "Forgot password?" link appears under the error', async () => {
+      const user = userEvent.setup();
+      login.mockRejectedValue({ message: 'Invalid email or password.', details: null, status: 401 });
+      render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={vi.fn()} />);
+
+      await fillAndSubmit(user);
+
+      await waitFor(() => expect(screen.getByText('Invalid email or password.')).toBeInTheDocument());
+      expect(screen.getAllByRole('button', { name: /Forgot password\?/i })).toHaveLength(2);
+    });
+
+    it('does NOT add the extra link for the empty-fields validation message', async () => {
+      const user = userEvent.setup();
+      render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={vi.fn()} />);
+
+      await user.click(screen.getByRole('button', { name: /Sign in/i }));
+
+      await waitFor(() => expect(screen.getByText('Enter your email and password to continue.')).toBeInTheDocument());
+      expect(login).not.toHaveBeenCalled();
+      expect(screen.getAllByRole('button', { name: /Forgot password\?/i })).toHaveLength(1);
+    });
+
+    it('does NOT add the extra link for EMAIL_NOT_VERIFIED — that error keeps only its Resend option', async () => {
+      const user = userEvent.setup();
+      login.mockRejectedValue({ message: 'Please verify your email address before signing in.', details: { code: 'EMAIL_NOT_VERIFIED' }, status: 403 });
+      render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} onGoToForgotPassword={vi.fn()} />);
+
+      await fillAndSubmit(user);
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Resend verification email/i })).toBeInTheDocument());
+      expect(screen.getAllByRole('button', { name: /Forgot password\?/i })).toHaveLength(1);
+    });
+  });
 });

@@ -10,6 +10,7 @@ vi.mock('../../../../services/api/adminService', () => ({
   deleteAdminUser: vi.fn(),
   resetUserProgress: vi.fn(),
   promoteToAdmin: vi.fn(),
+  demoteToStudent: vi.fn(),
 }));
 vi.mock('../../../../components/admin/UserDetailDialog', () => ({
   default: ({ userId }) => <div data-testid="user-detail-dialog">{userId}</div>,
@@ -22,7 +23,7 @@ let mockCurrentUser = null;
 vi.mock('../../../../contexts/AuthContext', () => ({ useAuth: () => ({ user: mockCurrentUser }) }));
 
 import AdminUsersPage from '../index.jsx';
-import { listAdminUsers, promoteToAdmin, deleteAdminUser } from '../../../../services/api/adminService';
+import { listAdminUsers, promoteToAdmin, demoteToStudent, deleteAdminUser } from '../../../../services/api/adminService';
 
 const STUDENT = { id: 10, first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com', role: 'student', is_active: 1, email_verified_at: '2026-01-01', level: 1, xp_points: 0 };
 const ADMIN = { id: 20, first_name: 'Grace', last_name: 'Hopper', email: 'grace@example.com', role: 'admin', is_active: 1, email_verified_at: '2026-01-01', level: 1, xp_points: 0 };
@@ -120,6 +121,90 @@ describe('AdminUsersPage — Promote to Admin', () => {
     await user.click(screen.getByRole('button', { name: 'Promote' }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('personal uploads')));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminUsersPage — Demote to Student', () => {
+  it('offers "Demote to Student" only on an admin row that is NOT the current admin', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [STUDENT, ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 3, pageSize: 10 },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Ada Lovelace')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Ada Lovelace' }));
+    expect(screen.queryByRole('menuitem', { name: /Demote to Student/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Actions for Ada Lovelace' }));
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Grace Hopper' }));
+    expect(screen.queryByRole('menuitem', { name: /Demote to Student/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Actions for Grace Hopper' }));
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    expect(screen.getByRole('menuitem', { name: /Demote to Student/i })).toBeInTheDocument();
+  });
+
+  it('cancelling the confirm dialog never calls the API', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Alan Turing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    await user.click(screen.getByRole('menuitem', { name: /Demote to Student/i }));
+
+    expect(screen.getByText(/Remove administrator access from Alan Turing\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/They will become a student account\./i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(demoteToStudent).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Remove administrator access from Alan Turing\?/i)).not.toBeInTheDocument();
+  });
+
+  it('confirming demotes the admin, toasts, and refreshes the list', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    demoteToStudent.mockResolvedValue(null);
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Alan Turing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    await user.click(screen.getByRole('menuitem', { name: /Demote to Student/i }));
+    await user.click(screen.getByRole('button', { name: 'Demote' }));
+
+    await waitFor(() => expect(demoteToStudent).toHaveBeenCalledWith(30));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Alan'));
+    await waitFor(() => expect(listAdminUsers).toHaveBeenCalledTimes(2));
+  });
+
+  it('a rejected demotion (e.g. the last active admin) shows the server error, not a silent success', async () => {
+    mockCurrentUser = { id: 20 };
+    listAdminUsers.mockResolvedValue({
+      users: [ADMIN, OTHER_ADMIN],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    demoteToStudent.mockRejectedValue(new Error('At least one administrator must remain.'));
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Alan Turing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Alan Turing' }));
+    await user.click(screen.getByRole('menuitem', { name: /Demote to Student/i }));
+    await user.click(screen.getByRole('button', { name: 'Demote' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('At least one administrator must remain.'));
     expect(toast.success).not.toHaveBeenCalled();
   });
 });

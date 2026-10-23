@@ -424,6 +424,18 @@ async function promoteToAdmin(userId) {
   return result.affectedRows;
 }
 
+// Takes an optional connection so the caller can run this inside the SAME
+// transaction as the last-admin guard (countActiveAdmins), the same way
+// setUserActive already does for deactivation.
+async function demoteToStudent(userId, connection = null) {
+  const result = await execute(
+    connection,
+    `UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'student') WHERE id = ? AND deleted_at IS NULL`,
+    [userId]
+  );
+  return result.affectedRows;
+}
+
 const RESOURCE_SORT_MAP = {
   newest: 'r.created_at DESC',
   oldest: 'r.created_at ASC',
@@ -570,6 +582,7 @@ module.exports = {
   countActiveAdmins,
   countPersonalUploads,
   promoteToAdmin,
+  demoteToStudent,
   listResourcesAdmin,
   deleteResourceAdmin,
   setResourceArchived,

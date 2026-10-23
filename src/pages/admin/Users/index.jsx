@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Eye, RotateCcw, ShieldCheck, Trash2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
+import { Eye, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX, Users as UsersIcon } from 'lucide-react';
 import ActionMenu from '../../../components/common/ActionMenu';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useToast } from '../../../components/common/Toast';
@@ -9,7 +9,7 @@ import Pagination from '../../../components/admin/Pagination';
 import SearchBar from '../../../components/admin/SearchBar';
 import UserDetailDialog from '../../../components/admin/UserDetailDialog';
 import {
-  deleteAdminUser, listAdminUsers, promoteToAdmin, resetUserProgress, setUserActive,
+  deleteAdminUser, demoteToStudent, listAdminUsers, promoteToAdmin, resetUserProgress, setUserActive,
 } from '../../../services/api/adminService';
 
 const ROLE_FILTERS = [
@@ -127,6 +127,24 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleDemote = async (user) => {
+    const ok = await confirm({
+      title: `Remove administrator access from ${user.first_name} ${user.last_name}?`,
+      message: 'They will become a student account.',
+      confirmLabel: 'Demote',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    try {
+      await demoteToStudent(user.id);
+      toast.success(`${user.first_name} is now a student.`);
+      load();
+    } catch (error) {
+      toast.error(error.message || 'Could not demote that admin.');
+    }
+  };
+
   const handleDelete = async (user) => {
     const isAdmin = user.role === 'admin';
     const ok = await confirm({
@@ -188,6 +206,7 @@ export default function AdminUsersPage() {
                 : { label: u.is_active ? 'Deactivate' : 'Reactivate', icon: u.is_active ? <UserX size={14} /> : <UserCheck size={14} />, onClick: () => toggleActive(u) },
               u.role === 'student' ? { label: 'Reset Progress', icon: <RotateCcw size={14} />, onClick: () => handleReset(u) } : null,
               u.role === 'student' ? { label: 'Promote to Admin', icon: <ShieldCheck size={14} />, onClick: () => handlePromote(u) } : null,
+              u.role === 'admin' && !isSelf ? { label: 'Demote to Student', icon: <ShieldOff size={14} />, onClick: () => handleDemote(u) } : null,
               isSelf
                 ? null
                 : { label: 'Delete', icon: <Trash2 size={14} />, danger: true, onClick: () => handleDelete(u) },

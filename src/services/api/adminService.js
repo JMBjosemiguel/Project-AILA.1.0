@@ -41,6 +41,10 @@ export function promoteToAdmin(userId) {
   return apiClient.patch(API_ENDPOINTS.admin.userPromote(userId));
 }
 
+export function demoteToStudent(userId) {
+  return apiClient.patch(API_ENDPOINTS.admin.userDemote(userId));
+}
+
 // Resources
 export function listAdminResources(params) {
   return apiClient.get(`${API_ENDPOINTS.admin.resources}?${toQueryString(params)}`);

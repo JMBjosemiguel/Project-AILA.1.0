@@ -156,6 +156,43 @@ async function promoteToAdmin(adminId, userId) {
   await logAdminAction(adminId, 'user.promote_to_admin', 'users', Number(userId), { fromRole: 'student', toRole: 'admin' });
 }
 
+// Demote only ever flips role_id back to student — the account, its data,
+// and verification status are untouched. Unlike promoteToAdmin there is no
+// upload check to run first: role_id = 2 (admin) is read live off the
+// user's CURRENT role wherever resource visibility hardcodes it, so a
+// demoted admin's own uploads simply stop being shown app-wide the moment
+// the role changes — nothing can leak by demoting.
+//
+// Access ends immediately without any session/token change: authenticate
+// re-fetches the user (and therefore its role) from the DB on every request
+// (see middlewares/authenticate.js -> findUserById), and authorize reads
+// req.auth.user.role from that fresh fetch — never from the JWT payload —
+// so the very next request after demotion already sees 'student'.
+async function demoteToStudent(adminId, userId) {
+  const numericUserId = Number(userId);
+  if (Number(adminId) === numericUserId) {
+    throw new ApiError(400, "You can't demote your own account.");
+  }
+
+  const affectedRows = await transaction(async (connection) => {
+    const target = await adminModel.getUserForDeletion(numericUserId, connection);
+    if (!target) return 0;
+    if (target.role !== 'admin') {
+      throw new ApiError(400, 'This user is not an admin.');
+    }
+    const activeAdmins = await adminModel.countActiveAdmins(connection);
+    if (activeAdmins <= 1) {
+      throw new ApiError(400, 'At least one administrator must remain.');
+    }
+    return adminModel.demoteToStudent(numericUserId, connection);
+  });
+
+  if (!affectedRows) {
+    throw new ApiError(404, 'User not found.');
+  }
+  await logAdminAction(adminId, 'user.demote_to_student', 'users', numericUserId, { fromRole: 'admin', toRole: 'student' });
+}
+
 async function resetUserProgress(adminId, userId) {
   await transaction((connection) => adminModel.resetUserProgress(Number(userId), connection));
   await logAdminAction(adminId, 'user.reset_progress', 'users', Number(userId));
@@ -326,6 +363,7 @@ module.exports = {
   getUserDetail,
   setUserActive,
   promoteToAdmin,
+  demoteToStudent,
   deleteUser,
   resetUserProgress,
   listResources,

@@ -13,6 +13,7 @@ const { notifyUser } = require('../utils/notify');
 const { truncateForAi, MAX_CHARS_FOR_AI } = require('../utils/pdfText');
 const { logAdminAction } = require('../utils/adminAudit');
 const { getResourceChunks, selectSpreadChunks, NO_READABLE_TEXT_MESSAGE } = require('./resourceTextExtraction');
+const { QUIZ_TIME_LIMIT_MINUTES, isTimerEligible } = require('../constants/quizTimer');
 
 // Builds the 'quiz_source_material' block for a resource-sourced quiz —
 // chunks are spread across the WHOLE document (not just the start) so a
@@ -448,6 +449,7 @@ function formatQuizForTake(quiz) {
  * answer key.
  */
 function formatAttemptForResume(quiz, attempt, savedAnswers) {
+  const timeLimitSeconds = attempt.time_limit_seconds == null ? null : Number(attempt.time_limit_seconds);
   return {
     attempt: {
       id: attempt.id,
@@ -455,6 +457,11 @@ function formatAttemptForResume(quiz, attempt, savedAnswers) {
       status: 'in_progress',
       currentIndex: Number(attempt.current_index) || 0,
       startedAt: attempt.started_at,
+      // The server's clock decides the deadline; the client only counts down
+      // from remainingSeconds (null = no limit), so a refresh never resets it.
+      timeLimitSeconds,
+      remainingSeconds: timeLimitSeconds == null ? null : Math.max(0, Number(attempt.remaining_seconds) || 0),
+      tabSwitchCount: Number(attempt.tab_switch_count) || 0,
     },
     quiz: {
       id: quiz.id,
@@ -462,6 +469,7 @@ function formatAttemptForResume(quiz, attempt, savedAnswers) {
       quizType: quiz.quiz_type,
       difficulty: quiz.difficulty,
       personalizationLevel: personalizationLevelFromSnapshot(quiz.personalization_context),
+      timerEligible: isTimerEligible(quiz),
       assessmentKind: quiz.assessment_kind || 'practice',
       passingScore: quiz.assessment_kind && quiz.assessment_kind !== 'practice'
         ? Number(quiz.passing_score ?? 70)
@@ -1119,7 +1127,24 @@ async function createAndSaveAssessment({ userId, kind, subjectId, moduleId, asse
  * (user_id, quiz_id, active_slot) index means two simultaneous calls cannot
  * both create an active attempt — the loser re-reads the winner's row.
  */
-async function startAttempt(userId, quizId) {
+// An in-progress attempt whose time limit has run out (server clock).
+function isAttemptExpired(attempt) {
+  return attempt.time_limit_seconds != null && attempt.expires_at != null && Number(attempt.remaining_seconds) <= 0;
+}
+
+/*
+ * Options (HTTP callers only; internal callers like the legacy one-shot path
+ * pass none and get the old behavior, an untimed attempt):
+ * - timeLimitMinutes: null (no limit) or one of QUIZ_TIME_LIMIT_MINUTES. Only
+ *   applied when a NEW attempt is created for a timer-eligible quiz; a resumed
+ *   attempt keeps the limit it started with.
+ * - askForTimeLimit: when true and no limit was chosen yet, a timer-eligible
+ *   quiz with no attempt in progress returns { needsTimeLimit: true } instead
+ *   of starting, so the student picks a limit first.
+ * Resuming an attempt whose time ran out submits it and returns
+ * { timedOut: true, review }.
+ */
+async function startAttempt(userId, quizId, { timeLimitMinutes, askForTimeLimit = false } = {}) {
   const quiz = await quizModel.getQuizWithQuestions(Number(quizId), userId);
   if (!quiz) {
     throw new ApiError(404, 'Quiz not found.');
@@ -1141,9 +1166,24 @@ async function startAttempt(userId, quizId) {
 
   const existing = await quizModel.findActiveAttempt(userId, quiz.id);
   if (existing) {
+    if (isAttemptExpired(existing)) {
+      return { timedOut: true, review: await autoSubmitExpiredAttempt(userId, existing.id) };
+    }
     const saved = await quizModel.getSavedAnswers(existing.id);
     return formatAttemptForResume(quiz, existing, saved);
   }
+
+  const timerEligible = isTimerEligible(quiz);
+  if (timerEligible && askForTimeLimit && timeLimitMinutes === undefined) {
+    const { kind, isFormal, passingScore } = assessmentMeta(quiz);
+    return {
+      needsTimeLimit: true,
+      quiz: { id: quiz.id, topic: quiz.topic, assessmentKind: kind, passingScore: isFormal ? passingScore : null },
+      timeLimitOptions: QUIZ_TIME_LIMIT_MINUTES,
+    };
+  }
+  const minutes = Number(timeLimitMinutes);
+  const timeLimitSeconds = timerEligible && QUIZ_TIME_LIMIT_MINUTES.includes(minutes) ? minutes * 60 : null;
 
   let attemptId;
   try {
@@ -1151,6 +1191,7 @@ async function startAttempt(userId, quizId) {
       quizId: quiz.id,
       userId,
       total: quiz.questions.length,
+      timeLimitSeconds,
     });
   } catch (err) {
     if (err && err.code === 'ER_DUP_ENTRY') {
@@ -1184,6 +1225,9 @@ async function saveAttemptAnswer(userId, attemptId, { questionId, selectedAnswer
   }
   if (attempt.status !== 'in_progress') {
     throw new ApiError(409, 'This attempt has already been submitted.');
+  }
+  if (isAttemptExpired(attempt)) {
+    throw new ApiError(409, "Time's up for this quiz, so answers can no longer be changed.", { code: 'ATTEMPT_EXPIRED' });
   }
 
   // Only the one answered question is needed here — not the whole quiz, which
@@ -1233,6 +1277,10 @@ async function getAttempt(userId, attemptId) {
     throw new ApiError(404, 'Quiz attempt not found.');
   }
 
+  if (attempt.status === 'in_progress' && isAttemptExpired(attempt)) {
+    return autoSubmitExpiredAttempt(userId, attempt.id);
+  }
+
   const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
   const saved = await quizModel.getSavedAnswers(attempt.id);
 
@@ -1266,7 +1314,42 @@ async function getAttempt(userId, attemptId) {
     passingScore: isFormal ? passingScore : null,
     passed: attempt.passed === null || attempt.passed === undefined ? null : Boolean(attempt.passed),
     percent: attempt.total > 0 ? Math.round((attempt.score / attempt.total) * 100) : 0,
+    timedOut: Boolean(attempt.timed_out),
+    timeLimitSeconds: attempt.time_limit_seconds == null ? null : Number(attempt.time_limit_seconds),
+    tabSwitchCount: Number(attempt.tab_switch_count) || 0,
   };
+}
+
+/**
+ * Submits an attempt whose time ran out, grading the answers saved before the
+ * deadline exactly like a normal submit (XP, analytics, notifications). If a
+ * concurrent request already submitted it, that result is returned instead.
+ */
+async function autoSubmitExpiredAttempt(userId, attemptId) {
+  try {
+    return { ...(await submitAttempt(userId, attemptId)), status: 'submitted' };
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 409) return getAttempt(userId, attemptId);
+    throw err;
+  }
+}
+
+/**
+ * Records one "left the quiz page" event (tab hidden / window blur) for a
+ * timer-eligible attempt. Record only: nothing else happens. Counted only while
+ * the attempt is in progress and before its deadline.
+ */
+async function recordTabSwitch(userId, attemptId) {
+  const attempt = await quizModel.getAttemptById(Number(attemptId), userId);
+  if (!attempt) {
+    throw new ApiError(404, 'Quiz attempt not found.');
+  }
+  const count = Number(attempt.tab_switch_count) || 0;
+  if (!isTimerEligible(attempt)) {
+    return { recorded: false, tabSwitchCount: count };
+  }
+  const affected = await quizModel.incrementTabSwitchCount(attempt.id);
+  return { recorded: affected > 0, tabSwitchCount: affected > 0 ? Math.min(count + 1, 65535) : count };
 }
 
 /**
@@ -1305,6 +1388,9 @@ async function submitAttempt(userId, attemptId) {
     throw new ApiError(409, 'This attempt has already been submitted.');
   }
 
+  // Submitting at/after the deadline (the client's auto-submit at 0, or an
+  // auto-submit on fetch/resume) still grades normally, but is marked timed out.
+  const timedOut = isAttemptExpired(attempt);
   const quiz = await quizModel.getQuizWithQuestions(attempt.quiz_id, userId);
   const saved = await quizModel.getSavedAnswers(attempt.id);
   const answerByQuestionId = new Map(saved.map((row) => [row.question_id, row.selected_answer]));
@@ -1390,13 +1476,16 @@ async function submitAttempt(userId, attemptId) {
     leveledUp: Boolean(outcome.leveledUp),
     level: outcome.level ?? null,
     newAchievements,
+    timedOut,
+    timeLimitSeconds: attempt.time_limit_seconds == null ? null : Number(attempt.time_limit_seconds),
+    tabSwitchCount: Number(attempt.tab_switch_count) || 0,
   };
   if (isFormal && !passed) {
     review.recommendation = await buildFailRecommendation(userId, quiz);
   }
 
   try {
-    await logAdminAction(userId, 'quiz.submit', 'quiz_attempts', attempt.id, { quizId: quiz.id, score, total, passed });
+    await logAdminAction(userId, 'quiz.submit', 'quiz_attempts', attempt.id, { quizId: quiz.id, score, total, passed, timedOut });
   } catch (error) {
     console.error(`[quizService] failed to write audit log entry for attempt ${attempt.id} submission: ${error.message}`);
   }
@@ -1528,6 +1617,7 @@ module.exports = {
   startAttempt,
   saveAttemptAnswer,
   getAttempt,
+  recordTabSwitch,
   getAttemptForActivity,
   submitAttempt,
   submitQuizAnswers,

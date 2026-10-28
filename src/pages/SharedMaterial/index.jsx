@@ -129,7 +129,9 @@ function QuizItemAnswer({ item, index, answer, onAnswer, graded }) {
             {!isCorrect && (
               <span className="font-medium text-ink-700">Your answer: {graded.yourAnswer || '(blank)'}. Correct answer: {graded.correctAnswer}. </span>
             )}
-            {graded.explanation}
+            {graded.explanation && (
+              <><span className="font-medium text-ink-700">Rationale: </span>{graded.explanation}</>
+            )}
           </span>
         </div>
       )}

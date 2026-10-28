@@ -16,6 +16,31 @@ const detail = (overrides) => ({
 
 beforeEach(() => vi.clearAllMocks());
 
+describe('UserDetailDialog — recent quiz attempts', () => {
+  it('lists each attempt with its raw score, Grade, tab-switch count, time limit and timed-out mark', async () => {
+    getAdminUserDetail.mockResolvedValue(detail({
+      recentAttempts: [
+        { id: 1, topic: 'Pharmacology checkpoint', status: 'submitted', score: 7, total: 10, completed_at: '2026-10-20T08:00:00Z', time_limit_seconds: 600, tab_switch_count: 3, timed_out: true },
+        { id: 2, topic: 'Vital signs', status: 'in_progress', score: 0, total: 5, completed_at: null, time_limit_seconds: null, tab_switch_count: 1, timed_out: false },
+      ],
+    }));
+    render(<UserDetailDialog userId={10} onClose={vi.fn()} />);
+
+    expect(await screen.findByText('Pharmacology checkpoint')).toBeInTheDocument();
+    expect(screen.getByText('7/10 · Grade 85%')).toBeInTheDocument();
+    expect(screen.getByText('3 tab switches')).toBeInTheDocument();
+    expect(screen.getByText(/10-min limit · Timed out/)).toBeInTheDocument();
+    expect(screen.getByText('In progress')).toBeInTheDocument();
+    expect(screen.getByText('1 tab switch')).toBeInTheDocument();
+  });
+
+  it('says so when there are no attempts', async () => {
+    getAdminUserDetail.mockResolvedValue(detail({ recentAttempts: [] }));
+    render(<UserDetailDialog userId={10} onClose={vi.fn()} />);
+    expect(await screen.findByText('No quiz attempts yet.')).toBeInTheDocument();
+  });
+});
+
 describe('UserDetailDialog — personal and contact info', () => {
   it('shows the middle name in the title and the student\'s Facebook and contact number', async () => {
     getAdminUserDetail.mockResolvedValue(detail({ middle_name: 'Byron', facebook: 'fb.com/ada', contact_number: '0917 123 4567' }));

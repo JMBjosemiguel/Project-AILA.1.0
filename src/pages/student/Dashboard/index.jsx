@@ -23,6 +23,7 @@ import { setResumeLesson } from '../../../utils/learningHubTarget';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
 import { buildWeekDays } from '../../../utils/weekActivity';
+import { gradePercent } from '../../../utils/gradePercent';
 
 // Dashboard stats come from the API as plain label/value pairs; map labels to icons here.
 const STAT_ICONS = {
@@ -178,6 +179,9 @@ export default function DashboardPage({ onNavigate }) {
                     <span className="text-ink-700 truncate">{quiz.topic}</span>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="text-primary font-semibold">{quiz.score}/{quiz.total}</span>
+                      {gradePercent(quiz.score, quiz.total) != null && (
+                        <span className="text-xs text-ink-400">Grade {gradePercent(quiz.score, quiz.total)}%</span>
+                      )}
                       <button
                         onClick={() => handleDeleteQuiz(quiz.id)}
                         aria-label={`Delete quiz attempt: ${quiz.topic}`}

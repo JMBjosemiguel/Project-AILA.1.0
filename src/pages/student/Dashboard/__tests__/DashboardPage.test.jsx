@@ -152,3 +152,23 @@ describe('DashboardPage — reliability', () => {
     expect(onNavigate).toHaveBeenCalledWith('hub');
   });
 });
+
+describe('DashboardPage — recent quiz scores', () => {
+  it('shows the Grade beside each raw score', () => {
+    state.data = {
+      ...baseData,
+      recentQuizzes: [
+        { id: 1, topic: 'Drug Classes', score: 3, total: 4 },
+        { id: 2, topic: 'Vital Signs', score: 0, total: 5 },
+      ],
+    };
+    state.loading = false;
+    state.error = null;
+    render(<DashboardPage onNavigate={vi.fn()} />);
+
+    expect(screen.getByText('3/4')).toBeInTheDocument();
+    expect(screen.getByText('Grade 88%')).toBeInTheDocument(); // (3 / 4 x 50) + 50 = 87.5
+    expect(screen.getByText('0/5')).toBeInTheDocument();
+    expect(screen.getByText('Grade 50%')).toBeInTheDocument();
+  });
+});

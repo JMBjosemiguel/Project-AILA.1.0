@@ -58,9 +58,18 @@ export function getChatQuizzes() {
 
 // --- Resumable attempt lifecycle ---
 
-// Begin or resume an attempt. Returns { attempt, quiz, items, answers }.
-export function startQuizAttempt(quizId) {
-  return apiClient.post(API_ENDPOINTS.quizzes.startAttempt(quizId));
+// Begin or resume an attempt. Returns { attempt, quiz, items, answers }, or
+// { needsTimeLimit: true } when a timed quiz needs a limit picked first, or
+// { timedOut: true, review } when the resumed attempt's time had run out.
+// Pass timeLimitMinutes (null = no limit) once the student has picked one.
+export function startQuizAttempt(quizId, { timeLimitMinutes } = {}) {
+  const body = timeLimitMinutes === undefined ? undefined : { timeLimitMinutes };
+  return apiClient.post(API_ENDPOINTS.quizzes.startAttempt(quizId), body);
+}
+
+// Record that the student left the quiz page (record only).
+export function recordQuizTabSwitch(attemptId) {
+  return apiClient.post(API_ENDPOINTS.quizzes.tabSwitch(attemptId));
 }
 
 // Autosave one answer. `currentIndex` persists the resume position.

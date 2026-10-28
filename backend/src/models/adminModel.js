@@ -3,6 +3,7 @@ const { buildTombstoneEmail, buildTombstoneStudentNumber } = require('./userMode
 const { appStartOfDay, appDateStr } = require('../utils/appTime');
 const { appWindowStart, windowStartDays, distinctCountByAppDay } = require('../utils/dayBucket');
 const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
 
 const INACTIVITY_DAYS = 7;
 
@@ -281,7 +282,7 @@ async function getUserDetail(userId) {
   const user = rows[0];
   if (!user) return null;
 
-  const [courses, lessonsCompleted, resources, quizAverage, streak, storage, activity, conversations] = await Promise.all([
+  const [courses, lessonsCompleted, resources, quizAverage, streak, storage, activity, conversations, attempts] = await Promise.all([
     query('SELECT COUNT(*) AS count FROM subjects WHERE created_by = ? AND deleted_at IS NULL', [userId]),
     query('SELECT COUNT(*) AS count FROM lesson_progress WHERE user_id = ?', [userId]),
     query('SELECT COUNT(*) AS count FROM resources WHERE uploaded_by = ? AND deleted_at IS NULL', [userId]),
@@ -298,6 +299,22 @@ async function getUserDetail(userId) {
       `,
       [userId]
     ),
+    // Latest quiz attempts (in progress or submitted) with the timer and
+    // tab-switch record. Chat quizzes are left out, as in learning analytics.
+    query(
+      `
+        SELECT qa.id, qa.status, qa.score, qa.total, qa.started_at, qa.completed_at,
+               qa.time_limit_seconds, qa.tab_switch_count,
+               (qa.expires_at IS NOT NULL AND qa.completed_at IS NOT NULL AND qa.completed_at >= qa.expires_at) AS timed_out,
+               q.topic, q.assessment_kind
+        FROM quiz_attempts qa
+        INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = ? AND ${notChatQuizCondition('q')}
+        ORDER BY COALESCE(qa.completed_at, qa.started_at) DESC, qa.id DESC
+        LIMIT 10
+      `,
+      [userId]
+    ),
   ]);
 
   return {
@@ -310,6 +327,7 @@ async function getUserDetail(userId) {
     storageBytes: storage[0].bytes,
     recentActivity: activity,
     recentConversations: conversations,
+    recentAttempts: attempts.map((row) => ({ ...row, timed_out: Boolean(row.timed_out) })),
   };
 }
 

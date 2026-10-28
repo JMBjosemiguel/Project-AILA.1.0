@@ -8,6 +8,7 @@ const {
   batchStartValidator,
   batchAppendValidator,
   quizIdParamValidator,
+  startAttemptValidator,
   attemptIdParamValidator,
   submitAttemptValidator,
   saveAnswerValidator,
@@ -34,9 +35,10 @@ router.get('/search', authenticate, searchQuizzesValidator, validateRequest, qui
 router.get('/chat', authenticate, quizController.listChatQuizzes);
 
 // Resumable attempt lifecycle.
-router.post('/:quizId/attempts/start', authenticate, quizIdParamValidator, validateRequest, quizController.startAttempt);
+router.post('/:quizId/attempts/start', authenticate, startAttemptValidator, validateRequest, quizController.startAttempt);
 router.patch('/attempts/:attemptId/answers', authenticate, saveAnswerValidator, validateRequest, quizController.saveAnswer);
 router.post('/attempts/:attemptId/submit', authenticate, attemptIdParamValidator, validateRequest, quizController.submitAttempt);
+router.post('/attempts/:attemptId/tab-switch', authenticate, attemptIdParamValidator, validateRequest, quizController.recordTabSwitch);
 
 router.get('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.getAttempt);
 router.delete('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.deleteAttempt);

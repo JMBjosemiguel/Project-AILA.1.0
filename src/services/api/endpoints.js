@@ -47,6 +47,7 @@ export const API_ENDPOINTS = {
     attemptForActivity: (activityId) => `/quizzes/activity/${activityId}/attempt`,
     attemptAnswers: (id) => `/quizzes/attempts/${id}/answers`,
     submitAttempt: (id) => `/quizzes/attempts/${id}/submit`,
+    tabSwitch: (id) => `/quizzes/attempts/${id}/tab-switch`,
   },
   gamification: {
     summary: '/gamification/summary',

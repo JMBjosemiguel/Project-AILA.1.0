@@ -57,10 +57,22 @@ const saveFromChatMessage = asyncHandler(async (req, res) => {
   );
 });
 
-// POST /quizzes/:quizId/attempts/start — begin or resume an attempt.
+// POST /quizzes/:quizId/attempts/start — begin or resume an attempt. A body
+// without timeLimitMinutes means the student hasn't picked one yet, so a
+// timer-eligible quiz answers { needsTimeLimit: true } instead of starting.
 const startAttempt = asyncHandler(async (req, res) => {
-  const attempt = await quizService.startAttempt(req.auth.user.id, req.params.quizId);
+  const body = req.body || {};
+  const attempt = await quizService.startAttempt(req.auth.user.id, req.params.quizId, {
+    timeLimitMinutes: body.timeLimitMinutes,
+    askForTimeLimit: !Object.prototype.hasOwnProperty.call(body, 'timeLimitMinutes'),
+  });
   sendSuccess(res, attempt, 200, 'Attempt ready.');
+});
+
+// POST /quizzes/attempts/:attemptId/tab-switch — record one "left the quiz".
+const recordTabSwitch = asyncHandler(async (req, res) => {
+  const result = await quizService.recordTabSwitch(req.auth.user.id, req.params.attemptId);
+  sendSuccess(res, result, 200, 'Recorded.');
 });
 
 // PATCH /quizzes/attempts/:attemptId/answers — autosave one answer.
@@ -127,6 +139,7 @@ module.exports = {
   getQuiz,
   saveFromChatMessage,
   startAttempt,
+  recordTabSwitch,
   saveAnswer,
   submitAttempt,
   submitLegacyAttempt,

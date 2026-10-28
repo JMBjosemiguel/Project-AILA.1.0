@@ -186,7 +186,7 @@ async function getQuestionForQuiz(quizId, questionId, connection = null) {
 async function getQuizWithQuestions(quizId, userId) {
   const quizRows = await query(
     `SELECT id, user_id, topic, quiz_type, difficulty, item_count, personalization_context, created_at,
-            subject_id, module_id, assessment_kind, passing_score, assessment_slot
+            subject_id, module_id, assessment_kind, passing_score, assessment_slot, source_type
        FROM quizzes WHERE id = ? AND user_id = ? LIMIT 1`,
     [quizId, userId]
   );
@@ -209,12 +209,25 @@ async function getQuizWithQuestions(quizId, userId) {
 
 // --- Resumable attempt lifecycle -------------------------------------------
 
+// Timer/tab-switch columns for an attempt row. remaining_seconds is computed on
+// the DB clock (the same clock that wrote expires_at), so the server stays the
+// source of truth regardless of the app server's or the browser's clock;
+// NULL when there is no time limit. timed_out marks a submission at/after the
+// deadline (auto-submitted on fetch/resume, or the client's submit at 0).
+// `p` is the quiz_attempts alias prefix ('qa.' or '').
+function attemptTimerColumns(p = '') {
+  return `${p}expires_at, ${p}time_limit_seconds, ${p}tab_switch_count,
+            TIMESTAMPDIFF(SECOND, CURRENT_TIMESTAMP, ${p}expires_at) AS remaining_seconds,
+            (${p}expires_at IS NOT NULL AND ${p}completed_at IS NOT NULL AND ${p}completed_at >= ${p}expires_at) AS timed_out`;
+}
+
 // The single active (in-progress) attempt for a (user, quiz), if one exists.
 // UNIQUE(user_id, quiz_id, active_slot) guarantees there is at most one.
 async function findActiveAttempt(userId, quizId, connection = null) {
   const rows = await execute(
     connection,
-    `SELECT id, quiz_id, user_id, status, current_index, score, total, started_at
+    `SELECT id, quiz_id, user_id, status, current_index, score, total, started_at,
+            ${attemptTimerColumns()}
        FROM quiz_attempts
       WHERE user_id = ? AND quiz_id = ? AND status = 'in_progress' AND active_slot = 1
       LIMIT 1`,
@@ -223,12 +236,18 @@ async function findActiveAttempt(userId, quizId, connection = null) {
   return rows[0] || null;
 }
 
-async function createInProgressAttempt({ quizId, userId, total }, connection = null) {
+// timeLimitSeconds NULL = no limit; DATE_ADD(..., INTERVAL NULL SECOND) is
+// NULL too, so expires_at stays NULL. Both timestamps come from the DB clock
+// in the same statement, so the deadline is exactly start + limit.
+async function createInProgressAttempt({ quizId, userId, total, timeLimitSeconds = null }, connection = null) {
   const result = await execute(
     connection,
-    `INSERT INTO quiz_attempts (quiz_id, user_id, score, total, status, current_index, active_slot, started_at, updated_at)
-     VALUES (?, ?, 0, ?, 'in_progress', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [quizId, userId, total]
+    `INSERT INTO quiz_attempts
+       (quiz_id, user_id, score, total, status, current_index, active_slot, started_at, updated_at,
+        time_limit_seconds, expires_at)
+     VALUES (?, ?, 0, ?, 'in_progress', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+             ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? SECOND))`,
+    [quizId, userId, total, timeLimitSeconds, timeLimitSeconds]
   );
   return result.insertId;
 }
@@ -238,7 +257,8 @@ async function getAttemptById(attemptId, userId, connection = null) {
     connection,
     `SELECT qa.id, qa.quiz_id, qa.user_id, qa.status, qa.current_index, qa.score, qa.total, qa.passed,
             qa.started_at, qa.completed_at, qa.updated_at,
-            q.topic, q.quiz_type, q.difficulty,
+            ${attemptTimerColumns('qa.')},
+            q.topic, q.quiz_type, q.difficulty, q.source_type,
             q.assessment_kind, q.passing_score, q.subject_id, q.module_id
        FROM quiz_attempts qa
        INNER JOIN quizzes q ON q.id = qa.quiz_id
@@ -314,6 +334,20 @@ async function upsertAttemptAnswer(attemptId, questionId, selectedAnswer, connec
      ON DUPLICATE KEY UPDATE selected_answer = VALUES(selected_answer), is_correct = NULL, answered_at = CURRENT_TIMESTAMP`,
     [attemptId, questionId, selectedAnswer]
   );
+}
+
+// Counts one "left the quiz" event, only while the attempt is still in
+// progress and before its deadline. updated_at is left as-is: a tab switch is
+// not answer progress.
+async function incrementTabSwitchCount(attemptId, connection = null) {
+  const result = await execute(
+    connection,
+    `UPDATE quiz_attempts
+        SET tab_switch_count = LEAST(tab_switch_count + 1, 65535), updated_at = updated_at
+      WHERE id = ? AND status = 'in_progress' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
+    [attemptId]
+  );
+  return result.affectedRows;
 }
 
 async function updateAttemptProgress(attemptId, currentIndex, connection = null) {
@@ -541,6 +575,7 @@ module.exports = {
   getSavedAnswers,
   upsertAttemptAnswer,
   updateAttemptProgress,
+  incrementTabSwitchCount,
   bulkUpsertGradedAnswers,
   finalizeAttempt,
   listActiveAttemptsForUser,

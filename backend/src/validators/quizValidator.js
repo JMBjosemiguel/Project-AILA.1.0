@@ -1,4 +1,5 @@
 const { body, param, query } = require('express-validator');
+const { QUIZ_TIME_LIMIT_MINUTES } = require('../constants/quizTimer');
 
 const generateValidator = [
   body('topic').trim().notEmpty().withMessage('Please provide a topic.').isLength({ max: 200 }),
@@ -61,8 +62,19 @@ const saveAnswerValidator = [
   body('currentIndex').optional({ values: 'null' }).isInt({ min: 0, max: 200 }),
 ];
 
+// timeLimitMinutes: omitted = not chosen yet, null = no limit, else one of the
+// listed minute values.
+const startAttemptValidator = [
+  param('quizId').isInt({ min: 1 }).withMessage('Invalid quiz id.'),
+  body('timeLimitMinutes').optional({ values: 'null' })
+    .isInt().withMessage('Please choose a time limit from the list.').bail()
+    .isIn(QUIZ_TIME_LIMIT_MINUTES).withMessage('Please choose a time limit from the list.')
+    .toInt(),
+];
+
 module.exports = {
   generateValidator,
+  startAttemptValidator,
   batchStartValidator,
   batchAppendValidator,
   quizIdParamValidator,

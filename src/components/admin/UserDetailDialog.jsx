@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Flame, Loader2, MessageSquare, X } from 'lucide-react';
 import { getAdminUserDetail } from '../../services/api/adminService';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
+import { gradePercent } from '../../utils/gradePercent';
 import ActivityList from '../student/ActivityList';
 
 function formatBytes(bytes) {
@@ -96,6 +97,36 @@ export default function UserDetailDialog({ userId, onClose }) {
                 {detail.recentActivity?.length ? (
                   <ActivityList activities={detail.recentActivity} showQuizView={false} />
                 ) : <p className="text-sm text-ink-400">No recent activity.</p>}
+              </div>
+
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Recent quiz attempts</div>
+                {detail.recentAttempts?.length ? (
+                  <div className="flex flex-col divide-y divide-ink-50">
+                    {detail.recentAttempts.map((item) => (
+                      <div key={item.id} className="py-2 text-sm flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-ink-700">{item.topic}</p>
+                          <p className="text-xs text-ink-400">
+                            {item.status === 'in_progress' ? 'In progress' : formatDateTime(item.completed_at)}
+                            {item.time_limit_seconds ? ` · ${Math.round(item.time_limit_seconds / 60)}-min limit` : ''}
+                            {item.timed_out ? ' · Timed out' : ''}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs flex-shrink-0">
+                          {item.status === 'in_progress' ? (
+                            <p className="text-ink-500">—</p>
+                          ) : (
+                            <p className="font-semibold text-ink-700">
+                              {item.score}/{item.total}{gradePercent(item.score, item.total) != null ? ` · Grade ${gradePercent(item.score, item.total)}%` : ''}
+                            </p>
+                          )}
+                          <p className="text-ink-400">{item.tab_switch_count} tab switch{item.tab_switch_count === 1 ? '' : 'es'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-sm text-ink-400">No quiz attempts yet.</p>}
               </div>
 
               <div>

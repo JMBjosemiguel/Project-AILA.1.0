@@ -47,6 +47,12 @@ export const COURSE_PURPOSES = [
 ];
 export const COURSE_PURPOSE_LABELS = Object.fromEntries(COURSE_PURPOSES.map((p) => [p.value, p.label]));
 
+// Must match the backend's QUIZ_TIME_LIMIT_MINUTES (constants/quizTimer.js).
+export const QUIZ_TIME_LIMIT_OPTIONS = [
+  { value: null, label: 'No limit' },
+  ...[5, 10, 15, 20, 30, 45, 60].map((minutes) => ({ value: minutes, label: `${minutes} min` })),
+];
+
 export const COURSE_LENGTHS = [
   { value: 'short', label: 'Short', description: '2-3 modules' },
   { value: 'standard', label: 'Standard', description: 'the current size' },

@@ -3,6 +3,7 @@ import { BookmarkPlus, Check, CheckCircle2, ClipboardList, Cloud, Loader2, Rotat
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 import PersonalizedBadge from '../common/PersonalizedBadge';
+import { gradePercent } from '../../utils/gradePercent';
 
 const TYPE_LABELS = {
   multiple_choice: 'Multiple Choice',
@@ -253,6 +254,8 @@ export default function QuizCard({
           <div className="px-3 py-2 rounded-xl bg-primary-50 text-primary text-sm font-semibold">
             You scored {score} / {items.length}
             {items.length > 0 ? ` (${Math.round((score / items.length) * 100)}%)` : ''}
+            {/* The informal chat mini-quiz is "not graded", so it shows no Grade. */}
+            {!isChatQuiz && items.length > 0 ? ` · Grade ${gradePercent(score, items.length)}%` : ''}
           </div>
           {!isChatQuiz && (
             <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
@@ -429,14 +432,16 @@ export default function QuizCard({
                       onClick={() => toggleExplanation(index)}
                       className="font-semibold text-primary hover:underline"
                     >
-                      {isCorrect ? 'Correct' : 'Incorrect'} — Show explanation
+                      {isCorrect ? 'Correct' : 'Incorrect'} — Show rationale
                     </button>
                   ) : (
                     <span className="text-ink-500">
                       {!isCorrect && graded?.correctAnswer && (
                         <span className="font-medium text-ink-700">Correct answer: {graded.correctAnswer}. </span>
                       )}
-                      {graded?.explanation}
+                      {graded?.explanation && (
+                        <><span className="font-medium text-ink-700">Rationale: </span>{graded.explanation}</>
+                      )}
                       {collapseExplanationsByDefault && (
                         <button type="button" onClick={() => toggleExplanation(index)} className="ml-1.5 font-semibold text-primary hover:underline">
                           Hide

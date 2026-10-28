@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, GraduationCap, Loader2, Share2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, GraduationCap, Loader2, Share2, X, XCircle } from 'lucide-react';
 import Button from '../../common/Button';
 import ShareDialog from '../../common/ShareDialog';
 import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
+import QuizTimer from './QuizTimer';
+import { QUIZ_TIME_LIMIT_OPTIONS } from '../../../constants/ui';
 import {
   generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt,
-  startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration,
+  startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration, recordQuizTabSwitch,
 } from '../../../services/api/quizService';
 
 const QUIZ_TYPES = [
@@ -17,6 +19,8 @@ const QUIZ_TYPES = [
 ];
 
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+const TAB_SWITCH_NOTICE = 'Leaving this page during the quiz is recorded.';
 
 const ASSESSMENT_LABEL = {
   module_checkpoint: 'Module Checkpoint',
@@ -85,7 +89,9 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
   const [batchProgress, setBatchProgress] = useState(null);
   const [shortResult, setShortResult] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [timeLimit, setTimeLimit] = useState(null); // minutes; null = no limit
   const submittingRef = useRef(false);
+  const timeUpRef = useRef(false);
   const batchCancelledRef = useRef(false);
   const toast = useToast();
 
@@ -125,46 +131,68 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
     await chainRef.current;
   }, [drain]);
 
-  const beginAttempt = useCallback(async (quizId) => {
+  // Shows a graded attempt (a past result, or one just submitted because its
+  // time ran out) read-only.
+  const showReview = useCallback((data) => {
+    setQuiz({
+      topic: data.topic,
+      quizType: data.quizType,
+      assessmentKind: data.assessmentKind,
+      items: data.items.map((i) => ({ id: i.id, question: i.question, options: i.options })),
+    });
+    setPresetReview({
+      answers: data.items.map((i) => ({ questionId: i.id, selectedAnswer: i.yourAnswer })),
+      graded: data.items.map((i) => ({ correctAnswer: i.correctAnswer, explanation: i.explanation, isCorrect: i.isCorrect })),
+    });
+    setResult({ ...data, assessmentKind: data.assessmentKind });
+    setStep('review');
+  }, []);
+
+  const applyStartResponse = useCallback((data) => {
+    if (data.needsTimeLimit) {
+      setQuiz({ ...data.quiz, items: [] });
+      setTimeLimit(null);
+      setStep('time-limit');
+      return;
+    }
+    if (data.timedOut) {
+      toast.error("Time's up — your saved answers were submitted automatically.");
+      showReview(data.review);
+      return;
+    }
+    attemptIdRef.current = data.attempt.id;
+    timeUpRef.current = false;
+    setAttempt(data.attempt);
+    setInitialAnswers(data.answers || []);
+    setQuiz({ ...data.quiz, items: data.items });
+    setSaveState('idle');
+    setStep('ready');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showReview]);
+
+  const beginAttempt = useCallback(async (quizId, options) => {
     quizIdRef.current = quizId;
     setStep('starting');
     setError('');
     try {
-      const data = await startQuizAttempt(quizId);
-      attemptIdRef.current = data.attempt.id;
-      setAttempt(data.attempt);
-      setInitialAnswers(data.answers || []);
-      setQuiz({ ...data.quiz, items: data.items });
-      setSaveState('idle');
-      setStep('ready');
+      const data = options ? await startQuizAttempt(quizId, options) : await startQuizAttempt(quizId);
+      applyStartResponse(data);
     } catch (err) {
       setError(err.message || 'Could not open this quiz. Please try again.');
       setStep('error');
     }
-  }, []);
+  }, [applyStartResponse]);
 
   const loadReview = useCallback(async (id) => {
     setStep('starting');
     setError('');
     try {
-      const data = await getQuizAttempt(id);
-      setQuiz({
-        topic: data.topic,
-        quizType: data.quizType,
-        assessmentKind: data.assessmentKind,
-        items: data.items.map((i) => ({ id: i.id, question: i.question, options: i.options })),
-      });
-      setPresetReview({
-        answers: data.items.map((i) => ({ questionId: i.id, selectedAnswer: i.yourAnswer })),
-        graded: data.items.map((i) => ({ correctAnswer: i.correctAnswer, explanation: i.explanation, isCorrect: i.isCorrect })),
-      });
-      setResult({ ...data, assessmentKind: data.assessmentKind });
-      setStep('review');
+      showReview(await getQuizAttempt(id));
     } catch (err) {
       setError(err.message || 'Could not load that result.');
       setStep('error');
     }
-  }, []);
+  }, [showReview]);
 
   useEffect(() => {
     if (reviewAttemptId) loadReview(reviewAttemptId);
@@ -295,11 +323,60 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
     }
   };
 
+  // Auto-submit at 0. The server rejects saves after the deadline, so this
+  // submits whatever was saved in time rather than blocking on unsaved answers.
+  const handleTimeUp = useCallback(async () => {
+    if (timeUpRef.current || !attemptIdRef.current) return;
+    timeUpRef.current = true;
+    await flushSaves().catch(() => {});
+    toast.error("Time's up — your saved answers were submitted automatically.");
+    try {
+      showReview(await submitAttempt(attemptIdRef.current));
+    } catch {
+      // Already submitted (e.g. by the server when the attempt was reopened).
+      try {
+        showReview(await getQuizAttempt(attemptIdRef.current));
+      } catch (err) {
+        setError(err.message || 'Could not load your result.');
+        setStep('error');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flushSaves, showReview]);
+
+  const inProgress = step === 'ready' && !result && Boolean(attempt?.id);
+  const tracksTabSwitches = inProgress && Boolean(quiz?.timerEligible);
+
+  // Record only: each time the student leaves the quiz (tab hidden or window
+  // blurred) counts once, until they come back. No popups, no auto-submit.
+  useEffect(() => {
+    if (!tracksTabSwitches) return undefined;
+    let away = false;
+    const leave = () => {
+      if (away) return;
+      away = true;
+      recordQuizTabSwitch(attemptIdRef.current).catch(() => {});
+    };
+    const back = () => { away = false; };
+    const onVisibilityChange = () => (document.visibilityState === 'hidden' ? leave() : back());
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', leave);
+    window.addEventListener('focus', back);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('blur', leave);
+      window.removeEventListener('focus', back);
+    };
+  }, [tracksTabSwitches]);
+
   const assessmentKind = quiz?.assessmentKind && quiz.assessmentKind !== 'practice' ? quiz.assessmentKind : null;
   const passingScore = quiz?.passingScore ?? result?.passingScore ?? null;
   const headerTitle = assessmentKind
     ? ASSESSMENT_LABEL[assessmentKind]
-    : step === 'ready' && quiz ? `Quiz: ${quiz.topic}` : reviewAttemptId ? 'Review' : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
+    : step === 'review' ? 'Review'
+      : step === 'ready' && quiz ? `Quiz: ${quiz.topic}`
+        : step === 'time-limit' ? 'Before you start'
+          : reviewAttemptId ? 'Review' : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
   const resumedCount = step === 'ready' && !result ? initialAnswers.filter((a) => a.selectedAnswer).length : 0;
   const formalResult = result && result.assessmentKind && result.assessmentKind !== 'practice';
 
@@ -317,13 +394,22 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
               {assessmentKind && passingScore != null && <span> · Passing {passingScore}%</span>}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full text-ink-400 hover:text-ink-800 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {inProgress && attempt.remainingSeconds != null && (
+              <QuizTimer
+                remainingSeconds={attempt.remainingSeconds}
+                onWarning={() => toast.error('1 minute left — your quiz will submit automatically at 0:00.')}
+                onExpire={handleTimeUp}
+              />
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full text-ink-400 hover:text-ink-800 hover:bg-ink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -430,6 +516,33 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
             </>
           )}
 
+          {step === 'time-limit' && (
+            <div className="flex flex-col gap-3">
+              <div>
+                <span className="text-xs font-semibold text-ink-600 mb-1.5 block">Time limit</span>
+                <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Time limit">
+                  {QUIZ_TIME_LIMIT_OPTIONS.map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => setTimeLimit(option.value)}
+                      role="radio"
+                      aria-checked={timeLimit === option.value}
+                      className={[
+                        'text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+                        timeLimit === option.value ? 'bg-primary border-primary text-white' : 'bg-surface border-ink-100 text-ink-600 hover:border-primary-300',
+                      ].join(' ')}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-400 mt-1.5">The time limit can&apos;t be changed after you start. When time runs out, your answers are submitted automatically.</p>
+              </div>
+              <p className="text-xs text-ink-500">{TAB_SWITCH_NOTICE}</p>
+            </div>
+          )}
+
           {(step === 'loading' || step === 'starting') && (
             <div className="flex items-center gap-2 text-sm text-ink-400 py-10 justify-center">
               <Loader2 size={16} className="animate-spin" />
@@ -509,10 +622,18 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
                   </div>
                 </div>
               )}
+              {result?.timedOut && (
+                <div className="mb-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+                  <Clock size={16} className="mt-0.5 flex-shrink-0" />
+                  <p>Time ran out, so your saved answers were submitted automatically.</p>
+                </div>
+              )}
+              {tracksTabSwitches && <p className="text-xs text-ink-500 mb-3">{TAB_SWITCH_NOTICE}</p>}
               {resumedCount > 0 && (
                 <p className="text-xs text-ink-400 mb-3">Resumed — {resumedCount} saved answer{resumedCount === 1 ? '' : 's'} restored.</p>
               )}
               <QuizCard
+                key={step}
                 quiz={quiz}
                 onSubmit={step === 'review' ? undefined : handleSubmit}
                 presetReview={presetReview}
@@ -537,6 +658,11 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
         {step === 'setup' && (
           <div className="flex-shrink-0 border-t border-ink-100 px-5 py-4">
             <Button full onClick={handleGenerate}>Generate quiz</Button>
+          </div>
+        )}
+        {step === 'time-limit' && (
+          <div className="flex-shrink-0 border-t border-ink-100 px-5 py-4">
+            <Button full onClick={() => beginAttempt(quizIdRef.current, { timeLimitMinutes: timeLimit })}>Start quiz</Button>
           </div>
         )}
       </div>

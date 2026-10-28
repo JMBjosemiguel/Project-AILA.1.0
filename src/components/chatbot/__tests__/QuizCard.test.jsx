@@ -254,9 +254,9 @@ describe('QuizCard — results (filter + collapsed explanations)', () => {
     await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
 
     expect(screen.queryByText(/Explanation 1\./)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Show explanation/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Show rationale/i }).length).toBeGreaterThan(0);
 
-    await user.click(screen.getAllByRole('button', { name: /Show explanation/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /Show rationale/i })[0]);
     expect(screen.getByText(/Explanation 1\./)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Expand all/i }));
@@ -271,7 +271,7 @@ describe('QuizCard — results (filter + collapsed explanations)', () => {
     await user.click(screen.getByRole('button', { name: 'Tokyo' }));
     await user.click(screen.getByRole('button', { name: /Check Answers/i }));
     await waitFor(() => expect(screen.getByText(/Since 1868/)).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Show explanation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show rationale/i })).not.toBeInTheDocument();
   });
 });
 
@@ -295,7 +295,7 @@ describe('QuizCard — chat quiz cards are never affected by long-quiz UI', () =
     await user.click(screen.getByRole('button', { name: /Check Answers/i }));
     await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
     expect(screen.queryByRole('radio', { name: /Wrong only/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Show explanation/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show rationale/i })).not.toBeInTheDocument();
     expect(screen.getByText('Explanation 1.')).toBeInTheDocument(); // shown inline, never collapsed
   });
 
@@ -306,5 +306,50 @@ describe('QuizCard — chat quiz cards are never affected by long-quiz UI', () =
 
     await user.click(screen.getByRole('button', { name: /Check Answers/i })); // nothing answered
     await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+  });
+});
+
+describe('QuizCard — grade and rationale', () => {
+  it('a graded quiz shows the Grade beside the raw score, and each explanation as "Rationale"', async () => {
+    const user = userEvent.setup();
+    render(<QuizCard quiz={takePayload} onSubmit={vi.fn().mockResolvedValue(gradedResult)} />);
+
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+
+    // 1 of 2: (1 / 2 x 50) + 50 = 75
+    await waitFor(() => expect(screen.getByText(/You scored 1 \/ 2 \(50%\) · Grade 75%/)).toBeInTheDocument());
+    expect(screen.getAllByText('Rationale:')).toHaveLength(2);
+    expect(screen.queryByText(/Explanation/)).not.toBeInTheDocument();
+  });
+
+  it('a chat mini-quiz (not graded) shows no Grade, but still labels the Rationale', async () => {
+    const user = userEvent.setup();
+    const inlineQuiz = {
+      topic: 'Practice', quizType: 'multiple_choice',
+      items: [{ question: 'Capital of France?', options: ['Paris', 'Berlin'], correctAnswer: 'Paris', explanation: 'Paris is correct.' }],
+    };
+    render(<QuizCard quiz={inlineQuiz} onSaveAsQuiz={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+
+    await waitFor(() => expect(screen.getByText(/You scored 0 \/ 1/)).toBeInTheDocument());
+    expect(screen.queryByText(/Grade/)).not.toBeInTheDocument();
+    expect(screen.getByText('Rationale:')).toBeInTheDocument();
+  });
+
+  it('0 correct is Grade 50% and all correct is Grade 100%', () => {
+    const items = [{ id: 1, question: 'Q?', options: ['a', 'b'] }];
+    const { unmount } = render(
+      <QuizCard quiz={{ topic: 'T', quizType: 'multiple_choice', items }} presetReview={{ answers: [], graded: [{ correctAnswer: 'a', explanation: '', isCorrect: false }] }} />
+    );
+    expect(screen.getByText(/Grade 50%/)).toBeInTheDocument();
+    unmount();
+    render(
+      <QuizCard quiz={{ topic: 'T', quizType: 'multiple_choice', items }} presetReview={{ answers: [], graded: [{ correctAnswer: 'a', explanation: '', isCorrect: true }] }} />
+    );
+    expect(screen.getByText(/Grade 100%/)).toBeInTheDocument();
   });
 });

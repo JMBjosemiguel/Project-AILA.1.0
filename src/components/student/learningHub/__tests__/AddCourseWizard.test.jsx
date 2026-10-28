@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../../../services/api/learningService', () => ({
@@ -36,9 +36,34 @@ describe('AddCourseWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Generate course' }));
 
     await waitFor(() => expect(generateCourse).toHaveBeenCalledWith({
-      courseName: 'Organic Chemistry', difficulty: 'beginner', goal: '', purpose: 'from_scratch', length: 'standard', focus: [],
+      courseName: 'Organic Chemistry', curriculumSubject: null, difficulty: 'beginner', goal: '', purpose: 'from_scratch', length: 'standard', focus: [],
     }));
     await waitFor(() => expect(onGenerated).toHaveBeenCalledWith(42));
+  });
+
+  it('the subject dropdown sits beside the course name, lists the subjects, and defaults to Others', () => {
+    render(<AddCourseWizard onClose={vi.fn()} onGenerated={vi.fn()} />);
+    const select = screen.getByLabelText('Subject');
+    expect(select).toHaveDisplayValue('Others');
+    const labels = within(select).getAllByRole('option').map((option) => option.textContent);
+    expect(labels[0]).toBe('NCM 104 Community Health Nursing I');
+    expect(labels).toContain('NCM 106 Pharmacology');
+    expect(labels).toContain('MC 4 Logic and Critical Thinking');
+    expect(labels[labels.length - 1]).toBe('Others');
+    expect(labels).toHaveLength(9);
+  });
+
+  it('a chosen subject is sent with the course', async () => {
+    const user = userEvent.setup();
+    render(<AddCourseWizard onClose={vi.fn()} onGenerated={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('Course name'), 'Drug Classes');
+    await user.selectOptions(screen.getByLabelText('Subject'), 'NCM 106');
+    await user.click(screen.getByRole('button', { name: 'Generate course' }));
+
+    await waitFor(() => expect(generateCourse).toHaveBeenCalledWith(expect.objectContaining({
+      courseName: 'Drug Classes', curriculumSubject: 'NCM 106',
+    })));
   });
 
   it('requires a course name, nothing else', async () => {
@@ -80,7 +105,7 @@ describe('AddCourseWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Generate course' }));
 
     await waitFor(() => expect(generateCourse).toHaveBeenCalledWith({
-      courseName: 'Pharmacology', difficulty: 'advanced', goal: 'Pass the finals',
+      courseName: 'Pharmacology', curriculumSubject: null, difficulty: 'advanced', goal: 'Pass the finals',
       purpose: 'from_scratch', length: 'in_depth', focus: ['case_scenarios', 'key_terms'],
     }));
   });

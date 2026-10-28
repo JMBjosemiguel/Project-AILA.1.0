@@ -2,6 +2,7 @@ const { body } = require('express-validator');
 
 const registerValidator = [
   body('first_name').trim().notEmpty().withMessage('First name is required.').isLength({ max: 100 }),
+  body('middle_name').optional({ values: 'falsy' }).trim().isLength({ max: 100 }).withMessage('Middle name must be at most 100 characters.'),
   body('last_name').trim().notEmpty().withMessage('Last name is required.').isLength({ max: 100 }),
   body('email').trim().isEmail().withMessage('A valid email is required.').normalizeEmail().isLength({ max: 150 }),
   body('password').isLength({ min: 8, max: 72 }).withMessage('Password must be 8 to 72 characters.'),
@@ -9,7 +10,10 @@ const registerValidator = [
     .optional({ values: 'falsy' })
     .custom((value, { req }) => value === req.body.password)
     .withMessage('Password confirmation does not match.'),
-  body('student_number').optional({ values: 'falsy' }).trim().isLength({ max: 30 }),
+  body('student_number')
+    .trim()
+    .notEmpty().withMessage('Please enter your student number.')
+    .isLength({ max: 30 }).withMessage('Student number must be at most 30 characters.'),
   body('program').trim().notEmpty().withMessage('Please enter your program.').isLength({ max: 150 }),
   body('year_level')
     .optional({ values: 'null' })

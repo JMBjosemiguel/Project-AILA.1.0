@@ -3,10 +3,19 @@ const ApiError = require('../utils/ApiError');
 const userModel = require('../models/userModel');
 const authService = require('./authService');
 
+// '' clears an optional text field; stored as NULL so "not provided" has one
+// representation.
+function blankToNull(value) {
+  if (value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
+
 async function getProfile(userId) {
-  const [user, activities] = await Promise.all([
+  const [user, activities, personal] = await Promise.all([
     userModel.findUserById(userId),
     userModel.getRecentActivity(userId),
+    userModel.findProfilePersonalFields(userId),
   ]);
 
   return {
@@ -17,7 +26,9 @@ async function getProfile(userId) {
       email: user.email,
       student_number: user.student_number,
     },
-    profile: user.profile,
+    // Middle name, Facebook and contact number come only from this owner-only
+    // endpoint (and admin user details) — never from the shared auth user object.
+    profile: user.profile ? { ...user.profile, ...personal } : null,
     activities,
   };
 }
@@ -29,6 +40,9 @@ async function updateProfile(userId, updates) {
   if (updates.bio !== undefined) fields.bio = updates.bio;
   if (updates.avatar_url !== undefined) fields.avatar_url = updates.avatar_url;
   if (updates.leaderboard_opt_in !== undefined) fields.leaderboard_opt_in = updates.leaderboard_opt_in ? 1 : 0;
+  if (updates.middle_name !== undefined) fields.middle_name = blankToNull(updates.middle_name);
+  if (updates.facebook !== undefined) fields.facebook = blankToNull(updates.facebook);
+  if (updates.contact_number !== undefined) fields.contact_number = blankToNull(updates.contact_number);
 
   if (Object.keys(fields).length) {
     await userModel.updateProfileFields(userId, fields);

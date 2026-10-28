@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
 import { useToast } from '../../common/Toast';
 import { COURSE_FOCUSES, COURSE_LENGTHS, COURSE_PURPOSES } from '../../../constants/ui';
+import { CURRICULUM_SUBJECT_OPTIONS } from '../../../constants/curriculumSubjects';
 import { generateCourse } from '../../../services/api/learningService';
 
 const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
@@ -17,6 +18,8 @@ function pillClass(active) {
 
 export default function AddCourseWizard({ onClose, onGenerated }) {
   const [courseName, setCourseName] = useState('');
+  // '' = "Others" (no curriculum subject), the default.
+  const [curriculumSubject, setCurriculumSubject] = useState('');
   const [purpose, setPurpose] = useState('from_scratch');
   const [difficulty, setDifficulty] = useState('beginner');
   const [length, setLength] = useState('standard');
@@ -44,7 +47,7 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
     setError('');
     try {
       const result = await generateCourse({
-        courseName: courseName.trim(), difficulty, goal: goal.trim(), purpose, length, focus,
+        courseName: courseName.trim(), curriculumSubject: curriculumSubject || null, difficulty, goal: goal.trim(), purpose, length, focus,
       });
       toast.success(
         result.personalizationLevel === 'performance_aware'
@@ -88,15 +91,30 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {error && <p className="text-xs text-rose-600 mb-3">{error}</p>}
               <div className="flex flex-col gap-4">
-                <div>
-                  <label htmlFor="course-name" className="text-xs font-semibold text-ink-600 mb-1.5 block">Course name</label>
-                  <input
-                    id="course-name"
-                    value={courseName}
-                    onChange={(event) => setCourseName(event.target.value)}
-                    placeholder="e.g. Introduction to Psychology, Organic Chemistry, Business Finance..."
-                    className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem] gap-3">
+                  <div>
+                    <label htmlFor="course-name" className="text-xs font-semibold text-ink-600 mb-1.5 block">Course name</label>
+                    <input
+                      id="course-name"
+                      value={courseName}
+                      onChange={(event) => setCourseName(event.target.value)}
+                      placeholder="e.g. Introduction to Psychology, Organic Chemistry, Business Finance..."
+                      className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="course-subject" className="text-xs font-semibold text-ink-600 mb-1.5 block">Subject</label>
+                    <select
+                      id="course-subject"
+                      value={curriculumSubject}
+                      onChange={(event) => setCurriculumSubject(event.target.value)}
+                      className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-2 py-2 text-sm bg-surface outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+                    >
+                      {CURRICULUM_SUBJECT_OPTIONS.map((option) => (
+                        <option key={option.value || 'others'} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>

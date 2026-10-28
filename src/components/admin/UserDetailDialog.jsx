@@ -43,7 +43,7 @@ export default function UserDetailDialog({ userId, onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div>
             <h3 id="user-detail-title" className="text-[0.95rem] font-semibold text-ink-800">
-              {loading ? 'Loading...' : detail ? `${detail.first_name} ${detail.last_name}` : 'User profile'}
+              {loading ? 'Loading...' : detail ? [detail.first_name, detail.middle_name, detail.last_name].filter(Boolean).join(' ') : 'User profile'}
             </h3>
             <p className="text-xs text-ink-400 mt-0.5">{detail?.email}</p>
           </div>
@@ -81,6 +81,14 @@ export default function UserDetailDialog({ userId, onClose }) {
                 <div className="text-ink-500">Program: {detail.program || 'Not set'} {detail.year_level ? `· Yr ${detail.year_level}` : ''}</div>
                 <div className="text-ink-500">Joined: {formatDate(detail.created_at)}</div>
                 <div className="text-ink-500 col-span-2">Last login: {detail.last_login_at ? formatDateTime(detail.last_login_at) : 'Never'}</div>
+              </div>
+
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Contact</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+                  <div className="text-ink-500 min-w-0 break-words">Facebook: {detail.facebook || 'Not set'}</div>
+                  <div className="text-ink-500 min-w-0 break-words">Contact number: {detail.contact_number || 'Not set'}</div>
+                </div>
               </div>
 
               <div>

@@ -37,6 +37,7 @@ const VERIFICATION_TOKEN_TTL_MS = 30 * 60 * 1000; // ~30 minutes
 function normalizeRegisterPayload(payload) {
   return {
     first_name: payload.first_name.trim(),
+    middle_name: payload.middle_name?.trim() || null,
     last_name: payload.last_name.trim(),
     email: payload.email.trim().toLowerCase(),
     password: payload.password,
@@ -202,10 +203,10 @@ async function register(payload) {
 
       await connection.execute(
         `
-          INSERT INTO user_profiles (user_id, program, year_level, xp_points, level)
-          VALUES (?, ?, ?, 0, 1)
+          INSERT INTO user_profiles (user_id, middle_name, program, year_level, xp_points, level)
+          VALUES (?, ?, ?, ?, 0, 1)
         `,
-        [userResult.insertId, data.program, data.year_level]
+        [userResult.insertId, data.middle_name, data.program, data.year_level]
       );
 
       rawToken = await issueVerificationToken(userResult.insertId, connection);

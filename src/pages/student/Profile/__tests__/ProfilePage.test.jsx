@@ -77,3 +77,58 @@ describe('Profile load failure', () => {
     expect(screen.queryByText(/couldn't load your profile/i)).not.toBeInTheDocument();
   });
 });
+
+describe('Profile middle name and contact info', () => {
+  it('shows the middle name in the display name, and the saved Facebook and contact number', () => {
+    profileState.data = {
+      ...data,
+      profile: { ...data.profile, middle_name: 'Dela Paz', facebook: 'fb.com/jose', contact_number: '0917 123 4567' },
+    };
+    render(<ProfilePage />);
+
+    expect(screen.getByRole('heading', { name: 'Jose Dela Paz Belleza' })).toBeInTheDocument();
+    expect(screen.getByText('fb.com/jose')).toBeInTheDocument();
+    expect(screen.getByText('0917 123 4567')).toBeInTheDocument();
+    expect(screen.getByText(/only visible to you and AILA admins, never to other students/i)).toBeInTheDocument();
+  });
+
+  it('saves the middle name, Facebook and contact number with the rest of the profile', async () => {
+    const user = userEvent.setup();
+    render(<ProfilePage />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.type(screen.getByLabelText('Middle name'), ' Dela Paz ');
+    await user.type(screen.getByLabelText('Facebook'), 'https://facebook.com/jose');
+    await user.type(screen.getByLabelText('Contact number'), '+63 917 123 4567');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({
+      middle_name: 'Dela Paz',
+      program: 'BSIT',
+      year_level: 2,
+      bio: null,
+      facebook: 'https://facebook.com/jose',
+      contact_number: '+63 917 123 4567',
+    }));
+  });
+
+  it('clearing the fields sends null so the saved values are removed', async () => {
+    profileState.data = {
+      ...data,
+      profile: { ...data.profile, middle_name: 'Dela Paz', facebook: 'fb.com/jose', contact_number: '0917 123 4567' },
+    };
+    const user = userEvent.setup();
+    render(<ProfilePage />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    for (const label of ['Middle name', 'Facebook', 'Contact number']) {
+      // eslint-disable-next-line no-await-in-loop
+      await user.clear(screen.getByLabelText(label));
+    }
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith(expect.objectContaining({
+      middle_name: null, facebook: null, contact_number: null,
+    })));
+  });
+});

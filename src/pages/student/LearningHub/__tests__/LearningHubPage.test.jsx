@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LearningHubPage from '../index';
 import { useLearningHubData } from '../../../../hooks/useLearningHubData';
@@ -289,5 +289,60 @@ describe('LearningHubPage search — lessons, quizzes, and resources', () => {
     expect(screen.queryByText('Lessons')).not.toBeInTheDocument();
     expect(screen.queryByText('Quizzes')).not.toBeInTheDocument();
     expect(screen.queryByText('Resources')).not.toBeInTheDocument();
+  });
+});
+
+describe('LearningHubPage curriculum subject groups', () => {
+  const grouped = [
+    { ...subjects[0], id: 1, name: 'Drug Classes', curriculum_subject: 'NCM 106' },
+    { ...subjects[1], id: 2, name: 'Free Elective Notes', curriculum_subject: null },
+    { ...subjects[1], id: 3, name: 'Community Diagnosis', curriculum_subject: 'NCM 104' },
+    { ...subjects[0], id: 4, name: 'Retired Subject Course', curriculum_subject: 'NCM 999' },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    mockHubData(grouped);
+  });
+
+  it('groups courses under their subject in list order, with no-subject courses under Others last', () => {
+    renderPage();
+
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['NCM 104 Community Health Nursing I (1)', 'NCM 106 Pharmacology (1)', 'Others (2)']);
+
+    const others = screen.getByRole('region', { name: 'Others' });
+    expect(within(others).getByText('Free Elective Notes')).toBeInTheDocument();
+    expect(within(others).getByText('Retired Subject Course')).toBeInTheDocument();
+  });
+
+  it('the subject filter shows only that subject, and "Others" shows only courses without one', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const filter = screen.getByRole('combobox', { name: 'Filter courses by subject' });
+
+    await user.selectOptions(filter, 'NCM 106');
+    expect(screen.getByText('Drug Classes')).toBeInTheDocument();
+    expect(screen.queryByText('Community Diagnosis')).not.toBeInTheDocument();
+    expect(screen.queryByText('Free Elective Notes')).not.toBeInTheDocument();
+
+    await user.selectOptions(filter, 'Others');
+    expect(screen.getByText('Free Elective Notes')).toBeInTheDocument();
+    expect(screen.getByText('Retired Subject Course')).toBeInTheDocument();
+    expect(screen.queryByText('Drug Classes')).not.toBeInTheDocument();
+
+    await user.selectOptions(filter, 'All subjects');
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(3);
+  });
+
+  it('a subject with no courses shows the no-match state', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter courses by subject' }), 'MC 4');
+
+    expect(screen.getByText('No matching courses')).toBeInTheDocument();
+    expect(screen.getByText('Try a different search term or subject.')).toBeInTheDocument();
   });
 });

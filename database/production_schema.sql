@@ -68,10 +68,13 @@ CREATE TABLE email_verification_tokens (
 CREATE TABLE user_profiles (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
+  middle_name VARCHAR(100) NULL DEFAULT NULL,  -- migration 010
   program VARCHAR(150) NULL,
   year_level TINYINT NULL,
   avatar_url VARCHAR(255) NULL,
   bio TEXT NULL,
+  facebook VARCHAR(255) NULL DEFAULT NULL,      -- migration 010: student + admins only
+  contact_number VARCHAR(30) NULL DEFAULT NULL, -- migration 010: student + admins only
   xp_points INT UNSIGNED NOT NULL DEFAULT 0,
   level INT UNSIGNED NOT NULL DEFAULT 1,
   leaderboard_opt_in TINYINT(1) NOT NULL DEFAULT 0,  -- migration 006: opt-in leaderboard visibility
@@ -315,6 +318,7 @@ CREATE TABLE subjects (
   description TEXT NULL,
   difficulty ENUM('beginner','intermediate','advanced') NULL,
   goal VARCHAR(150) NULL,
+  curriculum_subject VARCHAR(50) NULL DEFAULT NULL,  -- migration 010: curriculum subject code; NULL = "Others"
   is_ai_generated TINYINT(1) NOT NULL DEFAULT 0,
   is_archived TINYINT(1) NOT NULL DEFAULT 0,
   personalization_context JSON NULL,  -- migration 003: audit snapshot of the context used for AI generation
@@ -775,7 +779,9 @@ CREATE TABLE quiz_attempts (
   active_slot TINYINT UNSIGNED NULL DEFAULT NULL,
   passed TINYINT(1) NULL DEFAULT NULL,  -- migration 004: recorded at submit for formal assessments
   started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP NULL DEFAULT NULL,
+  expires_at TIMESTAMP NULL DEFAULT NULL,                -- the attempt deadline when time_limit_seconds is set
+  time_limit_seconds INT UNSIGNED NULL DEFAULT NULL,     -- migration 010: NULL = no time limit
+  tab_switch_count SMALLINT UNSIGNED NOT NULL DEFAULT 0, -- migration 010
   completed_at TIMESTAMP NULL DEFAULT NULL,
   updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

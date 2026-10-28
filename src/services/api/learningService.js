@@ -16,10 +16,10 @@ export function completeLesson(lessonId) {
   return apiClient.post(API_ENDPOINTS.learning.completeLesson(lessonId));
 }
 
-export function generateCourse({ courseName, difficulty, goal, purpose, length, focus }) {
+export function generateCourse({ courseName, curriculumSubject, difficulty, goal, purpose, length, focus }) {
   return apiClient.post(
     API_ENDPOINTS.learning.generateCourse,
-    { courseName, difficulty, goal, purpose, length, focus },
+    { courseName, curriculumSubject, difficulty, goal, purpose, length, focus },
     { timeout: COURSE_GENERATION_REQUEST_TIMEOUT_MS }
   );
 }

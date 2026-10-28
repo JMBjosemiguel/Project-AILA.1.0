@@ -15,7 +15,7 @@ const { execute } = require('../config/database');
 async function copySubjectTree(sourceSubjectId, recipientId, connection) {
   const srcRows = await execute(
     connection,
-    'SELECT name, description, difficulty, goal, is_ai_generated FROM subjects WHERE id = ? LIMIT 1',
+    'SELECT name, description, difficulty, goal, curriculum_subject, is_ai_generated FROM subjects WHERE id = ? LIMIT 1',
     [sourceSubjectId]
   );
   const src = srcRows[0];
@@ -24,10 +24,10 @@ async function copySubjectTree(sourceSubjectId, recipientId, connection) {
   const subjectResult = await execute(
     connection,
     `INSERT INTO subjects
-       (created_by, name, code, description, difficulty, goal, is_ai_generated,
+       (created_by, name, code, description, difficulty, goal, curriculum_subject, is_ai_generated,
         personalization_context, visibility, copied_from_subject_id)
-     VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, 'private', ?)`,
-    [recipientId, src.name, src.description, src.difficulty, src.goal, src.is_ai_generated, sourceSubjectId]
+     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, 'private', ?)`,
+    [recipientId, src.name, src.description, src.difficulty, src.goal, src.curriculum_subject, src.is_ai_generated, sourceSubjectId]
   );
   const newSubjectId = subjectResult.insertId;
 

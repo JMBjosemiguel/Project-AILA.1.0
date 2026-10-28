@@ -51,8 +51,9 @@ function normalizeSession(data) {
 function buildRegisterPayload(payload) {
   return {
     first_name: payload.first_name,
+    middle_name: payload.middle_name?.trim() || null,
     last_name: payload.last_name,
-    student_number: payload.student_number || null,
+    student_number: payload.student_number?.trim() || null,
     email: payload.email,
     program: payload.program || null,
     year_level: payload.year_level || null,

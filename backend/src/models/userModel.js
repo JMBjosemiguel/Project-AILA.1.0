@@ -154,6 +154,17 @@ async function findUserForPasswordReset(userId) {
   return rows[0] || null;
 }
 
+// Kept out of publicUserSelect on purpose: that shape is the auth user object
+// (req.auth.user, /auth/me, login) and travels widely. These are read only by
+// the owner's own profile endpoint (and admin user details, adminModel).
+async function findProfilePersonalFields(userId) {
+  const rows = await query(
+    'SELECT middle_name, facebook, contact_number FROM user_profiles WHERE user_id = ? LIMIT 1',
+    [userId]
+  );
+  return rows[0] || { middle_name: null, facebook: null, contact_number: null };
+}
+
 async function getRoleIdByName(roleName) {
   const rows = await query('SELECT id FROM roles WHERE name = ? LIMIT 1', [roleName]);
   return rows[0]?.id || null;
@@ -233,6 +244,7 @@ module.exports = {
   findUserByStudentNumber,
   findPasswordHashById,
   findUserForPasswordReset,
+  findProfilePersonalFields,
   getRoleIdByName,
   updateLastLogin,
   updateProfileFields,

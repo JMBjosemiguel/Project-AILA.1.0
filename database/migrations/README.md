@@ -17,6 +17,7 @@ AILA database in place. A fresh installation does not need these files because
 | 007 | `007_chat_quiz_provenance.sql` | Adds quiz provenance for chatbot-generated quizzes. |
 | 008 | `008_email_verification.sql` | Adds email verification support. |
 | 009 | `009_chat_pending_intent.sql` | Adds pending chatbot intent state. |
+| 010 | `010_curriculum_subject_profile_fields_quiz_timer.sql` | Adds course curriculum subject, profile middle name/Facebook/contact number, and quiz attempt time limit/tab-switch count. |
 
 Run migrations in this order only.
 

@@ -8,6 +8,7 @@ import { maskEmail } from '../../../utils/maskEmail';
 
 const INITIAL_FORM = {
   first_name: '',
+  middle_name: '',
   last_name: '',
   student_number: '',
   email: '',
@@ -46,6 +47,11 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!form.student_number.trim()) {
+      setError('Please enter your student number.');
       return;
     }
 
@@ -178,10 +184,12 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
           <AuthInput label="Last name" placeholder="Last name" value={form.last_name} onChange={update('last_name')} />
         </div>
 
+        <AuthInput label="Middle name" icon={User} placeholder="Middle name (optional)" value={form.middle_name} onChange={update('middle_name')} />
+
         <AuthInput label="Email" icon={Mail} type="email" placeholder="you@university.edu" value={form.email} onChange={update('email')} />
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-3">
-          <AuthInput label="Student number" icon={Hash} placeholder="Optional" value={form.student_number} onChange={update('student_number')} />
+          <AuthInput label="Student number" icon={Hash} placeholder="e.g. 2024-00123" value={form.student_number} onChange={update('student_number')} />
           <AuthInput label="Year" type="number" min="1" max="4" placeholder="1" value={form.year_level} onChange={update('year_level')} />
         </div>
 

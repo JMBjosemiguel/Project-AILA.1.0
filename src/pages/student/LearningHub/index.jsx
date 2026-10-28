@@ -10,6 +10,7 @@ import AddCourseWizard from '../../../components/student/learningHub/AddCourseWi
 import LessonReader from '../../../components/student/learningHub/LessonReader';
 import SubjectCard from '../../../components/student/learningHub/SubjectCard';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
+import { CURRICULUM_SUBJECT_OPTIONS, groupCoursesBySubject, matchesSubjectFilter } from '../../../constants/curriculumSubjects';
 import { useLearningHubData } from '../../../hooks/useLearningHubData';
 import { deleteCourse } from '../../../services/api/learningService';
 import { getResourceLibraryData } from '../../../services/api/resourceService';
@@ -102,6 +103,7 @@ export default function LearningHubPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useLearningHubData(refreshVersion);
   const [search, setSearch] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('all'); // 'all' | a subject code | '' (Others)
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [quizRequest, setQuizRequest] = useState(null);
   const [resumeQuizId, setResumeQuizId] = useState(null);
@@ -124,8 +126,11 @@ export default function LearningHubPage({ onNavigate }) {
 
   const normalizedSearch = search.trim().toLowerCase();
   const filtered = useMemo(() => (
-    normalizedSearch ? subjects.filter((subject) => subjectMatchesSearch(subject, normalizedSearch)) : subjects
-  ), [subjects, normalizedSearch]);
+    subjects.filter((subject) => (
+      matchesSubjectFilter(subject, subjectFilter) && (!normalizedSearch || subjectMatchesSearch(subject, normalizedSearch))
+    ))
+  ), [subjects, normalizedSearch, subjectFilter]);
+  const groups = useMemo(() => groupCoursesBySubject(filtered), [filtered]);
   const matchingLessons = useMemo(() => (
     collectMatchingLessons(subjects, normalizedSearch)
   ), [subjects, normalizedSearch]);
@@ -221,26 +226,39 @@ export default function LearningHubPage({ onNavigate }) {
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5 max-w-sm w-full sm:w-auto">
-          <Search size={16} className="text-ink-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder="Search subjects..."
-            aria-label="Search your courses, lessons, quizzes, and resources"
-            className="flex-1 outline-none text-sm bg-transparent placeholder:text-ink-400"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="text-ink-300 hover:text-ink-600 flex-shrink-0"
-            >
-              <X size={14} />
-            </button>
-          )}
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 bg-surface border border-ink-100 focus-within:border-primary-300 rounded-xl px-3.5 py-2.5 max-w-sm w-full sm:w-auto">
+            <Search size={16} className="text-ink-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search subjects..."
+              aria-label="Search your courses, lessons, quizzes, and resources"
+              className="flex-1 outline-none text-sm bg-transparent placeholder:text-ink-400"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                className="text-ink-300 hover:text-ink-600 flex-shrink-0"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <select
+            value={subjectFilter}
+            onChange={(event) => setSubjectFilter(event.target.value)}
+            aria-label="Filter courses by subject"
+            className="bg-surface border border-ink-100 focus:border-primary-300 rounded-xl px-3 py-2.5 text-sm text-ink-700 outline-none max-w-sm w-full sm:w-56"
+          >
+            <option value="all">All subjects</option>
+            {CURRICULUM_SUBJECT_OPTIONS.map((option) => (
+              <option key={option.value || 'others'} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </div>
         <Button icon={<Plus size={15} />} onClick={() => setAddingCourse(true)}>Add course</Button>
       </div>
@@ -257,23 +275,32 @@ export default function LearningHubPage({ onNavigate }) {
         <>
           {normalizedSearch && <h2 className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Courses</h2>}
           {filtered.length ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-              {filtered.map((subject) => (
-                <SubjectCard
-                  key={subject.id}
-                  subject={subject}
-                  onSelectLesson={setSelectedLessonId}
-                  onDelete={handleDeleteCourse}
-                  onLaunchAssessment={setAssessmentLaunch}
-                  assessmentsRefreshKey={assessmentsRefreshKey}
-                />
+            <div className="flex flex-col gap-6">
+              {groups.map((group) => (
+                <section key={group.value || 'others'} aria-label={group.label}>
+                  <h3 className="text-sm font-semibold text-ink-700 mb-2">
+                    {group.label} <span className="text-xs font-normal text-ink-400">({group.courses.length})</span>
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                    {group.courses.map((subject) => (
+                      <SubjectCard
+                        key={subject.id}
+                        subject={subject}
+                        onSelectLesson={setSelectedLessonId}
+                        onDelete={handleDeleteCourse}
+                        onLaunchAssessment={setAssessmentLaunch}
+                        assessmentsRefreshKey={assessmentsRefreshKey}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           ) : subjects.length ? (
             <EmptyState
               icon={Search}
               title="No matching courses"
-              message="Try a different search term."
+              message={subjectFilter === 'all' ? 'Try a different search term.' : 'Try a different search term or subject.'}
             />
           ) : (
             <EmptyState

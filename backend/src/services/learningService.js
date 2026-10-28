@@ -6,6 +6,7 @@ const personalizationService = require('./personalizationService');
 const achievementService = require('./achievementService');
 const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification');
 const { notifyUser } = require('../utils/notify');
+const { normalizeCurriculumSubject } = require('../utils/curriculumSubject');
 
 const LESSON_COMPLETE_XP = 10;
 
@@ -25,8 +26,9 @@ async function listSubjects(userId) {
   return learningModel.listSubjectsForUser(userId);
 }
 
-async function generateCourse(userId, { courseName, difficulty, goal, purpose, length, focus }) {
+async function generateCourse(userId, { courseName, difficulty, goal, purpose, length, focus, curriculumSubject }) {
   const resolvedDifficulty = difficulty || 'beginner';
+  const resolvedCurriculumSubject = normalizeCurriculumSubject(curriculumSubject);
   // Goal is now optional (was required) — mysql2 rejects `undefined` bind
   // params outright (must be SQL NULL), so this must be coerced before it
   // ever reaches a query, not left as whatever the request did or didn't send.
@@ -57,6 +59,7 @@ async function generateCourse(userId, { courseName, difficulty, goal, purpose, l
 
   const subjectId = await courseGenerationService.generateRoadmap({
     userId, courseName, difficulty: resolvedDifficulty, goal: resolvedGoal, context, courseOptions,
+    curriculumSubject: resolvedCurriculumSubject,
   });
   return { subjectId, personalizationLevel: context?.personalizationLevel ?? 'basic' };
 }

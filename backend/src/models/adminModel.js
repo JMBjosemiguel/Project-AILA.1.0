@@ -269,7 +269,7 @@ async function getUserDetail(userId) {
     `
       SELECT
         u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.email_verified_at, u.created_at, u.last_login_at,
-        r.name AS role, up.program, up.year_level, up.bio, up.xp_points, up.level
+        r.name AS role, up.middle_name, up.program, up.year_level, up.bio, up.facebook, up.contact_number, up.xp_points, up.level
       FROM users u
       INNER JOIN roles r ON r.id = u.role_id
       LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -513,7 +513,7 @@ async function listSubjectsAdmin({ search = '', archived = 'all', sort = 'newest
     query(
       `
         SELECT
-          s.id, s.name, s.code, s.difficulty, s.goal, s.is_ai_generated, s.is_archived, s.created_at,
+          s.id, s.name, s.code, s.difficulty, s.goal, s.curriculum_subject, s.is_ai_generated, s.is_archived, s.created_at,
           u.id AS owner_id, u.first_name, u.last_name,
           (SELECT COUNT(*) FROM modules m WHERE m.subject_id = s.id AND m.deleted_at IS NULL) AS module_count,
           (

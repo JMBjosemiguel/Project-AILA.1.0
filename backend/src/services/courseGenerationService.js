@@ -7,6 +7,7 @@ const personalizationService = require('./personalizationService');
 const {
   COURSE_PURPOSE_GUIDANCE, COURSE_LENGTH_ROADMAP_RULE, COURSE_FOCUS_GUIDANCE,
 } = require('../constants/courseOptions');
+const { curriculumSubjectLabel } = require('../utils/curriculumSubject');
 
 const DIFFICULTY_TO_LESSON_DIFFICULTY = {
   beginner: 'easy',
@@ -162,13 +163,18 @@ function readRoadmapAttempt(payload) {
   return modules;
 }
 
-async function generateRoadmap({ userId, courseName, difficulty, goal, context = null, courseOptions = null }) {
+async function generateRoadmap({ userId, courseName, difficulty, goal, context = null, courseOptions = null, curriculumSubject = null }) {
   const personalization = personalizationService.formatPersonalizationPrompt(context);
   const optionsRules = courseOptionsRules(courseOptions, { includeLength: true });
   const systemInstruction = [ROADMAP_SYSTEM_RULES, optionsRules, personalization].filter(Boolean).join('\n\n');
 
+  // curriculumSubject is a validated code from the fixed config list (never
+  // free student text), so it can be stated plainly rather than delimited.
   const userPrompt = [
     `Generate a course roadmap at ${difficulty} level for the course named below.`,
+    curriculumSubject
+      ? `This course is for the BS Nursing curriculum subject "${curriculumSubjectLabel(curriculumSubject)}". Keep the roadmap within that subject's scope.`
+      : '',
     personalizationService.delimitStudentText('course_name', courseName),
     personalizationService.delimitStudentText('goal', goal),
   ].filter(Boolean).join('\n\n');
@@ -210,8 +216,8 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
 
   const subjectId = await transaction(async (connection) => {
     const [subjectResult] = await connection.execute(
-      'INSERT INTO subjects (created_by, name, difficulty, goal, is_ai_generated, personalization_context) VALUES (?, ?, ?, ?, 1, ?)',
-      [userId, courseName, difficulty, goal, storedContext]
+      'INSERT INTO subjects (created_by, name, difficulty, goal, curriculum_subject, is_ai_generated, personalization_context) VALUES (?, ?, ?, ?, ?, 1, ?)',
+      [userId, courseName, difficulty, goal, curriculumSubject, storedContext]
     );
     const newSubjectId = subjectResult.insertId;
 

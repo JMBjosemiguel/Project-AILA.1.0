@@ -12,10 +12,12 @@ import RegisterPage from '../index.jsx';
 
 // AuthInput doesn't wire label -> input with htmlFor/id, so query by
 // placeholder (the same way a screen reader fallback / visual QA would).
-async function fillAndSubmit(user, { email = 'ada@example.com', program = 'Computer Science', yearLevel } = {}) {
+async function fillAndSubmit(user, { email = 'ada@example.com', program = 'Computer Science', yearLevel, studentNumber = '2024-00123', middleName } = {}) {
   await user.type(screen.getByPlaceholderText('First name'), 'Ada');
+  if (middleName) await user.type(screen.getByPlaceholderText('Middle name (optional)'), middleName);
   await user.type(screen.getByPlaceholderText('Last name'), 'Lovelace');
   await user.type(screen.getByPlaceholderText('you@university.edu'), email);
+  if (studentNumber) await user.type(screen.getByPlaceholderText('e.g. 2024-00123'), studentNumber);
   if (program) await user.type(screen.getByPlaceholderText('Example: Bachelor of Science in Nursing'), program);
   if (yearLevel !== undefined) await user.type(screen.getByPlaceholderText('1'), String(yearLevel));
   await user.type(screen.getByPlaceholderText('Min. 8 characters'), 'Password1!');
@@ -187,8 +189,39 @@ describe('RegisterPage', () => {
       email: 'ada@example.com',
       program: 'Bachelor of Science in Nursing',
       year_level: '2',
+      student_number: '2024-00123',
       password: 'Password1!',
       confirm_password: 'Password1!',
     }));
+  });
+
+  it('an empty student number is blocked with "Please enter your student number.", never calls register', async () => {
+    const user = userEvent.setup();
+    render(<RegisterPage onGoToLogin={vi.fn()} />);
+
+    await fillAndSubmit(user, { studentNumber: null });
+
+    expect(screen.getByText('Please enter your student number.')).toBeInTheDocument();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('a student number of only spaces is blocked the same way', async () => {
+    const user = userEvent.setup();
+    render(<RegisterPage onGoToLogin={vi.fn()} />);
+
+    await fillAndSubmit(user, { studentNumber: '   ' });
+
+    expect(screen.getByText('Please enter your student number.')).toBeInTheDocument();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('the middle name is optional, and sent when filled in', async () => {
+    const user = userEvent.setup();
+    register.mockResolvedValue({ user: { id: 1 } });
+    render(<RegisterPage onGoToLogin={vi.fn()} />);
+
+    await fillAndSubmit(user, { middleName: 'Byron' });
+
+    await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ middle_name: 'Byron' })));
   });
 });

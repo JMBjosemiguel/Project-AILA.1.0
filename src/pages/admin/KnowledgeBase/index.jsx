@@ -10,6 +10,7 @@ import CourseDetailDialog from '../../../components/admin/CourseDetailDialog';
 import {
   listAdminCourses, deleteAdminCourse, archiveAdminCourse, unarchiveAdminCourse,
 } from '../../../services/api/adminService';
+import { curriculumSubjectLabel } from '../../../constants/curriculumSubjects';
 import { formatDate } from '../../../utils/formatDate';
 
 const SORT_OPTIONS = [
@@ -88,6 +89,7 @@ export default function AdminKnowledgeBasePage() {
       ),
     },
     { key: 'owner', label: 'Owner', render: (c) => <span className="text-ink-500">{c.first_name} {c.last_name}</span> },
+    { key: 'subject', label: 'Subject', render: (c) => <span className="text-ink-500">{curriculumSubjectLabel(c.curriculum_subject)}</span> },
     { key: 'modules', label: 'Modules', render: (c) => <span className="text-ink-500">{c.module_count}</span> },
     { key: 'lessons', label: 'Lessons', render: (c) => <span className="text-ink-500">{c.lesson_count}</span> },
     { key: 'completion', label: 'Completion', render: (c) => <span className="text-ink-500">{c.completion_rate !== null ? `${c.completion_rate}%` : '—'}</span> },

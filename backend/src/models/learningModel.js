@@ -34,6 +34,7 @@ function buildSubjectTree(rows) {
         goal: row.subject_goal,
         visibility: row.subject_visibility ?? 'private',
         copied_from_subject_id: row.subject_copied_from ?? null,
+        curriculum_subject: row.subject_curriculum_subject ?? null, // NULL = "Others"
         // Just the purpose key for the course-card badge — never the raw
         // snapshot/options object (length/focus aren't shown here).
         purpose: parseCourseOptions(row.subject_personalization_context)?.purpose ?? null,
@@ -112,6 +113,7 @@ async function listSubjectsForUser(userId) {
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
         s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
+        s.curriculum_subject AS subject_curriculum_subject,
         s.personalization_context AS subject_personalization_context,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,
@@ -139,6 +141,7 @@ async function getSubjectTreeById(subjectId, userId) {
       SELECT
         s.id AS subject_id, s.name AS subject_name, s.code AS subject_code, s.description AS subject_description,
         s.is_ai_generated, s.difficulty AS subject_difficulty, s.goal AS subject_goal, s.visibility AS subject_visibility, s.copied_from_subject_id AS subject_copied_from,
+        s.curriculum_subject AS subject_curriculum_subject,
         s.personalization_context AS subject_personalization_context,
         m.id AS module_id, m.title AS module_title,
         t.id AS topic_id, t.title AS topic_title,

@@ -1,0 +1,14 @@
+{
+  "_note": "Placeholder CHED 2nd-year BSN subject list. Edit ONLY this file: the backend validates course subjects against it and the frontend dropdowns read it at build time. A course with no subject (NULL) shows as othersLabel.",
+  "othersLabel": "Others",
+  "subjects": [
+    { "code": "NCM 104", "name": "Community Health Nursing I" },
+    { "code": "NCM 105", "name": "Nutrition and Diet Therapy" },
+    { "code": "NCM 106", "name": "Pharmacology" },
+    { "code": "NCM 107", "name": "Care of Mother, Child, Adolescent (Well Clients)" },
+    { "code": "NCM 108", "name": "Health Care Ethics (Bioethics)" },
+    { "code": "NCM 109", "name": "Care of Mother, Child at Risk or with Problem" },
+    { "code": "NCM 110", "name": "Nursing Informatics" },
+    { "code": "MC 4", "name": "Logic and Critical Thinking" }
+  ]
+}

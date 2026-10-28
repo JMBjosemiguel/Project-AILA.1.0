@@ -1,5 +1,6 @@
 const { param, body } = require('express-validator');
 const { COURSE_PURPOSE_KEYS, COURSE_LENGTH_KEYS, COURSE_FOCUS_KEYS } = require('../constants/courseOptions');
+const { ACCEPTED_CURRICULUM_SUBJECT_VALUES } = require('../utils/curriculumSubject');
 
 const lessonIdParamValidator = [
   param('lessonId').isInt({ min: 1 }).withMessage('Invalid lesson id.'),
@@ -25,6 +26,11 @@ const generateCourseValidator = [
   body('length').optional().trim().isIn(COURSE_LENGTH_KEYS).withMessage('Invalid course length.'),
   body('focus').optional().isArray({ max: COURSE_FOCUS_KEYS.length }).withMessage('Invalid focus selection.'),
   body('focus.*').trim().isIn(COURSE_FOCUS_KEYS).withMessage('Invalid focus selection.'),
+  body('curriculumSubject')
+    .optional({ values: 'null' })
+    .isString().withMessage('Please choose a subject from the list.')
+    .trim()
+    .isIn(ACCEPTED_CURRICULUM_SUBJECT_VALUES).withMessage('Please choose a subject from the list.'),
 ];
 
 module.exports = {

@@ -17,6 +17,7 @@ function basePayload(overrides = {}) {
     email: nextEmail(),
     password: 'ItestPassw0rd!',
     program: 'Computer Science',
+    student_number: `IT-RV-${Math.random().toString(36).slice(2, 12)}`.slice(0, 30),
     ...overrides,
   };
 }
@@ -84,10 +85,34 @@ test('registration validation — year level 1-4, program required', async (t) =
     assert.ok(fieldError(res, 'program'));
   });
 
-  await t.test('a valid program is accepted, and student_number stays optional', async () => {
-    const payload = basePayload({ program: 'Bachelor of Science in Nursing' });
-    delete payload.student_number;
+  await t.test('a valid program is accepted', async () => {
+    const res = await api('POST', '/auth/register', { body: basePayload({ program: 'Bachelor of Science in Nursing' }) });
+    assert.equal(res.status, 201, JSON.stringify(res.json));
+  });
+
+  await t.test('student_number is required: omitted, empty or blank is a 422 field error', async () => {
+    const omitted = basePayload();
+    delete omitted.student_number;
+    for (const payload of [omitted, basePayload({ student_number: '' }), basePayload({ student_number: '   ' })]) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await api('POST', '/auth/register', { body: payload });
+      assert.equal(res.status, 422, JSON.stringify(res.json));
+      assert.ok(fieldError(res, 'student_number'));
+      assert.ok((res.json.details || []).some((d) => /please enter your student number/i.test(d.message)));
+    }
+  });
+
+  await t.test('an optional middle name is accepted and stored on the profile', async () => {
+    const payload = basePayload({ middle_name: '  Dela Paz  ' });
     const res = await api('POST', '/auth/register', { body: payload });
     assert.equal(res.status, 201, JSON.stringify(res.json));
+    const [row] = await db.query('SELECT up.middle_name FROM user_profiles up INNER JOIN users u ON u.id = up.user_id WHERE u.email = ?', [payload.email]);
+    assert.equal(row.middle_name, 'Dela Paz');
+  });
+
+  await t.test('a middle name over 100 characters is a 422 field error', async () => {
+    const res = await api('POST', '/auth/register', { body: basePayload({ middle_name: 'x'.repeat(101) }) });
+    assert.equal(res.status, 422, JSON.stringify(res.json));
+    assert.ok(fieldError(res, 'middle_name'));
   });
 });

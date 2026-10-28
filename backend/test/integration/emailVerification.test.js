@@ -27,6 +27,8 @@ async function registerRaw(email, extra = {}) {
       email,
       password: 'ItestPassw0rd!',
       program: 'Computer Science',
+      // Required at registration; unique per call (extra can still override).
+      student_number: `IT-EV-${Math.random().toString(36).slice(2, 12)}`.slice(0, 30),
       ...extra,
     },
   });

@@ -20,6 +20,14 @@ require(path.join(__dirname, '../../node_modules/dotenv')).config({
   path: path.join(__dirname, '../../.env'),
   quiet: true,
 });
+
+// Every integration file loads this module, so this is the one gate: refuse
+// unless the email driver is "console", then pin it for any in-process
+// emailService calls too (see emailGuard.js for why refusing is required).
+const { assertConsoleEmailDriver } = require('./emailGuard');
+assertConsoleEmailDriver();
+process.env.EMAIL_DRIVER = 'console';
+
 const db = require('../../src/config/database');
 
 async function serverReachable() {

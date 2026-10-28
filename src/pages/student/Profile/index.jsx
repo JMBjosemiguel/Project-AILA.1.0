@@ -18,7 +18,7 @@ export default function ProfilePage() {
   const { data, loading, error } = useProfileData(refreshVersion);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ program: '', year_level: '', bio: '' });
+  const [form, setForm] = useState({ middle_name: '', program: '', year_level: '', bio: '', facebook: '', contact_number: '' });
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
   const [showPassword, setShowPassword] = useState({ current: false, next: false, confirm: false });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -34,15 +34,18 @@ export default function ProfilePage() {
 
   const user = data?.user;
   const profile = data?.profile;
-  const name = user ? `${user.first_name} ${user.last_name}` : 'Profile pending';
+  const name = user ? [user.first_name, profile?.middle_name, user.last_name].filter(Boolean).join(' ') : 'Profile pending';
   const avatarLetter = user?.first_name?.[0] ?? 'A';
 
   useEffect(() => {
     if (profile) {
       setForm({
+        middle_name: profile.middle_name ?? '',
         program: profile.program ?? '',
         year_level: profile.year_level ?? '',
         bio: profile.bio ?? '',
+        facebook: profile.facebook ?? '',
+        contact_number: profile.contact_number ?? '',
       });
     }
   }, [profile]);
@@ -56,9 +59,12 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       await updateProfile({
+        middle_name: form.middle_name.trim() || null,
         program: form.program || null,
         year_level: form.year_level ? Number(form.year_level) : null,
         bio: form.bio || null,
+        facebook: form.facebook.trim() || null,
+        contact_number: form.contact_number.trim() || null,
       });
       setEditing(false);
       setRefreshVersion((version) => version + 1);
@@ -143,6 +149,14 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-3 text-sm">
               <InfoRow label="Email" value={user?.email} />
               <InfoRow
+                label="Middle name"
+                editing={editing}
+                value={form.middle_name}
+                onChange={(value) => setForm((current) => ({ ...current, middle_name: value }))}
+                maxLength={100}
+                emptyText="None"
+              />
+              <InfoRow
                 label="Program"
                 editing={editing}
                 value={form.program}
@@ -163,6 +177,26 @@ export default function ProfilePage() {
                 onChange={(value) => setForm((current) => ({ ...current, year_level: value }))}
                 displayValue={profile?.year_level ? `Year ${profile.year_level}` : null}
               />
+              <InfoRow
+                label="Facebook"
+                editing={editing}
+                value={form.facebook}
+                onChange={(value) => setForm((current) => ({ ...current, facebook: value }))}
+                placeholder="Name or facebook.com link"
+                maxLength={255}
+                emptyText="Not set"
+              />
+              <InfoRow
+                label="Contact number"
+                editing={editing}
+                type="tel"
+                value={form.contact_number}
+                onChange={(value) => setForm((current) => ({ ...current, contact_number: value }))}
+                placeholder="e.g. 0917 123 4567"
+                maxLength={30}
+                emptyText="Not set"
+              />
+              <p className="text-xs text-ink-400">Your Facebook and contact number are only visible to you and AILA admins, never to other students.</p>
             </div>
           </Card>
 
@@ -240,20 +274,21 @@ function MiniStat({ val, label }) {
   );
 }
 
-function InfoRow({ label, value, editing, onChange, type = 'text', displayValue, long = false }) {
+function InfoRow({ label, value, editing, onChange, type = 'text', displayValue, long = false, placeholder, maxLength, emptyText = 'Pending' }) {
   if (long) {
     return (
       <div className="flex flex-col gap-1 py-1.5 border-b border-ink-50 last:border-0">
         <span className="text-ink-400 font-medium">{label}</span>
         {editing && onChange ? (
           <textarea
+            aria-label={label}
             value={value ?? ''}
             onChange={(event) => onChange(event.target.value)}
             rows={3}
             className="w-full border border-primary-200 rounded-lg px-2.5 py-1.5 text-sm outline-none resize-none focus-visible:ring-2 focus-visible:ring-primary-200"
           />
         ) : (
-          <span className="text-ink-800 font-medium text-left whitespace-pre-wrap break-words">{(displayValue ?? value) || 'Pending'}</span>
+          <span className="text-ink-800 font-medium text-left whitespace-pre-wrap break-words">{(displayValue ?? value) || emptyText}</span>
         )}
       </div>
     );
@@ -265,12 +300,15 @@ function InfoRow({ label, value, editing, onChange, type = 'text', displayValue,
       {editing && onChange ? (
         <input
           type={type}
+          aria-label={label}
           value={value ?? ''}
           onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          maxLength={maxLength}
           className="text-right border border-primary-200 rounded-lg px-2 py-1 text-sm outline-none w-40 focus-visible:ring-2 focus-visible:ring-primary-200"
         />
       ) : (
-        <span className="text-ink-800 font-medium text-right">{(displayValue ?? value) || 'Pending'}</span>
+        <span className="text-ink-800 font-medium text-right min-w-0 break-words">{(displayValue ?? value) || emptyText}</span>
       )}
     </div>
   );

@@ -192,6 +192,54 @@ describe('QuizRunner — tab switches', () => {
     expect(recordQuizTabSwitch).toHaveBeenCalledTimes(2);
   });
 
+  it('one leave counts once, whichever order blur and visibilitychange fire in, and however often they repeat', async () => {
+    startQuizAttempt.mockResolvedValue(startPayload());
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+
+    // Tab hidden first, then the window blurs, then repeats while still away.
+    act(() => {
+      setVisibility('hidden');
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new Event('blur'));
+      setVisibility('hidden');
+    });
+    expect(recordQuizTabSwitch).toHaveBeenCalledTimes(1);
+
+    // Coming back in either order, then leaving again, is the second leave.
+    act(() => { window.dispatchEvent(new Event('focus')); setVisibility('visible'); });
+    expect(recordQuizTabSwitch).toHaveBeenCalledTimes(1);
+    act(() => { setVisibility('hidden'); window.dispatchEvent(new Event('blur')); });
+    expect(recordQuizTabSwitch).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaving and coming back 14 times records exactly 14, not 28', async () => {
+    startQuizAttempt.mockResolvedValue(startPayload());
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+
+    for (let i = 0; i < 14; i += 1) {
+      act(() => {
+        // Alternate the browser orders: blur before hidden, then hidden before blur.
+        if (i % 2) { window.dispatchEvent(new Event('blur')); setVisibility('hidden'); }
+        else { setVisibility('hidden'); window.dispatchEvent(new Event('blur')); }
+      });
+      act(() => { setVisibility('visible'); window.dispatchEvent(new Event('focus')); });
+    }
+    expect(recordQuizTabSwitch).toHaveBeenCalledTimes(14);
+  });
+
+  it('switching to another window without hiding the tab (blur only) still counts once per leave', async () => {
+    startQuizAttempt.mockResolvedValue(startPayload());
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    act(() => { window.dispatchEvent(new Event('focus')); });
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    expect(recordQuizTabSwitch).toHaveBeenCalledTimes(2);
+  });
+
   it('chat quizzes (not timer-eligible) show no notice and record nothing', async () => {
     startQuizAttempt.mockResolvedValue(startPayload({ timerEligible: false }));
     render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);

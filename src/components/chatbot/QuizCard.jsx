@@ -3,6 +3,7 @@ import { BookmarkPlus, Check, CheckCircle2, ClipboardList, Cloud, Loader2, Rotat
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 import PersonalizedBadge from '../common/PersonalizedBadge';
+import RationaleBox from '../common/RationaleBox';
 import { gradePercent } from '../../utils/gradePercent';
 
 const TYPE_LABELS = {
@@ -87,11 +88,10 @@ const SAVE_LABEL = {
   error: "Couldn't save",
 };
 
-// Taking/reviewing a long quiz gets paging, a navigator, and collapsed
-// explanations; an informal chatbot mini-quiz (capped at 20 items by
-// chatIntent.js) never does — it must look/behave exactly as it always has.
+// Taking a long quiz gets paging and a navigator; an informal chatbot
+// mini-quiz (capped at 20 items by chatIntent.js) never does. Every review
+// shows each question's rationale in full, with no extra clicks.
 const PAGE_SIZE = 10;
-const EXPLANATION_COLLAPSE_THRESHOLD = 20;
 
 export default function QuizCard({
   quiz,
@@ -123,7 +123,6 @@ export default function QuizCard({
   const [focusedIndex, setFocusedIndex] = useState(initialIndex);
   const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
   const [resultFilter, setResultFilter] = useState('all');
-  const [expandedExplanations, setExpandedExplanations] = useState(() => new Set());
   const submitted = review !== null;
   const itemRefs = useRef([]);
   const didMountRef = useRef(false);
@@ -148,7 +147,6 @@ export default function QuizCard({
   const totalPages = isPaginated ? Math.ceil(items.length / PAGE_SIZE) : 1;
   const pageStart = isPaginated ? currentPage * PAGE_SIZE : 0;
   const pageEnd = isPaginated ? Math.min(pageStart + PAGE_SIZE, items.length) : items.length;
-  const collapseExplanationsByDefault = !isChatQuiz && items.length > EXPLANATION_COLLAPSE_THRESHOLD;
   const reviewIndexes = items.map((_, i) => i).filter((i) => resultFilter === 'all' || !review?.[i]?.isCorrect);
   const takeIndexes = isPaginated
     ? Array.from({ length: pageEnd - pageStart }, (_, i) => pageStart + i)
@@ -220,20 +218,6 @@ export default function QuizCard({
     handleSubmit();
   };
 
-  const toggleExplanation = (index) => {
-    setExpandedExplanations((current) => {
-      const next = new Set(current);
-      if (next.has(index)) next.delete(index); else next.add(index);
-      return next;
-    });
-  };
-
-  const toggleAllExplanations = () => {
-    setExpandedExplanations((current) => (
-      current.size === items.length ? new Set() : new Set(items.map((_, i) => i))
-    ));
-  };
-
   const showSaveStatus = !submitted && typeof onAnswerChange === 'function' && saveState !== 'idle';
 
   return (
@@ -258,7 +242,7 @@ export default function QuizCard({
             {!isChatQuiz && items.length > 0 ? ` · Grade ${gradePercent(score, items.length)}%` : ''}
           </div>
           {!isChatQuiz && (
-            <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
               <div className="flex gap-1.5" role="radiogroup" aria-label="Result filter">
                 <button
                   type="button"
@@ -285,11 +269,6 @@ export default function QuizCard({
                   Wrong only ({items.length - score})
                 </button>
               </div>
-              {collapseExplanationsByDefault && (
-                <button type="button" onClick={toggleAllExplanations} className="text-xs font-semibold text-primary hover:underline">
-                  {expandedExplanations.size === items.length ? 'Collapse all' : 'Expand all'}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -420,36 +399,22 @@ export default function QuizCard({
               )}
 
               {submitted && (
-                <div className="mt-2.5 flex items-start gap-1.5 text-xs">
-                  {isCorrect ? (
-                    <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
-                  )}
-                  {collapseExplanationsByDefault && !expandedExplanations.has(index) ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleExplanation(index)}
-                      className="font-semibold text-primary hover:underline"
-                    >
-                      {isCorrect ? 'Correct' : 'Incorrect'} — Show rationale
-                    </button>
-                  ) : (
+                <>
+                  <div className="mt-2.5 flex items-start gap-1.5 text-xs">
+                    {isCorrect ? (
+                      <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
+                    )}
                     <span className="text-ink-500">
+                      <span className="font-semibold text-ink-700">{isCorrect ? 'Correct.' : 'Incorrect.'}</span>
                       {!isCorrect && graded?.correctAnswer && (
-                        <span className="font-medium text-ink-700">Correct answer: {graded.correctAnswer}. </span>
-                      )}
-                      {graded?.explanation && (
-                        <><span className="font-medium text-ink-700">Rationale: </span>{graded.explanation}</>
-                      )}
-                      {collapseExplanationsByDefault && (
-                        <button type="button" onClick={() => toggleExplanation(index)} className="ml-1.5 font-semibold text-primary hover:underline">
-                          Hide
-                        </button>
+                        <span className="font-medium text-ink-700"> Correct answer: {graded.correctAnswer}.</span>
                       )}
                     </span>
-                  )}
-                </div>
+                  </div>
+                  <RationaleBox explanation={graded?.explanation} />
+                </>
               )}
             </div>
           );

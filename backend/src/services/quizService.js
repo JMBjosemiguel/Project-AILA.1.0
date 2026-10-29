@@ -1550,6 +1550,11 @@ async function listActiveAttempts(userId) {
       startedAt: row.started_at,
       updatedAt: row.updated_at,
       timeLimitSeconds: row.time_limit_seconds ?? null,
+      // Server-side seconds left (null = untimed), so the dashboard countdown
+      // never trusts the browser clock for the deadline.
+      remainingSeconds: row.time_limit_seconds == null || row.remaining_seconds == null
+        ? null
+        : Math.max(0, Number(row.remaining_seconds) || 0),
       // Time ran out but the attempt hasn't been opened since; opening it
       // submits the saved answers (see startAttempt / getAttempt).
       expired: Boolean(Number(row.expired)),

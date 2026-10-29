@@ -136,9 +136,16 @@ test('admin weekly results and the study-focused dashboard', async (t) => {
     const running = await listed();
     assert.equal(running.expired, false);
     assert.equal(running.timeLimitSeconds, 300);
+    assert.ok(running.remainingSeconds > 280 && running.remainingSeconds <= 300, `server time left, got ${running.remainingSeconds}`);
+
+    await db.query('UPDATE quiz_attempts SET expires_at = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 252 SECOND) WHERE id = ?', [attemptId]);
+    const later = (await listed()).remainingSeconds;
+    assert.ok(later >= 250 && later <= 252, `follows the server deadline, got ${later}`);
 
     await db.query('UPDATE quiz_attempts SET expires_at = DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 SECOND) WHERE id = ?', [attemptId]);
-    assert.equal((await listed()).expired, true);
+    const expired = await listed();
+    assert.equal(expired.expired, true);
+    assert.equal(expired.remainingSeconds, 0, 'never negative');
 
     const reopened = await api('POST', `/quizzes/${timedQuiz}/attempts/start`, { token: A.token });
     assert.equal(reopened.status, 200, JSON.stringify(reopened.json));

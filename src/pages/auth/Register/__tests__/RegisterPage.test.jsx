@@ -14,7 +14,7 @@ import RegisterPage from '../index.jsx';
 // placeholder (the same way a screen reader fallback / visual QA would).
 async function fillAndSubmit(user, { email = 'ada@example.com', program = 'Computer Science', yearLevel, studentNumber = '2024-00123', middleName } = {}) {
   await user.type(screen.getByPlaceholderText('First name'), 'Ada');
-  if (middleName) await user.type(screen.getByPlaceholderText('Middle name (optional)'), middleName);
+  if (middleName) await user.type(screen.getByPlaceholderText('Middle name'), middleName);
   await user.type(screen.getByPlaceholderText('Last name'), 'Lovelace');
   await user.type(screen.getByPlaceholderText('you@university.edu'), email);
   if (studentNumber) await user.type(screen.getByPlaceholderText('e.g. 2024-00123'), studentNumber);
@@ -223,5 +223,29 @@ describe('RegisterPage', () => {
     await fillAndSubmit(user, { middleName: 'Byron' });
 
     await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ middle_name: 'Byron' })));
+  });
+});
+
+describe('RegisterPage layout', () => {
+  const groupFields = (name) => Array.from(
+    screen.getByRole('group', { name }).querySelectorAll('label')
+  ).map((label) => label.textContent);
+
+  it('groups the same fields into Personal, School and Account sections, in that order', () => {
+    render(<RegisterPage onGoToLogin={vi.fn()} />);
+
+    const groups = screen.getAllByRole('group').map((group) => group.querySelector('legend').textContent);
+    expect(groups).toEqual(['Personal information', 'School information', 'Account']);
+    expect(groupFields('Personal information')).toEqual(['First name', 'Middle name (optional)', 'Last name']);
+    expect(groupFields('School information')).toEqual(['Student number', 'Year level', 'Program']);
+    expect(groupFields('Account')).toEqual(['Email', 'Password', 'Confirm password']);
+  });
+
+  it('still validates across the groups (missing program)', async () => {
+    const user = userEvent.setup();
+    render(<RegisterPage onGoToLogin={vi.fn()} />);
+    await fillAndSubmit(user, { program: null });
+    expect(screen.getByText('Please enter your program.')).toBeInTheDocument();
+    expect(register).not.toHaveBeenCalled();
   });
 });

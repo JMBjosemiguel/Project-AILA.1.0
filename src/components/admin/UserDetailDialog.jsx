@@ -1,16 +1,42 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Flame, Loader2, MessageSquare, X } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Facebook, Flame, Loader2, MessageSquare, Phone, X } from 'lucide-react';
 import { getAdminUserDetail } from '../../services/api/adminService';
+import { facebookHref } from '../../utils/facebookHref';
 import { formatDate, formatDateTime } from '../../utils/formatDate';
 import { gradePercent } from '../../utils/gradePercent';
 import ActivityList from '../student/ActivityList';
+import TabSwitchBadge from './TabSwitchBadge';
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ContactItem({ icon: Icon, label, value, href }) {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="w-7 h-7 rounded-lg bg-primary-50 text-primary flex items-center justify-center flex-shrink-0">
+        <Icon size={14} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs text-ink-400">{label}</div>
+        {value ? (
+          href ? (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline break-all">
+              {value} <ExternalLink size={11} className="flex-shrink-0" />
+            </a>
+          ) : (
+            <div className="text-sm font-medium text-ink-700 break-words">{value}</div>
+          )
+        ) : (
+          <div className="text-sm text-ink-400">Not set</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Stat({ label, value }) {
@@ -66,6 +92,14 @@ export default function UserDetailDialog({ userId, onClose }) {
             </div>
           ) : detail ? (
             <div className="flex flex-col gap-5">
+              <section aria-labelledby="user-detail-contact" className="rounded-xl border border-ink-100 p-3">
+                <h4 id="user-detail-contact" className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Contact information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ContactItem icon={Facebook} label="Facebook" value={detail.facebook} href={facebookHref(detail.facebook)} />
+                  <ContactItem icon={Phone} label="Contact number" value={detail.contact_number} />
+                </div>
+              </section>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <Stat label="Courses generated" value={detail.coursesGenerated} />
                 <Stat label="Lessons completed" value={detail.lessonsCompleted} />
@@ -82,14 +116,6 @@ export default function UserDetailDialog({ userId, onClose }) {
                 <div className="text-ink-500">Program: {detail.program || 'Not set'} {detail.year_level ? `· Yr ${detail.year_level}` : ''}</div>
                 <div className="text-ink-500">Joined: {formatDate(detail.created_at)}</div>
                 <div className="text-ink-500 col-span-2">Last login: {detail.last_login_at ? formatDateTime(detail.last_login_at) : 'Never'}</div>
-              </div>
-
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wide text-ink-400 mb-2">Contact</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
-                  <div className="text-ink-500 min-w-0 break-words">Facebook: {detail.facebook || 'Not set'}</div>
-                  <div className="text-ink-500 min-w-0 break-words">Contact number: {detail.contact_number || 'Not set'}</div>
-                </div>
               </div>
 
               <div>
@@ -121,7 +147,7 @@ export default function UserDetailDialog({ userId, onClose }) {
                               {item.score}/{item.total}{gradePercent(item.score, item.total) != null ? ` · Grade ${gradePercent(item.score, item.total)}%` : ''}
                             </p>
                           )}
-                          <p className="text-ink-400">{item.tab_switch_count} tab switch{item.tab_switch_count === 1 ? '' : 'es'}</p>
+                          <div className="mt-1"><TabSwitchBadge count={item.tab_switch_count} /></div>
                         </div>
                       </div>
                     ))}

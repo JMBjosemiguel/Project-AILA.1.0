@@ -398,6 +398,7 @@ async function listActiveAttemptsForUser(userId, limit = 10) {
   return query(
     `SELECT qa.id AS attempt_id, qa.quiz_id, qa.current_index, qa.total, qa.started_at, qa.updated_at,
             qa.time_limit_seconds, (qa.expires_at IS NOT NULL AND qa.expires_at <= CURRENT_TIMESTAMP) AS expired,
+            TIMESTAMPDIFF(SECOND, CURRENT_TIMESTAMP, qa.expires_at) AS remaining_seconds,
             q.topic, q.quiz_type, q.difficulty, q.item_count, q.assessment_kind,
             (SELECT COUNT(*) FROM quiz_attempt_answers x
               WHERE x.attempt_id = qa.id AND x.selected_answer IS NOT NULL AND x.selected_answer <> '') AS answered

@@ -3,6 +3,7 @@ import { BookOpen, CheckCircle2, ClipboardList, Copy, GraduationCap, ListChecks,
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import EmptyState from '../../components/common/EmptyState';
+import RationaleBox from '../../components/common/RationaleBox';
 import MarkdownRenderer from '../../components/chatbot/MarkdownRenderer';
 import { useConfirm } from '../../components/common/ConfirmDialog';
 import { useToast } from '../../components/common/Toast';
@@ -118,22 +119,22 @@ function QuizItemAnswer({ item, index, answer, onAnswer, graded }) {
       )}
 
       {submitted && (
-        <div className="mt-2.5 flex items-start gap-1.5 text-xs">
-          {isCorrect ? (
-            <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-          ) : (
-            <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
-          )}
-          <span className="text-ink-500">
-            <span className="font-semibold text-ink-700">{isCorrect ? 'Correct. ' : 'Incorrect. '}</span>
-            {!isCorrect && (
-              <span className="font-medium text-ink-700">Your answer: {graded.yourAnswer || '(blank)'}. Correct answer: {graded.correctAnswer}. </span>
+        <>
+          <div className="mt-2.5 flex items-start gap-1.5 text-xs">
+            {isCorrect ? (
+              <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+            ) : (
+              <XCircle size={14} className="text-rose-500 flex-shrink-0 mt-0.5" />
             )}
-            {graded.explanation && (
-              <><span className="font-medium text-ink-700">Rationale: </span>{graded.explanation}</>
-            )}
-          </span>
-        </div>
+            <span className="text-ink-500">
+              <span className="font-semibold text-ink-700">{isCorrect ? 'Correct. ' : 'Incorrect. '}</span>
+              {!isCorrect && (
+                <span className="font-medium text-ink-700">Your answer: {graded.yourAnswer || '(blank)'}. Correct answer: {graded.correctAnswer}.</span>
+              )}
+            </span>
+          </div>
+          <RationaleBox explanation={graded.explanation} />
+        </>
       )}
     </div>
   );

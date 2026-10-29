@@ -1,22 +1,39 @@
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Pencil } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Facebook, Pencil, Phone, Plus } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
 import EmptyState from '../../../components/common/EmptyState';
 import LoadError from '../../../components/common/LoadError';
 import Switch from '../../../components/common/Switch';
 import { useToast } from '../../../components/common/Toast';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
 import ActivityList from '../../../components/student/ActivityList';
+import { facebookHref } from '../../../utils/facebookHref';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
 
+function formFromProfile(profile) {
+  return {
+    middle_name: profile.middle_name ?? '',
+    program: profile.program ?? '',
+    year_level: profile.year_level ?? '',
+    bio: profile.bio ?? '',
+    facebook: profile.facebook ?? '',
+    contact_number: profile.contact_number ?? '',
+  };
+}
+
 export default function ProfilePage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useProfileData(refreshVersion);
-  const [editing, setEditing] = useState(false);
+  const { refreshUser } = useAuth();
+  // Which card is in edit mode ('account' | 'contact'), and the contact field
+  // an "Add ..." button asked to focus.
+  const [editing, setEditing] = useState(null);
+  const [focusField, setFocusField] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ middle_name: '', program: '', year_level: '', bio: '', facebook: '', contact_number: '' });
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
@@ -38,21 +55,20 @@ export default function ProfilePage() {
   const avatarLetter = user?.first_name?.[0] ?? 'A';
 
   useEffect(() => {
-    if (profile) {
-      setForm({
-        middle_name: profile.middle_name ?? '',
-        program: profile.program ?? '',
-        year_level: profile.year_level ?? '',
-        bio: profile.bio ?? '',
-        facebook: profile.facebook ?? '',
-        contact_number: profile.contact_number ?? '',
-      });
-    }
+    if (profile) setForm(formFromProfile(profile));
   }, [profile]);
 
-  const handleEditToggle = async () => {
-    if (!editing) {
-      setEditing(true);
+  // Opening one card's form drops unsaved edits in the other, so a save only
+  // ever carries what the student can see.
+  const startEditing = (section, field = null) => {
+    if (profile) setForm(formFromProfile(profile));
+    setFocusField(field);
+    setEditing(section);
+  };
+
+  const handleEditToggle = async (section) => {
+    if (editing !== section) {
+      startEditing(section);
       return;
     }
 
@@ -66,8 +82,11 @@ export default function ProfilePage() {
         facebook: form.facebook.trim() || null,
         contact_number: form.contact_number.trim() || null,
       });
-      setEditing(false);
+      setEditing(null);
+      setFocusField(null);
       setRefreshVersion((version) => version + 1);
+      // The sidebar and header read the signed-in user, not this page's data.
+      refreshUser();
       toast.success('Profile updated.');
     } catch (error) {
       toast.error(error.message || 'Could not save your profile.');
@@ -141,8 +160,8 @@ export default function ProfilePage() {
             <CardHeader
               title="Account info"
               action={
-                <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={handleEditToggle} disabled={saving}>
-                  {editing ? (saving ? 'Saving...' : 'Save') : 'Edit'}
+                <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={() => handleEditToggle('account')} disabled={saving}>
+                  {editing === 'account' ? (saving ? 'Saving...' : 'Save') : 'Edit'}
                 </Button>
               }
             />
@@ -150,7 +169,7 @@ export default function ProfilePage() {
               <InfoRow label="Email" value={user?.email} />
               <InfoRow
                 label="Middle name"
-                editing={editing}
+                editing={editing === 'account'}
                 value={form.middle_name}
                 onChange={(value) => setForm((current) => ({ ...current, middle_name: value }))}
                 maxLength={100}
@@ -158,45 +177,74 @@ export default function ProfilePage() {
               />
               <InfoRow
                 label="Program"
-                editing={editing}
+                editing={editing === 'account'}
                 value={form.program}
                 onChange={(value) => setForm((current) => ({ ...current, program: value }))}
               />
               <InfoRow
                 label="Bio"
-                editing={editing}
+                editing={editing === 'account'}
                 value={form.bio}
                 onChange={(value) => setForm((current) => ({ ...current, bio: value }))}
                 long
               />
               <InfoRow
                 label="Year level"
-                editing={editing}
+                editing={editing === 'account'}
                 type="number"
                 value={form.year_level}
                 onChange={(value) => setForm((current) => ({ ...current, year_level: value }))}
                 displayValue={profile?.year_level ? `Year ${profile.year_level}` : null}
               />
-              <InfoRow
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Contact information"
+              action={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Pencil size={13} />}
+                  onClick={() => handleEditToggle('contact')}
+                  disabled={saving}
+                  aria-label={editing === 'contact' ? 'Save contact information' : 'Edit contact information'}
+                >
+                  {editing === 'contact' ? (saving ? 'Saving...' : 'Save') : 'Edit'}
+                </Button>
+              }
+            />
+            <div className="flex flex-col gap-1 text-sm">
+              <ContactRow
+                icon={Facebook}
                 label="Facebook"
-                editing={editing}
-                value={form.facebook}
+                value={profile?.facebook}
+                href={facebookHref(profile?.facebook)}
+                editing={editing === 'contact'}
+                inputValue={form.facebook}
                 onChange={(value) => setForm((current) => ({ ...current, facebook: value }))}
+                autoFocus={focusField === 'facebook'}
                 placeholder="Name or facebook.com link"
                 maxLength={255}
-                emptyText="Not set"
+                addLabel="Add Facebook"
+                onAdd={() => startEditing('contact', 'facebook')}
               />
-              <InfoRow
+              <ContactRow
+                icon={Phone}
                 label="Contact number"
-                editing={editing}
                 type="tel"
-                value={form.contact_number}
+                value={profile?.contact_number}
+                editing={editing === 'contact'}
+                inputValue={form.contact_number}
                 onChange={(value) => setForm((current) => ({ ...current, contact_number: value }))}
+                autoFocus={focusField === 'contact_number'}
                 placeholder="e.g. 0917 123 4567"
                 maxLength={30}
-                emptyText="Not set"
+                addLabel="Add contact number"
+                onAdd={() => startEditing('contact', 'contact_number')}
               />
-              <p className="text-xs text-ink-400">Your Facebook and contact number are only visible to you and AILA admins, never to other students.</p>
+              <p className="text-xs text-ink-400 mt-2">Your Facebook and contact number are only visible to you and AILA admins, never to other students.</p>
             </div>
           </Card>
 
@@ -310,6 +358,54 @@ function InfoRow({ label, value, editing, onChange, type = 'text', displayValue,
       ) : (
         <span className="text-ink-800 font-medium text-right min-w-0 break-words">{(displayValue ?? value) || emptyText}</span>
       )}
+    </div>
+  );
+}
+
+// One contact field: icon, label, then the saved value (a link when it is a
+// URL), a clear "Add ..." button when empty, or the input while editing.
+function ContactRow({
+  icon: Icon, label, value, href, editing, inputValue, onChange, autoFocus, type = 'text', placeholder, maxLength, addLabel, onAdd,
+}) {
+  return (
+    <div className="flex items-center gap-3 py-2 border-b border-ink-50">
+      <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary flex items-center justify-center flex-shrink-0">
+        <Icon size={15} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs text-ink-400 font-medium">{label}</div>
+        {editing ? (
+          <input
+            type={type}
+            aria-label={label}
+            value={inputValue ?? ''}
+            onChange={(event) => onChange(event.target.value)}
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus={autoFocus}
+            placeholder={placeholder}
+            maxLength={maxLength}
+            className="mt-1 w-full border border-primary-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
+          />
+        ) : value ? (
+          href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 max-w-full font-medium text-primary hover:underline break-all"
+            >
+              {value}
+              <ExternalLink size={12} className="flex-shrink-0" />
+            </a>
+          ) : (
+            <div className="font-medium text-ink-800 break-words">{value}</div>
+          )
+        ) : (
+          <Button size="sm" variant="subtle" icon={<Plus size={13} />} onClick={onAdd} className="mt-1">
+            {addLabel}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

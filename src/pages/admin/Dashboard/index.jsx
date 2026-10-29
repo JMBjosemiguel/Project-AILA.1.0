@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Send, Users, BookOpen, FolderOpen, MessageSquare, GraduationCap,
   ClipboardCheck, Star, Activity, UserPlus, Sparkles, Upload, Trash2, AlertTriangle,
-  Clock, LifeBuoy,
+  Clock, LifeBuoy, X,
 } from 'lucide-react';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
@@ -11,10 +11,14 @@ import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonStat, SkeletonList } from '../../../components/common/Skeleton';
 import { useToast } from '../../../components/common/Toast';
 import BarChart from '../../../components/analytics/BarChart';
+import TabSwitchBadge from '../../../components/admin/TabSwitchBadge';
 import { getAdminDashboard, sendAnnouncement } from '../../../services/api/adminService';
+import { formatDateTime } from '../../../utils/formatDate';
+import { gradePercent } from '../../../utils/gradePercent';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const STUDENTS_NEEDING_HELP_ANCHOR = 'students-needing-help';
+const TAB_SWITCH_LIST_ID = 'tab-switch-attempts';
 
 // Opens the Users page with ?userId=<id> in the URL and triggers the
 // router's own popstate listener so it picks up the new path — there is no
@@ -55,11 +59,13 @@ function collapseDeletions(deletions) {
   }));
 }
 
-function AttentionItem({ icon: Icon, label, value, onClick }) {
+function AttentionItem({ icon: Icon, label, value, onClick, expanded, controls }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-expanded={expanded}
+      aria-controls={controls}
       className="flex-1 min-w-[180px] flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-left transition-colors hover:border-amber-200"
     >
       <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
@@ -70,6 +76,66 @@ function AttentionItem({ icon: Icon, label, value, onClick }) {
         <div className="text-xs font-medium mt-0.5 text-ink-500">{label}</div>
       </div>
     </button>
+  );
+}
+
+// Opened from the "needs attention" row: last 7 days of quiz attempts where
+// the student left the quiz, newest first (server: getTabSwitchAttempts).
+function TabSwitchAttemptsList({ attempts, total, onClose }) {
+  return (
+    <Card className="mb-5">
+      <div id={TAB_SWITCH_LIST_ID}>
+        <CardHeader
+          title="Quiz attempts with tab switches"
+          subtitle="Last 7 days, newest first. Chat quizzes are not tracked."
+          action={(
+            <button type="button" onClick={onClose} aria-label="Close list" className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-full text-ink-400 hover:text-ink-800 hover:bg-ink-50">
+              <X size={16} />
+            </button>
+          )}
+        />
+        {attempts.length ? (
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="text-left text-[0.7rem] font-bold uppercase tracking-wider text-ink-400">
+                  <th scope="col" className="py-2 px-1 font-bold">Student</th>
+                  <th scope="col" className="py-2 px-1 font-bold">Quiz</th>
+                  <th scope="col" className="py-2 px-1 font-bold">Date</th>
+                  <th scope="col" className="py-2 px-1 font-bold">Tab switches</th>
+                  <th scope="col" className="py-2 px-1 text-right font-bold">Grade</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-50">
+                {attempts.map((row) => {
+                  const grade = gradePercent(row.score, row.total);
+                  return (
+                    <tr key={row.id}>
+                      <td className="py-2 px-1">
+                        <button type="button" onClick={() => goToUserDetail(row.user_id)} className="font-medium text-primary hover:underline text-left">
+                          {row.first_name} {row.last_name}
+                        </button>
+                      </td>
+                      <td className="py-2 px-1 text-ink-700 max-w-[200px] truncate">{row.topic}</td>
+                      <td className="py-2 px-1 text-ink-500 whitespace-nowrap">{formatDateTime(row.completed_at ?? row.started_at)}</td>
+                      <td className="py-2 px-1"><TabSwitchBadge count={row.tab_switch_count} /></td>
+                      <td className="py-2 px-1 text-right tabular-nums text-ink-700 whitespace-nowrap">
+                        {row.status === 'in_progress' ? 'In progress' : grade != null ? `${grade}%` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {total > attempts.length && (
+              <p className="text-xs text-ink-400 mt-2 px-1">Showing the latest {attempts.length} of {total}.</p>
+            )}
+          </div>
+        ) : (
+          <EmptyState title="No tab switches" message="No student left a quiz in the last 7 days." />
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -104,6 +170,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [showTabSwitches, setShowTabSwitches] = useState(false);
   const toast = useToast();
 
   const loadStats = () => {
@@ -199,7 +266,23 @@ export default function AdminDashboardPage({ onNavigate }) {
             value={needsAttention.studentsNeedingHelp}
             onClick={scrollToStudentsNeedingHelp}
           />
+          <AttentionItem
+            icon={AlertTriangle}
+            label="Quiz attempts with tab switches (last 7 days)"
+            value={needsAttention.tabSwitchAttempts ?? 0}
+            onClick={() => setShowTabSwitches((open) => !open)}
+            expanded={showTabSwitches}
+            controls={TAB_SWITCH_LIST_ID}
+          />
         </div>
+      )}
+
+      {!loading && showTabSwitches && (
+        <TabSwitchAttemptsList
+          attempts={stats?.tabSwitchAttempts ?? []}
+          total={needsAttention?.tabSwitchAttempts ?? 0}
+          onClose={() => setShowTabSwitches(false)}
+        />
       )}
 
       <div className="grid lg:grid-cols-3 gap-4">

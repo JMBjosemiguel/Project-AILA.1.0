@@ -13,6 +13,7 @@ const AuthContext = createContext({
   register: async () => {},
   logout: async () => {},
   getCurrentUser: async () => {},
+  refreshUser: async () => {},
   refreshSession: async () => {},
   verifyEmail: async () => {},
   resendVerification: async () => {},
@@ -109,6 +110,18 @@ export function AuthProvider({ children }) {
         } catch (currentUserError) {
           setError(currentUserError.message);
           throw currentUserError;
+        }
+      },
+      // After the student edits their own profile: reloads the signed-in user
+      // so the sidebar and header show the new values. Quiet on failure — the
+      // save already worked, and the next page load picks the change up.
+      async refreshUser() {
+        try {
+          const user = await authService.getCurrentUser();
+          setSession((current) => (current ? { ...current, user } : current));
+          return user;
+        } catch {
+          return null;
         }
       },
       async refreshSession() {

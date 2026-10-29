@@ -22,7 +22,9 @@ const FEATURES = [
   },
 ];
 
-export default function AuthLayout({ title, subtitle, children }) {
+// `wide` gives a longer form (Register) a wider card from tablet width up;
+// on a phone every card is full width anyway.
+export default function AuthLayout({ title, subtitle, children, wide = false }) {
   const { theme, toggleTheme } = useTheme();
   return (
     <div className="min-h-screen flex bg-canvas">
@@ -72,7 +74,7 @@ export default function AuthLayout({ title, subtitle, children }) {
       </div>
 
       <div className="flex-1 flex items-center justify-center p-4 sm:p-10">
-        <div className="w-full max-w-[400px]">
+        <div className={`w-full ${wide ? 'max-w-[400px] sm:max-w-[560px]' : 'max-w-[400px]'}`}>
           <div className="lg:hidden flex items-center gap-2.5 justify-center mb-8">
             <AilaOrb size={30} />
             <span className="font-display font-bold text-ink-800">AILA</span>

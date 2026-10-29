@@ -131,7 +131,7 @@ describe('SharedMaterialPage', () => {
       expect(checkSharedQuizAnswers).toHaveBeenCalledWith('tok', [{ index: 0, answer: 'stops recursion' }]);
       expect(screen.getByText('100% correct')).toBeInTheDocument();
       expect(screen.getByText(/A base case ends the recursion/)).toBeInTheDocument();
-      expect(screen.getByText('Rationale:')).toBeInTheDocument();
+      expect(screen.getByRole('note', { name: 'Rationale' })).toHaveTextContent('A base case ends the recursion.');
     });
 
     it('this works for a logged-out visitor exactly the same way', async () => {

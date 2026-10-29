@@ -236,7 +236,7 @@ describe('QuizCard — results (filter + collapsed explanations)', () => {
     expect(screen.getByText(/Capital of Japan\?/)).toBeInTheDocument();
   });
 
-  it('explanations are collapsed by default for quizzes over 20 items, and can be expanded individually or all at once', async () => {
+  it('a quiz over 20 items shows every rationale right away, with no extra clicks', async () => {
     const user = userEvent.setup();
     const items = makeItems(22);
     const quiz = { topic: 'T', quizType: 'multiple_choice', items };
@@ -253,14 +253,10 @@ describe('QuizCard — results (filter + collapsed explanations)', () => {
     await user.click(screen.getByRole('button', { name: /Submit anyway/i }));
     await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
 
-    expect(screen.queryByText(/Explanation 1\./)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Show rationale/i }).length).toBeGreaterThan(0);
-
-    await user.click(screen.getAllByRole('button', { name: /Show rationale/i })[0]);
-    expect(screen.getByText(/Explanation 1\./)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Expand all/i }));
-    expect(screen.getByText(/Explanation 22\./)).toBeInTheDocument();
+    expect(screen.getAllByRole('note', { name: 'Rationale' })).toHaveLength(22);
+    expect(screen.getByText('Explanation 1.')).toBeInTheDocument();
+    expect(screen.getByText('Explanation 22.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Show rationale|Expand all/i })).not.toBeInTheDocument();
   });
 
   it('explanations for a short (<=20 item) quiz are never collapsed', async () => {
@@ -320,8 +316,38 @@ describe('QuizCard — grade and rationale', () => {
 
     // 1 of 2: (1 / 2 x 50) + 50 = 75
     await waitFor(() => expect(screen.getByText(/You scored 1 \/ 2 \(50%\) · Grade 75%/)).toBeInTheDocument());
-    expect(screen.getAllByText('Rationale:')).toHaveLength(2);
+    expect(screen.getAllByRole('note', { name: 'Rationale' })).toHaveLength(2);
     expect(screen.queryByText(/Explanation/)).not.toBeInTheDocument();
+  });
+
+  it('puts a labelled Rationale box under the choices of every question, right or wrong', async () => {
+    const user = userEvent.setup();
+    render(<QuizCard quiz={takePayload} onSubmit={vi.fn().mockResolvedValue(gradedResult)} />);
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+
+    const boxes = screen.getAllByRole('note', { name: 'Rationale' });
+    gradedResult.items.forEach((item, i) => {
+      expect(boxes[i]).toHaveTextContent(`Rationale${item.explanation}`);
+    });
+    // Below the choices: the box follows the last option of its question.
+    const lastOption = screen.getByRole('button', { name: 'Berlin' });
+    expect(lastOption.compareDocumentPosition(boxes[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Incorrect.')).toBeInTheDocument();
+    expect(screen.getByText('Correct.')).toBeInTheDocument();
+  });
+
+  it('says so in the box when a question was saved without a rationale (the timed-out review uses the same view)', () => {
+    const items = [{ id: 1, question: 'Q?', options: ['a', 'b'] }];
+    render(
+      <QuizCard
+        quiz={{ topic: 'T', quizType: 'multiple_choice', items }}
+        presetReview={{ answers: [{ questionId: 1, selectedAnswer: 'b' }], graded: [{ correctAnswer: 'a', explanation: null, isCorrect: false }] }}
+      />
+    );
+    expect(screen.getByRole('note', { name: 'Rationale' })).toHaveTextContent('No rationale was saved for this question.');
   });
 
   it('a chat mini-quiz (not graded) shows no Grade, but still labels the Rationale', async () => {
@@ -337,7 +363,7 @@ describe('QuizCard — grade and rationale', () => {
 
     await waitFor(() => expect(screen.getByText(/You scored 0 \/ 1/)).toBeInTheDocument());
     expect(screen.queryByText(/Grade/)).not.toBeInTheDocument();
-    expect(screen.getByText('Rationale:')).toBeInTheDocument();
+    expect(screen.getByRole('note', { name: 'Rationale' })).toHaveTextContent('Paris is correct.');
   });
 
   it('0 correct is Grade 50% and all correct is Grade 100%', () => {

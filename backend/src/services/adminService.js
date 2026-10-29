@@ -12,13 +12,14 @@ const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 const { APP_TIMEZONE } = require('../utils/appTime');
 
 async function getDashboardStats() {
-  const [stats, activity, feedbackPending, unverifiedOver24h, studentsNeedingHelp, activeStudentsByDay] = await Promise.all([
+  const [stats, activity, feedbackPending, unverifiedOver24h, studentsNeedingHelp, activeStudentsByDay, tabSwitchAttempts] = await Promise.all([
     adminModel.getDashboardStats(),
     adminModel.getRecentActivity(6),
     adminModel.getFeedbackPendingCount(),
     adminModel.getUnverifiedOver24hCount(),
     adminModel.getStudentsNeedingHelp(5),
     adminModel.getActiveStudentsByDay(7),
+    adminModel.getTabSwitchAttempts(7),
   ]);
   return {
     ...stats,
@@ -27,8 +28,10 @@ async function getDashboardStats() {
       feedbackPending,
       unverifiedOver24h,
       studentsNeedingHelp: studentsNeedingHelp.total,
+      tabSwitchAttempts: tabSwitchAttempts.total,
     },
     studentsNeedingHelp: studentsNeedingHelp.students,
+    tabSwitchAttempts: tabSwitchAttempts.attempts,
     activeStudentsByDay,
   };
 }

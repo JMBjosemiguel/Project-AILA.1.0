@@ -158,6 +158,38 @@ test('admin dashboard insights', async (t) => {
     for (const row of after) assert.equal(typeof row.count, 'number');
   });
 
+  await t.test('getTabSwitchAttempts lists recent attempts with tab switches, newest first', async () => {
+    const before = await adminModel.getTabSwitchAttempts(7, 1000);
+    const quiz = await db.query("INSERT INTO quizzes (user_id, topic, item_count, source_type) VALUES (?, 'qa.itest tabs', 10, 'lesson')", [lowScorer.id]);
+    const chat = await db.query("INSERT INTO quizzes (user_id, topic, item_count, source_type) VALUES (?, 'qa.itest chat', 10, 'chat')", [lowScorer.id]);
+    quizIds.push(quiz.insertId, chat.insertId);
+    const attempt = (quizId, tabs, startedAgo, completedAgo) => db.query(
+      `INSERT INTO quiz_attempts (quiz_id, user_id, score, total, status, tab_switch_count, started_at, completed_at)
+       VALUES (?, ?, 6, 10, 'submitted', ?, NOW() - INTERVAL ? MINUTE, NOW() - INTERVAL ? MINUTE)`,
+      [quizId, lowScorer.id, tabs, startedAgo, completedAgo]
+    );
+    const older = await attempt(quiz.insertId, 2, 120, 110);
+    const newer = await attempt(quiz.insertId, 14, 60, 55);
+    await attempt(quiz.insertId, 0, 50, 45); // never left the quiz
+    await attempt(quiz.insertId, 5, 8 * 24 * 60, 8 * 24 * 60 - 5); // 8 days ago
+    await attempt(chat.insertId, 3, 40, 35); // chat quiz
+
+    const after = await adminModel.getTabSwitchAttempts(7, 1000);
+    assert.equal(after.total - before.total, 2, 'only the two recent non-chat attempts with switches');
+    const mine = after.attempts.filter((row) => row.user_id === lowScorer.id);
+    assert.deepEqual(mine.map((row) => row.id), [newer.insertId, older.insertId], 'newest first');
+    assert.equal(mine[0].tab_switch_count, 14);
+    assert.equal(mine[0].topic, 'qa.itest tabs');
+    assert.equal(mine[0].first_name, 'ITest');
+    assert.equal(mine[0].last_name, 'lowscorer');
+    assert.equal(Number(mine[0].score), 6);
+    assert.equal(Number(mine[0].total), 10);
+
+    const capped = await adminModel.getTabSwitchAttempts(7, 1);
+    assert.equal(capped.attempts.length, 1);
+    assert.equal(capped.total, after.total, 'the count is not capped by the list limit');
+  });
+
   await t.test('GET /admin/dashboard exposes the new fields with the right shape', async () => {
     const res = await api('GET', '/admin/dashboard', { token: admin });
     assert.equal(res.status, 200);
@@ -169,5 +201,8 @@ test('admin dashboard insights', async (t) => {
     assert.ok(data.studentsNeedingHelp.length <= 5);
     assert.ok(Array.isArray(data.activeStudentsByDay));
     assert.equal(data.activeStudentsByDay.length, 7);
+    assert.equal(typeof data.needsAttention.tabSwitchAttempts, 'number');
+    assert.ok(Array.isArray(data.tabSwitchAttempts));
+    assert.ok(data.tabSwitchAttempts.some((row) => row.user_id === lowScorer.id && row.tab_switch_count === 14));
   });
 });

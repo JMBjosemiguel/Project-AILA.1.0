@@ -174,49 +174,55 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
   }
 
   return (
-    <AuthLayout title="Create your account" subtitle="Set up your student profile">
+    <AuthLayout title="Create your account" subtitle="Set up your student profile" wide>
       {/* noValidate: the Year input's native min/max constraint would otherwise
           silently block the browser's submit event (and our own validation
           error message) in favor of an unstyled native tooltip. */}
-      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <AuthInput label="First name" icon={User} placeholder="First name" value={form.first_name} onChange={update('first_name')} />
-          <AuthInput label="Last name" placeholder="Last name" value={form.last_name} onChange={update('last_name')} />
-        </div>
+      <form className="flex flex-col gap-5" onSubmit={submit} noValidate>
+        {/* Side-by-side fields only where the card is at its full width: from
+            sm up, except lg, where the brand panel leaves the card narrower. */}
+        <FormGroup title="Personal information">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-3">
+            <AuthInput label="First name" icon={User} placeholder="First name" value={form.first_name} onChange={update('first_name')} />
+            <AuthInput label="Middle name (optional)" placeholder="Middle name" value={form.middle_name} onChange={update('middle_name')} />
+            <AuthInput label="Last name" placeholder="Last name" value={form.last_name} onChange={update('last_name')} />
+          </div>
+        </FormGroup>
 
-        <AuthInput label="Middle name" icon={User} placeholder="Middle name (optional)" value={form.middle_name} onChange={update('middle_name')} />
+        <FormGroup title="School information">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_110px] gap-3">
+            <AuthInput label="Student number" icon={Hash} placeholder="e.g. 2024-00123" value={form.student_number} onChange={update('student_number')} />
+            <AuthInput label="Year level" type="number" min="1" max="4" placeholder="1" value={form.year_level} onChange={update('year_level')} />
+          </div>
+          <AuthInput label="Program" icon={GraduationCap} placeholder="Example: Bachelor of Science in Nursing" value={form.program} onChange={update('program')} />
+        </FormGroup>
 
-        <AuthInput label="Email" icon={Mail} type="email" placeholder="you@university.edu" value={form.email} onChange={update('email')} />
-
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_96px] gap-3">
-          <AuthInput label="Student number" icon={Hash} placeholder="e.g. 2024-00123" value={form.student_number} onChange={update('student_number')} />
-          <AuthInput label="Year" type="number" min="1" max="4" placeholder="1" value={form.year_level} onChange={update('year_level')} />
-        </div>
-
-        <AuthInput label="Program" icon={GraduationCap} placeholder="Example: Bachelor of Science in Nursing" value={form.program} onChange={update('program')} />
-
-        <AuthInput
-          label="Password"
-          icon={Lock}
-          type={showPassword ? 'text' : 'password'}
-          placeholder="Min. 8 characters"
-          value={form.password}
-          onChange={update('password')}
-          rightElement={
-            <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="text-ink-400 hover:text-primary">
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          }
-        />
-
-        <AuthInput
-          label="Confirm password"
-          icon={Lock}
-          type={showPassword ? 'text' : 'password'}
-          placeholder="Repeat password"
-          value={form.confirm_password}
-          onChange={update('confirm_password')}
-        />
+        <FormGroup title="Account">
+          <AuthInput label="Email" icon={Mail} type="email" placeholder="you@university.edu" value={form.email} onChange={update('email')} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3">
+            <AuthInput
+              label="Password"
+              icon={Lock}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Min. 8 characters"
+              value={form.password}
+              onChange={update('password')}
+              rightElement={
+                <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="text-ink-400 hover:text-primary">
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              }
+            />
+            <AuthInput
+              label="Confirm password"
+              icon={Lock}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Repeat password"
+              value={form.confirm_password}
+              onChange={update('confirm_password')}
+            />
+          </div>
+        </FormGroup>
 
         {error && <p className="text-xs text-rose-600">{error}</p>}
 
@@ -228,5 +234,14 @@ export default function RegisterPage({ onRegistered, onGoToLogin }) {
         </p>
       </form>
     </AuthLayout>
+  );
+}
+
+function FormGroup({ title, children }) {
+  return (
+    <fieldset className="min-w-0 flex flex-col gap-3">
+      <legend className="mb-3 text-[0.7rem] font-bold uppercase tracking-wider text-ink-400">{title}</legend>
+      {children}
+    </fieldset>
   );
 }

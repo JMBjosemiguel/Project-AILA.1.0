@@ -189,6 +189,36 @@ async function getStudentsNeedingHelp(limit = 5) {
   return { total: all.length, students: all.slice(0, limit) };
 }
 
+// Quiz attempts started in the last `days` days where the student left the
+// quiz at least once, newest first. Chat quizzes never record tab switches
+// and are left out, as everywhere else. Returns up to `limit` rows plus the
+// true total for the "needs attention" count.
+const TAB_SWITCH_ATTEMPTS_FROM = `
+  FROM quiz_attempts qa
+  INNER JOIN quizzes q ON q.id = qa.quiz_id
+  INNER JOIN users u ON u.id = qa.user_id AND u.deleted_at IS NULL
+  INNER JOIN roles r ON r.id = u.role_id AND r.name = 'student'
+  WHERE qa.tab_switch_count > 0 AND qa.started_at >= ? AND ${notChatQuizCondition('q')}
+`;
+
+async function getTabSwitchAttempts(days = 7, limit = 50, now = new Date()) {
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const [countRows, rows] = await Promise.all([
+    query(`SELECT COUNT(*) AS count ${TAB_SWITCH_ATTEMPTS_FROM}`, [since]),
+    query(
+      `
+        SELECT qa.id, qa.user_id, u.first_name, u.last_name, q.topic, qa.status, qa.score, qa.total,
+               qa.tab_switch_count, qa.started_at, qa.completed_at
+        ${TAB_SWITCH_ATTEMPTS_FROM}
+        ORDER BY COALESCE(qa.completed_at, qa.started_at) DESC, qa.id DESC
+        LIMIT ?
+      `,
+      [since, Number(limit)]
+    ),
+  ]);
+  return { total: Number(countRows[0].count) || 0, attempts: rows };
+}
+
 // Distinct active students per APP_TIMEZONE calendar day, last `days` days,
 // zero-filled. "Active" = any dashboard_activity_log event (lesson/quiz/task
 // completion, resource views, XP, streaks) — the broadest existing signal of
@@ -588,6 +618,7 @@ module.exports = {
   getFeedbackPendingCount,
   getUnverifiedOver24hCount,
   getStudentsNeedingHelp,
+  getTabSwitchAttempts,
   getActiveStudentsByDay,
   listStudentUserIds,
   listUsers,

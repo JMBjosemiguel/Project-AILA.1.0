@@ -232,6 +232,8 @@ test('resumable formal quiz attempts', async (t) => {
     assert.equal(active.total, 2);
     assert.equal(active.answered, 1);
     assert.equal(active.progressPercent, 50);
+    assert.equal(active.timeLimitSeconds, null);
+    assert.equal(active.remainingSeconds, null, 'an untimed attempt has no countdown');
     assert.ok(!/correct_?answer|explanation/i.test(JSON.stringify(active)));
   });
 });

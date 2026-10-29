@@ -115,3 +115,60 @@ describe('AdminDashboardPage — needs attention & insights', () => {
     expect(screen.getByText('No active students yet')).toBeInTheDocument();
   });
 });
+
+describe('AdminDashboardPage — quiz attempts with tab switches', () => {
+  const STATS = {
+    ...BASE_STATS,
+    needsAttention: { ...BASE_STATS.needsAttention, tabSwitchAttempts: 2 },
+    tabSwitchAttempts: [
+      { id: 31, user_id: 201, first_name: 'Jose', last_name: 'Belleza', topic: 'Fluid balance', status: 'submitted', score: 4, total: 10, tab_switch_count: 14, started_at: '2026-10-28T08:00:00Z', completed_at: '2026-10-28T08:05:00Z' },
+      { id: 30, user_id: 202, first_name: 'Ana', last_name: 'Cruz', topic: 'Vital signs', status: 'in_progress', score: 0, total: 5, tab_switch_count: 2, started_at: '2026-10-27T08:00:00Z', completed_at: null },
+    ],
+  };
+
+  it('shows the count in the needs-attention row', async () => {
+    getAdminDashboard.mockResolvedValue(STATS);
+    render(<AdminDashboardPage onNavigate={vi.fn()} />);
+    const item = await screen.findByRole('button', { name: /Quiz attempts with tab switches \(last 7 days\)/ });
+    expect(within(item).getByText('2')).toBeInTheDocument();
+    expect(item).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('opens a newest-first list with student, quiz, date, tab switches and Grade; a student opens their details', async () => {
+    const user = userEvent.setup();
+    const pushStateSpy = vi.spyOn(window.history, 'pushState');
+    getAdminDashboard.mockResolvedValue(STATS);
+    render(<AdminDashboardPage onNavigate={vi.fn()} />);
+
+    const item = await screen.findByRole('button', { name: /Quiz attempts with tab switches/ });
+    await user.click(item);
+    expect(item).toHaveAttribute('aria-expanded', 'true');
+
+    const table = screen.getByRole('table');
+    const headers = within(table).getAllByRole('columnheader').map((th) => th.textContent);
+    expect(headers).toEqual(['Student', 'Quiz', 'Date', 'Tab switches', 'Grade']);
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Jose Belleza');
+    expect(rows[0]).toHaveTextContent('Fluid balance');
+    expect(rows[0]).toHaveTextContent('14 tab switches');
+    expect(rows[0]).toHaveTextContent('70%'); // 4/10 -> Grade 70%
+    expect(rows[1]).toHaveTextContent('Ana Cruz');
+    expect(rows[1]).toHaveTextContent('2 tab switches');
+    expect(rows[1]).toHaveTextContent('In progress');
+
+    await user.click(within(rows[0]).getByRole('button', { name: 'Jose Belleza' }));
+    expect(pushStateSpy).toHaveBeenCalledWith({}, '', '/admin/users?userId=201');
+  });
+
+  it('can be closed again, and has an empty state', async () => {
+    const user = userEvent.setup();
+    getAdminDashboard.mockResolvedValue({ ...STATS, needsAttention: { ...STATS.needsAttention, tabSwitchAttempts: 0 }, tabSwitchAttempts: [] });
+    render(<AdminDashboardPage onNavigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: /Quiz attempts with tab switches/ }));
+    expect(screen.getByText('No student left a quiz in the last 7 days.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close list' }));
+    expect(screen.queryByText('No student left a quiz in the last 7 days.')).not.toBeInTheDocument();
+  });
+});

@@ -3,28 +3,21 @@ import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import WelcomeHeader from '../WelcomeHeader.jsx';
 
-describe('WelcomeHeader XP progress', () => {
-  it('shows progress INTO the current level, not xp % 500', () => {
-    // Level 3 (250 XP) -> 50 XP into the level, bar at 50%.
+describe('WelcomeHeader', () => {
+  it('greets the student and offers Ask AILA', () => {
     render(<WelcomeHeader profile={{ first_name: 'Jo', xp_points: 250, level: 3 }} onAskAI={vi.fn()} />);
-    expect(screen.getByText('Lvl 3 · 50/100 XP')).toBeInTheDocument();
-    const bar = document.querySelector('[style*="width: 50%"]');
-    expect(bar).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /, Jo$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ask AILA/i })).toBeInTheDocument();
   });
 
-  it('renders a full-but-not-over bar just before a level up', () => {
-    render(<WelcomeHeader profile={{ first_name: 'Jo', xp_points: 99, level: 1 }} onAskAI={vi.fn()} />);
-    expect(screen.getByText('Lvl 1 · 99/100 XP')).toBeInTheDocument();
-    expect(document.querySelector('[style*="width: 99%"]')).toBeTruthy();
+  it('no longer shows level or XP (they moved to the compact progress row)', () => {
+    render(<WelcomeHeader profile={{ first_name: 'Jo', xp_points: 250, level: 3 }} onAskAI={vi.fn()} />);
+    expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Lvl|Level/)).not.toBeInTheDocument();
   });
 
-  it('derives the level from XP when the profile omits it', () => {
-    render(<WelcomeHeader profile={{ first_name: 'Jo', xp_points: 340 }} onAskAI={vi.fn()} />);
-    expect(screen.getByText('Lvl 4 · 40/100 XP')).toBeInTheDocument();
-  });
-
-  it('handles a missing / zero profile without crashing', () => {
+  it('handles a missing profile without crashing', () => {
     render(<WelcomeHeader profile={null} onAskAI={vi.fn()} />);
-    expect(screen.getByText('Lvl 1 · 0/100 XP')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Good (morning|afternoon|evening)$/ })).toBeInTheDocument();
   });
 });

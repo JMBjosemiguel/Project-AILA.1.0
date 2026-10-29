@@ -95,6 +95,20 @@ function appStartOfWeek(instant = new Date()) {
   return localMidnightUtc(anchor.getUTCFullYear(), anchor.getUTCMonth() + 1, anchor.getUTCDate());
 }
 
+/**
+ * The start of each of the last `weeks` weeks (Monday 00:00 in the application
+ * timezone), oldest first. The last entry is the current week, the same instant
+ * the weekly leaderboard starts from. Each earlier week is found from 1 ms
+ * before the following Monday, so a DST shift can't skip or repeat one.
+ */
+function appWeekStarts(weeks, instant = new Date()) {
+  const starts = [appStartOfWeek(instant)];
+  while (starts.length < weeks) {
+    starts.unshift(appStartOfWeek(new Date(starts[0].getTime() - 1)));
+  }
+  return starts;
+}
+
 // Human-readable instant, application timezone — e.g. "Oct 14, 2026, 9:41 PM".
 // For display text (emails, audit-style messages), never for comparisons.
 function appDateTimeStr(instant = new Date()) {
@@ -119,6 +133,7 @@ module.exports = {
   appYesterdayStr,
   appStartOfDay,
   appStartOfWeek,
+  appWeekStarts,
   appDateTimeStr,
   appTimeStr,
 };

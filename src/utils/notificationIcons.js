@@ -1,17 +1,18 @@
-import { Bell, CalendarClock, ClipboardCheck, Megaphone, Sparkles, Trophy, Zap } from 'lucide-react';
+import { Award, Bell, CalendarClock, ClipboardCheck, Megaphone, Sparkles, TrendingUp } from 'lucide-react';
 
 // The DB only has 4 notification types (announcement/reminder/assignment_alert/
 // system) — "quiz scored", "level up" and "achievement unlocked" all share
 // type='system', distinguished only by their title (see backend quizService,
 // gamification.js, achievementService.js). Matched by title FIRST, so these
 // three get their own icon before falling through to the generic per-type one.
-// Icons/colors mirror the existing conventions already used elsewhere:
-// ClipboardCheck for quizzes and Zap for XP (src/utils/activityIcons.js),
-// Trophy for achievements (src/components/student/gamification/achievementIcons.js).
+// ClipboardCheck for quizzes (as in src/utils/activityIcons.js); progress icons
+// are kept calm (TrendingUp, Award) rather than game-like. Titles are now
+// "Progress: Level N reached" and "Achievement earned"; the older "Level up!" /
+// "Achievement unlocked" titles already in the feed still match.
 const TITLE_ICON_RULES = [
   { test: (title) => /quiz scored|checkpoint|course final/i.test(title), icon: ClipboardCheck, color: 'text-primary bg-primary-50' },
-  { test: (title) => /level up/i.test(title), icon: Zap, color: 'text-emerald-600 bg-emerald-50' },
-  { test: (title) => /achievement unlocked/i.test(title), icon: Trophy, color: 'text-amber-600 bg-amber-50' },
+  { test: (title) => /level up|level \d+ reached/i.test(title), icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50' },
+  { test: (title) => /achievement (unlocked|earned)/i.test(title), icon: Award, color: 'text-amber-600 bg-amber-50' },
 ];
 
 const TYPE_ICON = {

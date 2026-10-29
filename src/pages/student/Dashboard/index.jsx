@@ -1,13 +1,13 @@
-import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, CalendarClock, FolderOpen, Flame, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, CalendarClock, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
 import ResumeTestCard from '../../../components/student/dashboard/ResumeTestCard';
-import AchievementsPreviewCard from '../../../components/student/dashboard/AchievementsPreviewCard';
 import ActivityCard from '../../../components/student/dashboard/ActivityCard';
 import CourseProgressCard from '../../../components/student/dashboard/CourseProgressCard';
 import DeadlinesCard from '../../../components/student/dashboard/DeadlinesCard';
 import QuickActionsCard from '../../../components/student/dashboard/QuickActionsCard';
-import StreakCard from '../../../components/student/dashboard/StreakCard';
+import StudyProgressRow from '../../../components/student/dashboard/StudyProgressRow';
+import WeakTopicsCard from '../../../components/student/dashboard/WeakTopicsCard';
 import WelcomeHeader from '../../../components/student/dashboard/WelcomeHeader';
 import Button from '../../../components/common/Button';
 import Card, { CardHeader } from '../../../components/common/Card';
@@ -28,16 +28,18 @@ import { gradePercent } from '../../../utils/gradePercent';
 // Dashboard stats come from the API as plain label/value pairs; map labels to icons here.
 const STAT_ICONS = {
   'Completed Lessons': BookOpenCheck,
-  'Study Streak': Flame,
   'Pending Tasks': CalendarClock,
   'Avg Quiz Score': BarChart3,
 };
+
+// The streak is shown in the compact progress row instead of a stat card.
+const PROGRESS_ROW_STATS = new Set(['Study Streak']);
 
 export default function DashboardPage({ onNavigate }) {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useDashboardData(refreshVersion);
   const { data: gamification, loading: gamificationLoading } = useGamificationSummary(refreshVersion);
-  const stats = data?.stats ?? [];
+  const stats = (data?.stats ?? []).filter((stat) => !PROGRESS_ROW_STATS.has(stat.label));
   const continueLearning = data?.continueLearning;
   const recommendation = data?.recommendation;
   // Don't show "Continue learning" when the AI Insight already points at the same lesson.
@@ -110,37 +112,9 @@ export default function DashboardPage({ onNavigate }) {
       {/* An unfinished formal assessment is the most time-sensitive action — it comes first. */}
       {!loading && <ResumeTestCard attempts={data?.activeQuizAttempts ?? []} onResume={handleResumeTest} />}
 
+      {/* Learning first: where to pick up, what to review, what's due, how quizzes went. */}
       {!loading && (
-        <AIInsightCard
-          recommendation={recommendation}
-          onReview={handleReviewRecommendation}
-          onAskAila={handleAskAilaAboutRecommendation}
-        />
-      )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, index) => <SkeletonStat key={index} />)
-        ) : stats.length ? (
-          stats.map((stat) => <StatCard key={stat.label} {...stat} icon={STAT_ICONS[stat.label]} />)
-        ) : (
-          <div className="col-span-2 lg:col-span-4">
-            <EmptyState title="No dashboard metrics yet" message="Complete a lesson, take a quiz, or add a task to start seeing your stats here." />
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-        <CourseProgressCard courses={data?.courses ?? []} loading={loading} onViewAll={() => onNavigate('hub')} />
-        <QuickActionsCard onNavigate={onNavigate} />
-        <ActivityCard activities={data?.activities ?? []} loading={loading} />
-        <DeadlinesCard deadlines={data?.deadlines ?? []} loading={loading} onViewAll={() => onNavigate('planner')} />
-        <StreakCard streak={data?.streak} weeklyActivity={data?.weeklyActivity} loading={loading} />
-        <AchievementsPreviewCard summary={gamification} loading={gamificationLoading} onNavigate={onNavigate} />
-      </div>
-
-      {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5 items-start">
           {!continueLearningIsDuplicate && (
             <Card>
               <CardHeader title="Continue learning" />
@@ -155,20 +129,19 @@ export default function DashboardPage({ onNavigate }) {
               )}
             </Card>
           )}
+          <AIInsightCard
+            className={continueLearningIsDuplicate ? 'lg:col-span-3' : 'lg:col-span-2'}
+            recommendation={recommendation}
+            onReview={handleReviewRecommendation}
+            onAskAila={handleAskAilaAboutRecommendation}
+          />
+        </div>
+      )}
 
-          <Card>
-            <CardHeader title="Recent AI conversations" action={<button onClick={() => onNavigate('assistant')} className="text-xs font-semibold text-primary hover:underline">AI Assistant</button>} />
-            {data?.recentConversations?.length ? (
-              <div className="flex flex-col gap-2.5">
-                {data.recentConversations.map((conversation) => (
-                  <div key={conversation.id} className="flex items-center gap-2 text-sm text-ink-700">
-                    <MessageSquare size={13} className="text-ink-300 flex-shrink-0" />
-                    <span className="truncate">{conversation.title || 'Untitled conversation'}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <EmptyState icon={MessageSquare} title="No conversations yet" message="Chat with AILA to see recent conversations here." />}
-          </Card>
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5 items-start">
+          <WeakTopicsCard topics={data?.weakTopics ?? []} onViewAll={() => onNavigate('analytics')} />
+          <DeadlinesCard deadlines={data?.deadlines ?? []} loading={loading} onViewAll={() => onNavigate('planner')} />
 
           <Card>
             <CardHeader title="Recent quiz scores" action={<button onClick={() => onNavigate('analytics')} className="text-xs font-semibold text-primary hover:underline">Analytics</button>} />
@@ -195,36 +168,81 @@ export default function DashboardPage({ onNavigate }) {
               </div>
             ) : <EmptyState icon={BarChart3} title="No quizzes yet" message="Generate a quiz from Learning Hub or AILA to see scores here." />}
           </Card>
-
-          <Card>
-            <CardHeader title="Recently opened resources" action={<button onClick={() => onNavigate('resources')} className="text-xs font-semibold text-primary hover:underline">Resources</button>} />
-            {data?.recentlyOpenedResources?.length ? (
-              <div className="flex flex-col gap-2.5">
-                {data.recentlyOpenedResources.map((resource) => (
-                  <div key={resource.id} className="text-sm text-ink-700 truncate">{resource.title}</div>
-                ))}
-              </div>
-            ) : <EmptyState icon={FolderOpen} title="No resources opened" message="Files you open will show up here." />}
-          </Card>
-
-          <Card className="lg:col-span-2">
-            <CardHeader title="This week's activity" />
-            {data?.weeklyActivity?.length ? (
-              <div className="flex items-end gap-3 h-24">
-                {buildWeekDays(data.weeklyActivity).map((day, index) => (
-                  <div key={`${day.day}-${index}`} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
-                    <div
-                      className="w-full bg-primary-300 rounded-md"
-                      style={{ height: day.count > 0 ? `${Math.max(8, Math.min(80, day.count * 8))}px` : 0 }}
-                    />
-                    <span className="text-[0.65rem] text-ink-400 font-semibold">{day.day}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <EmptyState title="No activity yet" message="Completed lessons, quizzes, and tasks will populate this chart." />}
-          </Card>
         </div>
       )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => <SkeletonStat key={index} />)
+        ) : stats.length ? (
+          stats.map((stat) => <StatCard key={stat.label} {...stat} icon={STAT_ICONS[stat.label]} />)
+        ) : (
+          <div className="sm:col-span-3">
+            <EmptyState title="No dashboard metrics yet" message="Complete a lesson, take a quiz, or add a task to start seeing your stats here." />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <CourseProgressCard courses={data?.courses ?? []} loading={loading} onViewAll={() => onNavigate('hub')} />
+        <QuickActionsCard onNavigate={onNavigate} />
+        <ActivityCard activities={data?.activities ?? []} loading={loading} />
+
+        {!loading && (
+          <>
+            <Card>
+              <CardHeader title="Recent AI conversations" action={<button onClick={() => onNavigate('assistant')} className="text-xs font-semibold text-primary hover:underline">AI Assistant</button>} />
+              {data?.recentConversations?.length ? (
+                <div className="flex flex-col gap-2.5">
+                  {data.recentConversations.map((conversation) => (
+                    <div key={conversation.id} className="flex items-center gap-2 text-sm text-ink-700">
+                      <MessageSquare size={13} className="text-ink-300 flex-shrink-0" />
+                      <span className="truncate">{conversation.title || 'Untitled conversation'}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <EmptyState icon={MessageSquare} title="No conversations yet" message="Chat with AILA to see recent conversations here." />}
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader title="This week's activity" />
+              {data?.weeklyActivity?.length ? (
+                <div className="flex items-end gap-3 h-24">
+                  {buildWeekDays(data.weeklyActivity).map((day, index) => (
+                    <div key={`${day.day}-${index}`} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+                      <div
+                        className="w-full bg-primary-300 rounded-md"
+                        style={{ height: day.count > 0 ? `${Math.max(8, Math.min(80, day.count * 8))}px` : 0 }}
+                      />
+                      <span className="text-[0.65rem] text-ink-400 font-semibold">{day.day}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <EmptyState title="No activity yet" message="Completed lessons, quizzes, and tasks will populate this chart." />}
+            </Card>
+
+            <Card>
+              <CardHeader title="Recently opened resources" action={<button onClick={() => onNavigate('resources')} className="text-xs font-semibold text-primary hover:underline">Resources</button>} />
+              {data?.recentlyOpenedResources?.length ? (
+                <div className="flex flex-col gap-2.5">
+                  {data.recentlyOpenedResources.map((resource) => (
+                    <div key={resource.id} className="text-sm text-ink-700 truncate">{resource.title}</div>
+                  ))}
+                </div>
+              ) : <EmptyState icon={FolderOpen} title="No resources opened" message="Files you open will show up here." />}
+            </Card>
+          </>
+        )}
+      </div>
+
+      {/* XP, level, streak and achievements: one compact row, below the learning content. */}
+      <StudyProgressRow
+        profile={data?.profile}
+        streak={data?.streak}
+        summary={gamification}
+        loading={loading || gamificationLoading}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }

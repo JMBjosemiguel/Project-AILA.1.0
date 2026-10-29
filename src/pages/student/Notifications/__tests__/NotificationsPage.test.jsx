@@ -66,13 +66,26 @@ describe('NotificationsPage — type icons', () => {
     const { container } = render(<NotificationsPage />);
 
     expect(container.querySelector('.lucide-clipboard-check')).toBeInTheDocument(); // quiz scored
-    expect(container.querySelector('.lucide-zap')).toBeInTheDocument(); // level up
-    expect(container.querySelector('.lucide-trophy')).toBeInTheDocument(); // achievement
+    expect(container.querySelector('.lucide-trending-up')).toBeInTheDocument(); // level reached
+    expect(container.querySelector('.lucide-award')).toBeInTheDocument(); // achievement
     expect(container.querySelector('.lucide-megaphone')).toBeInTheDocument(); // announcement
     expect(container.querySelector('.lucide-calendar-clock')).toBeInTheDocument(); // reminder
     expect(container.querySelector('.lucide-sparkles')).toBeInTheDocument(); // generic system
     // No more raw first-letter badges.
     expect(screen.queryByText('S')).not.toBeInTheDocument();
+  });
+
+  it('the calmer new titles get the same progress icons as the old ones', () => {
+    state.data = {
+      notifications: [
+        makeNotification({ id: 1, title: 'Progress: Level 4 reached', type: 'system' }),
+        makeNotification({ id: 2, title: 'Achievement earned', type: 'system' }),
+      ],
+    };
+    const { container } = render(<NotificationsPage />);
+    expect(container.querySelector('.lucide-trending-up')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-award')).toBeInTheDocument();
+    expect(container.querySelector('.lucide-sparkles')).not.toBeInTheDocument();
   });
 
   it('falls back to a bell icon for an unrecognized type', () => {

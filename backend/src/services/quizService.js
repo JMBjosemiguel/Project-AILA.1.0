@@ -1549,6 +1549,10 @@ async function listActiveAttempts(userId) {
       currentIndex: Number(row.current_index) || 0,
       startedAt: row.started_at,
       updatedAt: row.updated_at,
+      timeLimitSeconds: row.time_limit_seconds ?? null,
+      // Time ran out but the attempt hasn't been opened since; opening it
+      // submits the saved answers (see startAttempt / getAttempt).
+      expired: Boolean(Number(row.expired)),
     };
   });
 }

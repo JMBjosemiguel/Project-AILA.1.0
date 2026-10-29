@@ -13,6 +13,7 @@ import { usePlannerData } from '../../../hooks/usePlannerData';
 import { useLearningHubData } from '../../../hooks/useLearningHubData';
 import { createStudyTask, deleteStudyTask, duplicateStudyTask, updateStudyTask } from '../../../services/api/plannerService';
 import { formatDate } from '../../../utils/formatDate';
+import { achievementEarnedMessage, levelReachedMessage } from '../../../utils/progressMessages';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
@@ -78,8 +79,8 @@ export default function PlannerPage() {
       } else {
         toast.success(nextStatus === TASK_STATUS.COMPLETED ? 'Task marked complete.' : 'Task marked incomplete.');
       }
-      if (updated.leveledUp) toast.success(`Level up! You're now Level ${updated.level}.`);
-      (updated.newAchievements ?? []).forEach((a) => toast.success(`Achievement unlocked: ${a.name}`));
+      if (updated.leveledUp) toast.success(levelReachedMessage(updated.level));
+      (updated.newAchievements ?? []).forEach((a) => toast.success(achievementEarnedMessage(a.name)));
     } catch (error) {
       toast.error(error.message || 'Could not update that task.');
     }

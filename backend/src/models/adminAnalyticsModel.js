@@ -1,5 +1,9 @@
 const { query } = require('../config/database');
-const { appWindowStart, windowStartDays, countByAppDay, avgPercentByAppDay } = require('../utils/dayBucket');
+const { appWindowStart, windowStartDays, countByAppDay, avgPercentByAppDay, groupByWeek } = require('../utils/dayBucket');
+const { appWeekStarts } = require('../utils/appTime');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
+
+const STUDENT_ROLE = "(SELECT id FROM roles WHERE name = 'student')";
 
 async function getRegistrationsOverTime(days = 14) {
   const rows = await query(
@@ -52,6 +56,61 @@ async function getLessonCompletionsOverTime(days = 14) {
   );
   const validDays = new Set(windowStartDays(days));
   return countByAppDay(rows, 'ts').filter((row) => validDays.has(row.date));
+}
+
+// One row per week for the last `weeks` weeks, oldest first. Weeks start on
+// Monday 00:00 in APP_TIMEZONE, the same boundary as the weekly leaderboard.
+// Active students = students with any dashboard activity that week (the same
+// signal as the admin dashboard's daily active-students chart). Chat quizzes
+// are left out of the quiz numbers, like the student analytics.
+async function getWeeklyResults(weeks = 8, now = new Date()) {
+  const starts = appWeekStarts(weeks, now);
+  const from = starts[0];
+  const [activity, attempts, lessons, registrations] = await Promise.all([
+    query(
+      `
+        SELECT dal.user_id, dal.created_at AS ts
+        FROM dashboard_activity_log dal
+        INNER JOIN users u ON u.id = dal.user_id
+        WHERE dal.created_at >= ? AND u.deleted_at IS NULL AND u.role_id = ${STUDENT_ROLE}
+      `,
+      [from]
+    ),
+    query(
+      `
+        SELECT qa.completed_at AS ts, qa.score, qa.total
+        FROM quiz_attempts qa
+        INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.status = 'submitted' AND qa.completed_at >= ? AND ${notChatQuizCondition('q')}
+      `,
+      [from]
+    ),
+    query('SELECT completed_at AS ts FROM lesson_progress WHERE completed_at >= ?', [from]),
+    query(
+      `SELECT created_at AS ts FROM users WHERE role_id = ${STUDENT_ROLE} AND deleted_at IS NULL AND created_at >= ?`,
+      [from]
+    ),
+  ]);
+
+  const activityByWeek = groupByWeek(activity, starts);
+  const attemptsByWeek = groupByWeek(attempts, starts);
+  const lessonsByWeek = groupByWeek(lessons, starts);
+  const registrationsByWeek = groupByWeek(registrations, starts);
+
+  return starts.map((start, i) => {
+    const scored = attemptsByWeek[i].filter((row) => Number(row.total) > 0);
+    const avgQuizScore = scored.length
+      ? Math.round(scored.reduce((sum, row) => sum + (Number(row.score) / Number(row.total)) * 100, 0) / scored.length)
+      : null;
+    return {
+      weekStart: start.toISOString(),
+      activeStudents: new Set(activityByWeek[i].map((row) => row.user_id)).size,
+      quizzesCompleted: attemptsByWeek[i].length,
+      avgQuizScore,
+      lessonsCompleted: lessonsByWeek[i].length,
+      newRegistrations: registrationsByWeek[i].length,
+    };
+  });
 }
 
 async function getPopularCourses(limit = 5) {
@@ -136,6 +195,7 @@ module.exports = {
   getAiUsageOverTime,
   getQuizScoreTrend,
   getLessonCompletionsOverTime,
+  getWeeklyResults,
   getPopularCourses,
   getPopularResources,
   getMostActiveStudents,

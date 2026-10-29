@@ -135,8 +135,8 @@ test('gamification — achievements, streaks, leaderboard', async (t) => {
     assert.equal(await ledgerCount(A.id, 'achievement:first_lesson'), 1);
     assert.deepEqual(await achievementSlugs(A.id), ['first_lesson']);
 
-    // Exactly one "Achievement unlocked" notification — not one per later read.
-    const unlockNotifs = notifications.filter((n) => n.title === 'Achievement unlocked');
+    // Exactly one "Achievement earned" notification — not one per later read.
+    const unlockNotifs = notifications.filter((n) => n.title === 'Achievement earned');
     assert.equal(unlockNotifs.length, 1);
 
     // A repeat completion is a no-op: no new achievement, no new XP.

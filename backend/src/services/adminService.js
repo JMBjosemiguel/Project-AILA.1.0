@@ -9,6 +9,7 @@ const { notifyUsers } = require('../utils/notify');
 const { deleteStoredFile } = require('./resourceService');
 const { logAdminAction } = require('../utils/adminAudit');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
+const { APP_TIMEZONE } = require('../utils/appTime');
 
 async function getDashboardStats() {
   const [stats, activity, feedbackPending, unverifiedOver24h, studentsNeedingHelp, activeStudentsByDay] = await Promise.all([
@@ -324,7 +325,7 @@ async function deleteAnnouncement(adminId, announcementId) {
 async function getAnalytics() {
   const [
     registrations, aiUsage, quizTrend, lessonCompletions,
-    popularCourses, popularResources, activeStudents, strongTopics, weakTopics,
+    popularCourses, popularResources, activeStudents, strongTopics, weakTopics, weeklyResults,
   ] = await Promise.all([
     adminAnalyticsModel.getRegistrationsOverTime(14),
     adminAnalyticsModel.getAiUsageOverTime(14),
@@ -335,11 +336,13 @@ async function getAnalytics() {
     adminAnalyticsModel.getMostActiveStudents(5),
     adminAnalyticsModel.getTopicMasteryPlatform('desc', 5),
     adminAnalyticsModel.getTopicMasteryPlatform('asc', 5),
+    adminAnalyticsModel.getWeeklyResults(8),
   ]);
 
   return {
     registrations, aiUsage, quizTrend, lessonCompletions,
     popularCourses, popularResources, activeStudents, strongTopics, weakTopics,
+    weeklyResults, timezone: APP_TIMEZONE,
   };
 }
 

@@ -14,7 +14,7 @@ export default function DeadlinesCard({ deadlines = [], loading = false, onViewA
   return (
     <Card>
       <CardHeader
-        title="Upcoming deadlines"
+        title="Upcoming study tasks"
         action={<button onClick={onViewAll} className="text-xs font-semibold text-primary hover:underline">Planner</button>}
       />
       {loading ? (

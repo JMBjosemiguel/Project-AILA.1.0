@@ -172,3 +172,99 @@ describe('DashboardPage — recent quiz scores', () => {
     expect(screen.getByText('Grade 50%')).toBeInTheDocument();
   });
 });
+
+describe('DashboardPage — study-focused layout', () => {
+  const learningData = () => ({
+    ...baseData,
+    stats: [
+      { label: 'Completed Lessons', value: '2', delta: 'this week' },
+      { label: 'Study Streak', value: '3d' },
+      { label: 'Pending Tasks', value: '1' },
+      { label: 'Avg Quiz Score', value: '72%' },
+    ],
+    continueLearning: { lessonId: 7, lessonTitle: 'Cell Structure', topicTitle: 'Cells', subjectName: 'Biology' },
+    recommendation: { type: 'weak_topic', title: 'Review Photosynthesis', message: 'reinforce', lessonId: 99 },
+    weakTopics: [{ topicId: 3, topic: 'Fluid balance', subject: 'Nursing 101', avgPercent: 42 }],
+    deadlines: [{ id: 1, title: 'Read chapter 4', deadline: '2026-11-02T00:00:00Z', priority_label: 'High' }],
+    recentQuizzes: [{ id: 1, topic: 'Drug Classes', score: 3, total: 4 }],
+  });
+
+  function renderDashboard(data = learningData()) {
+    state.data = data;
+    state.loading = false;
+    state.error = null;
+    return render(<DashboardPage onNavigate={vi.fn()} />);
+  }
+
+  const follows = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('puts learning first, in order: continue learning, recommendation, weak topics, study tasks, recent quiz scores', () => {
+    renderDashboard();
+    const order = [
+      screen.getByText('Continue learning'),
+      screen.getByText('Review Photosynthesis'),
+      screen.getByText('Weak topics'),
+      screen.getByText('Upcoming study tasks'),
+      screen.getByText('Recent quiz scores'),
+    ];
+    for (let i = 1; i < order.length; i += 1) expect(follows(order[i - 1], order[i])).toBe(true);
+  });
+
+  it('shows XP, level, streak and achievements as one compact row below the learning content', () => {
+    renderDashboard();
+    const row = screen.getByRole('region', { name: 'Your progress' });
+    expect(row).toHaveTextContent('Level 1 · 40/100 XP');
+    expect(row).toHaveTextContent('Study streak: 3 days (best 5)');
+    expect(follows(screen.getByText('Recent quiz scores'), row)).toBe(true);
+    expect(follows(screen.getByText('Course progress'), row)).toBe(true);
+  });
+
+  it('no longer shows the streak as a stat card, nor the old streak and achievements cards', () => {
+    renderDashboard();
+    expect(screen.getByText('Completed Lessons')).toBeInTheDocument();
+    expect(screen.getByText('Avg Quiz Score')).toBeInTheDocument();
+    expect(screen.queryByText('3d')).not.toBeInTheDocument();
+    expect(screen.queryByText('Study streak')).not.toBeInTheDocument();
+    expect(screen.queryByText('No badges yet')).not.toBeInTheDocument();
+  });
+
+  it('does not show the leaderboard (it stays on the Achievements page)', () => {
+    renderDashboard();
+    expect(screen.queryByText(/leaderboard/i)).not.toBeInTheDocument();
+  });
+
+  it('lists weak topics with their quiz average', () => {
+    renderDashboard();
+    expect(screen.getByText('Fluid balance')).toBeInTheDocument();
+    expect(screen.getByText('Nursing 101')).toBeInTheDocument();
+    expect(screen.getByText('42%')).toBeInTheDocument();
+  });
+
+  it('says so when there are no weak topics', () => {
+    renderDashboard({ ...learningData(), weakTopics: [] });
+    expect(screen.getByText('No weak topics')).toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage — expired timed attempt in the resume list', () => {
+  it('says "Time\'s up, see results" instead of "Resume", and still opens the quiz', async () => {
+    const user = userEvent.setup();
+    setResumeQuiz.mockClear();
+    const onNavigate = vi.fn();
+    state.error = null;
+    state.loading = false;
+    state.data = {
+      ...baseData,
+      activeQuizAttempts: [
+        { attemptId: 9, quizId: 42, topic: 'Photosynthesis', total: 6, answered: 3, progressPercent: 50, timeLimitSeconds: 600, expired: true },
+        { attemptId: 10, quizId: 43, topic: 'Respiration', total: 4, answered: 1, progressPercent: 25, timeLimitSeconds: 600, expired: false },
+      ],
+    };
+    render(<DashboardPage onNavigate={onNavigate} />);
+
+    expect(screen.getAllByRole('button', { name: /^Resume$/ })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: "Time's up, see results" }));
+    expect(setResumeQuiz).toHaveBeenCalledWith(42);
+    expect(onNavigate).toHaveBeenCalledWith('hub');
+  });
+});

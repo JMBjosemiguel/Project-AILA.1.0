@@ -92,7 +92,26 @@ function distinctCountByAppDay(rows, tsKey, idKey) {
     .map(([date, ids]) => ({ date, count: ids.size }));
 }
 
+// Splits rows into weeks: `starts` is ascending week-start instants (see
+// appTime.appWeekStarts) and each row goes to the last week that starts at or
+// before its timestamp. Rows before starts[0] are dropped. Returns one array
+// of rows per week, in the same order as `starts`.
+function groupByWeek(rows, starts, tsKey = 'ts') {
+  const weeks = starts.map(() => []);
+  const times = starts.map((start) => new Date(start).getTime());
+  for (const row of rows) {
+    const t = new Date(row[tsKey]).getTime();
+    let index = -1;
+    for (let i = times.length - 1; i >= 0; i -= 1) {
+      if (t >= times[i]) { index = i; break; }
+    }
+    if (index >= 0) weeks[index].push(row);
+  }
+  return weeks;
+}
+
 module.exports = {
+  groupByWeek,
   appWindowStart,
   windowStartDays,
   countByAppDay,

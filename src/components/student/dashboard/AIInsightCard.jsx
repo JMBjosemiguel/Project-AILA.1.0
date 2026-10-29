@@ -2,11 +2,11 @@ import { ArrowRight, Sparkles } from 'lucide-react';
 import AilaOrb from '../../common/AilaOrb';
 import Button from '../../common/Button';
 
-export default function AIInsightCard({ recommendation, onReview, onAskAila }) {
+export default function AIInsightCard({ recommendation, onReview, onAskAila, className = 'mb-5' }) {
   if (!recommendation) return null;
 
   return (
-    <div className="flex items-start gap-4 rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 via-surface to-surface p-5 mb-5">
+    <div className={`flex items-start gap-4 rounded-2xl border border-primary-100 bg-gradient-to-br from-primary-50 via-surface to-surface p-5 ${className}`}>
       <AilaOrb size={40} pulse />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-primary mb-1">

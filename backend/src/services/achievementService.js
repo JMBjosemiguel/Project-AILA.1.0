@@ -95,7 +95,7 @@ async function evaluateForEvent(userId, triggers, connection = null, { notify = 
     for (const a of newlyEarned) {
       await notifyUser(userId, {
         type: 'system',
-        title: 'Achievement unlocked',
+        title: 'Achievement earned',
         body: `You earned "${a.name}" — ${a.description}.`,
         connection,
       });

@@ -96,8 +96,8 @@ async function awardXpOnce(userId, { eventKey, points, reason }, connection = nu
   if (leveledUp) {
     await notifyUser(userId, {
       type: 'system',
-      title: 'Level up!',
-      body: `You reached Level ${level}. Keep up the momentum.`,
+      title: `Progress: Level ${level} reached`,
+      body: `Your lessons, quizzes and tasks brought you to Level ${level}.`,
       connection,
     });
   }

@@ -6,6 +6,7 @@ import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonList } from '../../../components/common/Skeleton';
 import BarChart from '../../../components/analytics/BarChart';
 import TopicGroupsSection from '../../../components/admin/TopicGroups';
+import WeeklyResults from '../../../components/admin/WeeklyResults';
 import { getAdminAnalytics } from '../../../services/api/adminService';
 
 function shortDate(iso) {
@@ -93,6 +94,8 @@ export default function AdminChatbotRulesPage() {
 
   return (
     <div className="p-5 lg:p-8 max-w-6xl 2xl:max-w-7xl mx-auto animate-fadeUp flex flex-col gap-5">
+      <WeeklyResults weeks={data.weeklyResults ?? []} timezone={data.timezone} />
+
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="New registrations" subtitle="Last 14 days" />

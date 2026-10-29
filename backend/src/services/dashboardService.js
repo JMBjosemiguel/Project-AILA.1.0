@@ -170,6 +170,13 @@ async function getSummary(userId) {
     weeklyActivity,
     activeQuizAttempts,
     continueLearning: findContinueLearning(subjects),
+    // Already computed for the recommendation; the dashboard lists the top 3.
+    weakTopics: studentContext.weakTopics.slice(0, 3).map((row) => ({
+      topicId: row.topic_id,
+      topic: row.topic,
+      subject: row.subject,
+      avgPercent: Number(row.avg_percent),
+    })),
     recommendation: { ...recommendation, lessonId: recommendationLesson?.lessonId ?? null },
   };
 }

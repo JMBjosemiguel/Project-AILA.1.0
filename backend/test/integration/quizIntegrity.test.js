@@ -4,6 +4,14 @@ const assert = require('node:assert/strict');
 const { db, api, serverReachable, createStudent, purgeByTag } = require('./helpers');
 
 const TAG = `qa.itest.quiz.${Date.now()}`;
+const EXPLANATIONS = ['Paris has been the capital since 987.', 'Basic arithmetic.'];
+
+// Every string value in a JSON payload (keys and numbers left out).
+function stringValues(value, out = []) {
+  if (typeof value === 'string') out.push(value);
+  else if (value && typeof value === 'object') Object.values(value).forEach((v) => stringValues(v, out));
+  return out;
+}
 
 async function makeQuiz(userId, topic) {
   const q = await db.query(
@@ -14,8 +22,8 @@ async function makeQuiz(userId, topic) {
   await db.query(
     'INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation, order_index) VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)',
     [
-      quizId, 'Capital of France?', JSON.stringify(['Paris', 'Berlin', 'Rome', 'Madrid']), 'Paris', 'Paris has been the capital since 987.', 0,
-      quizId, '2 + 2 = ?', JSON.stringify(['3', '4', '5', '22']), '4', 'Basic arithmetic.', 1,
+      quizId, 'Capital of France?', JSON.stringify(['Paris', 'Berlin', 'Rome', 'Madrid']), 'Paris', EXPLANATIONS[0], 0,
+      quizId, '2 + 2 = ?', JSON.stringify(['3', '4', '5', '22']), '4', EXPLANATIONS[1], 1,
     ]
   );
   const rows = await db.query('SELECT id FROM quiz_questions WHERE quiz_id = ? ORDER BY order_index', [quizId]);
@@ -38,8 +46,13 @@ test('quiz assessment integrity (take vs review)', async (t) => {
     assert.doesNotMatch(body, /correct_?answer|correctAnswer/i);
     assert.doesNotMatch(body, /explanation/i);
     assert.doesNotMatch(body, /is_?correct|isCorrect/i);
-    // explanation text must not leak (question options like "Paris" are expected)
-    assert.doesNotMatch(body, /987|Basic arithmetic/i);
+    // Explanation text must not leak into any field (question options like
+    // "Paris" are expected). Checked against string values, not the raw body,
+    // so an id or timestamp that happens to contain 987 can't fail it.
+    const strings = stringValues(res.json);
+    for (const text of EXPLANATIONS) {
+      assert.ok(!strings.some((s) => s.includes(text)), `explanation leaked: ${text}`);
+    }
     assert.equal(res.json.data.items.length, 2);
     assert.ok(res.json.data.items[0].question && Array.isArray(res.json.data.items[0].options));
   });

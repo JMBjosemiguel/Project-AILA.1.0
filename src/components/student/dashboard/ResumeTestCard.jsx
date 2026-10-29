@@ -13,7 +13,8 @@ function attemptLabel(attempt) {
 }
 
 // Shown only when the student has an unfinished formal quiz attempt. The real
-// progress lives on the server; this is just the way back into it.
+// progress lives on the server; this is just the way back into it. A timed
+// attempt whose time ran out is submitted when opened, so its button says so.
 export default function ResumeTestCard({ attempts = [], onResume }) {
   if (!attempts.length) return null;
 
@@ -46,7 +47,7 @@ export default function ResumeTestCard({ attempts = [], onResume }) {
                 icon={<ArrowRight size={14} />}
                 onClick={() => onResume(attempt)}
               >
-                Resume
+                {attempt.expired ? "Time's up, see results" : 'Resume'}
               </Button>
             </div>
           );

@@ -1,4 +1,5 @@
 import {
+  Award,
   BarChart3,
   Bell,
   BookOpen,
@@ -7,7 +8,6 @@ import {
   LayoutGrid,
   MessageSquareHeart,
   Sparkles,
-  Trophy,
   UserRound,
 } from 'lucide-react';
 import { ROLES } from '../../constants/roles';
@@ -87,7 +87,7 @@ export const STUDENT_ROUTES = {
     label: 'Achievements',
     title: 'Achievements',
     subtitle: 'Badges, streaks, and the leaderboard.',
-    icon: Trophy,
+    icon: Award,
     allowedRoles: [ROLES.STUDENT],
   },
   [STUDENT_ROUTE_IDS.NOTIFICATIONS]: {

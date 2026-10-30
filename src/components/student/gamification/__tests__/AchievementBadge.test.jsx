@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+
+// Gamification SHOWN here (the XP reward label); hidden by default, which
+// AchievementsPage.milestones.test.jsx covers.
+vi.mock('../../../../constants/studentFeatures', async (importOriginal) => ({
+  ...(await importOriginal()),
+  SHOW_GAMIFICATION: true,
+}));
+
 import AchievementBadge from '../AchievementBadge.jsx';
 
 const base = {

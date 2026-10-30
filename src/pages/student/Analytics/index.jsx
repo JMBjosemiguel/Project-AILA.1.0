@@ -9,6 +9,7 @@ import LoadError from '../../../components/common/LoadError';
 import StatCard from '../../../components/common/StatCard';
 import { SkeletonStat } from '../../../components/common/Skeleton';
 import { useAnalyticsData } from '../../../hooks/useAnalyticsData';
+import { SHOW_GAMIFICATION } from '../../../constants/studentFeatures';
 
 // KPIs come from the API as plain label/value pairs; map labels to icons here
 // (same labels/icons as the student Dashboard's stat cards, for consistency).
@@ -22,7 +23,8 @@ const KPI_ICONS = {
 export default function AnalyticsPage() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const { data, loading, error } = useAnalyticsData(refreshVersion);
-  const kpis = data?.kpis ?? [];
+  // The XP / Level KPI and XP chart only show while gamification is shown.
+  const kpis = (data?.kpis ?? []).filter((kpi) => SHOW_GAMIFICATION || kpi.label !== 'XP / Level');
   const chatbotUsage = data?.chatbotUsage ?? [];
   const performanceTrend = data?.performanceTrend ?? [];
   const strongTopics = data?.strongTopics ?? [];
@@ -65,10 +67,12 @@ export default function AnalyticsPage() {
           <MasteryList data={data?.mastery ?? []} />
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader title="XP over time" />
-          {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
-        </Card>
+        {SHOW_GAMIFICATION && (
+          <Card className="lg:col-span-2">
+            <CardHeader title="XP over time" />
+            {xpOverTime.length ? <TrendLine points={xpOverTime} color="#D97706" unit=" XP" /> : <EmptyState icon={Zap} title="No XP data yet" message="Completing lessons and quizzes earns XP tracked here." />}
+          </Card>
+        )}
 
         <Card>
           <CardHeader title="AILA usage breakdown" />

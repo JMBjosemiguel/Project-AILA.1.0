@@ -7,11 +7,29 @@ import ProgressBar from '../../../components/common/ProgressBar';
 import { SkeletonGrid, SkeletonList } from '../../../components/common/Skeleton';
 import AchievementBadge from '../../../components/student/gamification/AchievementBadge';
 import { useAchievementsData, useGamificationSummary, useLeaderboardData } from '../../../hooks/useGamificationData';
+import { SHOW_GAMIFICATION, isStudyMilestone } from '../../../constants/studentFeatures';
 
 const TABS = [
   { id: 'achievements', label: 'Achievements' },
   { id: 'leaderboard', label: 'Leaderboard' },
 ];
+
+// With XP/levels hidden: just the study streak.
+function StreakHeader({ summary, loading }) {
+  if (loading) {
+    return <Card className="mb-5"><div className="h-10 animate-pulse rounded-xl bg-ink-100" /></Card>;
+  }
+  if (!summary) return null;
+  return (
+    <Card className="mb-5">
+      <div className="flex items-center gap-2 text-sm font-semibold text-rose-600">
+        <Flame size={16} />
+        Study streak: {summary.streak.current} day{summary.streak.current === 1 ? '' : 's'}
+        <span className="text-xs font-medium text-ink-400">(best {summary.streak.best})</span>
+      </div>
+    </Card>
+  );
+}
 
 function XpHeader({ summary, loading }) {
   if (loading) {
@@ -61,13 +79,16 @@ function AchievementsTab({ refreshKey, onRetry }) {
     );
   }
 
-  const earned = data.earned ?? [];
-  const locked = data.locked ?? [];
+  // The server already leaves XP/level achievements out while they're hidden;
+  // filtering here too keeps the page right either way.
+  const visible = SHOW_GAMIFICATION ? () => true : isStudyMilestone;
+  const earned = (data.earned ?? []).filter(visible);
+  const locked = (data.locked ?? []).filter(visible);
 
   return (
     <div className="flex flex-col gap-5">
       <p className="text-sm text-ink-500">
-        <strong className="text-ink-800">{data.earnedCount}</strong> of {data.totalCount} unlocked
+        <strong className="text-ink-800">{earned.length}</strong> of {earned.length + locked.length} {SHOW_GAMIFICATION ? 'unlocked' : 'milestones reached'}
       </p>
 
       {earned.length > 0 && (
@@ -179,27 +200,34 @@ export default function AchievementsPage({ onNavigate }) {
 
   return (
     <div className="mx-auto max-w-6xl 2xl:max-w-7xl animate-fadeUp p-5 lg:p-8">
-      <XpHeader summary={summary} loading={summaryLoading} />
+      {SHOW_GAMIFICATION ? (
+        <XpHeader summary={summary} loading={summaryLoading} />
+      ) : (
+        <StreakHeader summary={summary} loading={summaryLoading} />
+      )}
 
-      <div className="mb-5 flex gap-1 border-b border-ink-100" role="tablist" aria-label="Achievements and leaderboard">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={[
-              '-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors',
-              tab === t.id ? 'border-primary text-primary' : 'border-transparent text-ink-400 hover:text-ink-600',
-            ].join(' ')}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* The leaderboard tab only exists while gamification is shown. */}
+      {SHOW_GAMIFICATION && (
+        <div className="mb-5 flex gap-1 border-b border-ink-100" role="tablist" aria-label="Achievements and leaderboard">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={[
+                '-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors',
+                tab === t.id ? 'border-primary text-primary' : 'border-transparent text-ink-400 hover:text-ink-600',
+              ].join(' ')}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === 'achievements' ? (
+      {!SHOW_GAMIFICATION || tab === 'achievements' ? (
         <AchievementsTab refreshKey={refreshKey} onRetry={retry} />
       ) : (
         <LeaderboardTab optedIn={Boolean(summary?.leaderboardOptIn)} onNavigate={onNavigate} refreshKey={refreshKey} onRetry={retry} />

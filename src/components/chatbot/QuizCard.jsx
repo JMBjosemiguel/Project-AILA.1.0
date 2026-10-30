@@ -5,6 +5,7 @@ import Button from '../common/Button';
 import PersonalizedBadge from '../common/PersonalizedBadge';
 import RationaleBox from '../common/RationaleBox';
 import { gradePercent } from '../../utils/gradePercent';
+import { SHOW_GAMIFICATION } from '../../constants/studentFeatures';
 
 const TYPE_LABELS = {
   multiple_choice: 'Multiple Choice',
@@ -439,7 +440,7 @@ export default function QuizCard({
       {onSaveAsQuiz && (
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-50 pt-3">
           <p className="text-xs text-ink-400">
-            Practice quiz — not graded. Save it to take it formally with XP and history.
+            Practice quiz — not graded. Save it to take it formally with {SHOW_GAMIFICATION ? 'XP and history' : 'a grade and history'}.
           </p>
           <button
             type="button"

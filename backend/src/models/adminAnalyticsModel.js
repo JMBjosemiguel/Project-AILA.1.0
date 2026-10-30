@@ -142,18 +142,37 @@ async function getPopularResources(limit = 5) {
   );
 }
 
+// Most active = most studying: lessons completed + quizzes completed
+// (submitted, chat quizzes excluded), with the average quiz score (raw %).
 async function getMostActiveStudents(limit = 5) {
-  return query(
+  const rows = await query(
     `
-      SELECT u.id, u.first_name, u.last_name, up.xp_points, up.level
+      SELECT u.id, u.first_name, u.last_name,
+        (SELECT COUNT(*) FROM lesson_progress lp WHERE lp.user_id = u.id) AS lessons_completed,
+        qs.quizzes_completed, qs.avg_quiz_score
       FROM users u
-      INNER JOIN user_profiles up ON up.user_id = u.id
+      LEFT JOIN (
+        SELECT qa.user_id, COUNT(*) AS quizzes_completed,
+          ROUND(AVG(CASE WHEN qa.total > 0 THEN qa.score / qa.total * 100 END), 0) AS avg_quiz_score
+        FROM quiz_attempts qa
+        INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.status = 'submitted' AND ${notChatQuizCondition('q')}
+        GROUP BY qa.user_id
+      ) qs ON qs.user_id = u.id
       WHERE u.role_id = (SELECT id FROM roles WHERE name = 'student') AND u.deleted_at IS NULL
-      ORDER BY up.xp_points DESC
+      ORDER BY (lessons_completed + COALESCE(qs.quizzes_completed, 0)) DESC, u.id ASC
       LIMIT ?
     `,
     [limit]
   );
+  return rows.map((row) => ({
+    id: row.id,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    lessons_completed: Number(row.lessons_completed) || 0,
+    quizzes_completed: Number(row.quizzes_completed) || 0,
+    avg_quiz_score: row.avg_quiz_score == null ? null : Number(row.avg_quiz_score),
+  }));
 }
 
 // One row per (student, topic) with progress — the same FROM/JOIN/WHERE shape

@@ -2,6 +2,7 @@ import { Lock } from 'lucide-react';
 import ProgressBar from '../../common/ProgressBar';
 import { achievementIcon, CATEGORY_ACCENT } from './achievementIcons';
 import { formatDate } from '../../../utils/formatDate';
+import { SHOW_GAMIFICATION } from '../../../constants/studentFeatures';
 
 // Progress label for a countable achievement ("7 / 10 lessons"). Binary
 // achievements pass progress = null and get no bar.
@@ -42,7 +43,7 @@ export default function AchievementBadge({ achievement, earned = false, earnedAt
           <p className={['truncate text-sm font-semibold', earned ? 'text-ink-800' : 'text-ink-500'].join(' ')}>
             {achievement.name}
           </p>
-          {achievement.xpReward > 0 && (
+          {SHOW_GAMIFICATION && achievement.xpReward > 0 && (
             <span className={['flex-shrink-0 text-[0.7rem] font-semibold', earned ? 'text-primary' : 'text-ink-400'].join(' ')}>
               +{achievement.xpReward} XP
             </span>

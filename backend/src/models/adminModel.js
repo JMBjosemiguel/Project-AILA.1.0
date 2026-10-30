@@ -263,7 +263,13 @@ async function listUsers({ search = '', role = 'all', status = 'all', verificati
       `
         SELECT
           u.id, u.first_name, u.last_name, u.email, u.student_number, u.is_active, u.email_verified_at, u.created_at, u.last_login_at,
-          r.name AS role, up.program, up.year_level, up.xp_points, up.level
+          r.name AS role, up.program, up.year_level, up.xp_points, up.level,
+          -- Study stats for the Users table (in place of Level / XP).
+          (SELECT COUNT(*) FROM lesson_progress lp WHERE lp.user_id = u.id) AS lessons_completed,
+          (SELECT ROUND(AVG(qa.score / qa.total * 100), 0)
+             FROM quiz_attempts qa INNER JOIN quizzes q ON q.id = qa.quiz_id
+            WHERE qa.user_id = u.id AND qa.status = 'submitted' AND qa.total > 0
+              AND ${notChatQuizCondition('q')}) AS avg_quiz_score
         FROM users u
         INNER JOIN roles r ON r.id = u.role_id
         LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -316,7 +322,13 @@ async function getUserDetail(userId) {
     query('SELECT COUNT(*) AS count FROM subjects WHERE created_by = ? AND deleted_at IS NULL', [userId]),
     query('SELECT COUNT(*) AS count FROM lesson_progress WHERE user_id = ?', [userId]),
     query('SELECT COUNT(*) AS count FROM resources WHERE uploaded_by = ? AND deleted_at IS NULL', [userId]),
-    query('SELECT ROUND(AVG(score / total) * 100, 0) AS avg_percent FROM quiz_attempts WHERE user_id = ? AND total > 0', [userId]),
+    // Same definition as the Users table: submitted, non-chat attempts only.
+    query(
+      `SELECT ROUND(AVG(qa.score / qa.total) * 100, 0) AS avg_percent
+         FROM quiz_attempts qa INNER JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0 AND ${notChatQuizCondition('q')}`,
+      [userId]
+    ),
     query('SELECT current_streak, longest_streak FROM learning_streaks WHERE user_id = ? LIMIT 1', [userId]),
     query('SELECT COALESCE(SUM(file_size_bytes), 0) AS bytes FROM resources WHERE uploaded_by = ? AND deleted_at IS NULL', [userId]),
     query('SELECT id, activity_type, description, created_at FROM dashboard_activity_log WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', [userId]),

@@ -9,7 +9,7 @@ import { useMobileDrawer } from '../../../hooks/useMobileDrawer';
 import MarkdownRenderer from '../../chatbot/MarkdownRenderer';
 import { getLesson, completeLesson } from '../../../services/api/learningService';
 import { getStudyToolObjectives } from '../../../services/api/aiToolsService';
-import { achievementEarnedMessage, levelReachedMessage } from '../../../utils/progressMessages';
+import { progressToastMessages, xpEarnedSuffix } from '../../../utils/progressMessages';
 
 const DIFFICULTY_STYLE = {
   easy: 'bg-emerald-50 text-emerald-600',
@@ -122,9 +122,8 @@ export default function LessonReader({
       const result = await completeLesson(lessonId);
       setDetail((current) => (current ? { ...current, lesson: { ...current.lesson, completed: true } } : current));
       if (!result?.alreadyCompleted) {
-        toast.success(`Lesson completed. +${result?.xpAwarded ?? 10} XP earned.`);
-        if (result?.leveledUp) toast.success(levelReachedMessage(result.level));
-        (result?.newAchievements ?? []).forEach((a) => toast.success(achievementEarnedMessage(a.name)));
+        toast.success(`Lesson completed.${xpEarnedSuffix(result?.xpAwarded ?? 10)}`);
+        progressToastMessages(result).forEach((message) => toast.success(message));
       }
       onCompleted?.();
     } catch (err) {

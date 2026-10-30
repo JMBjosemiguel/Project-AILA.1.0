@@ -86,3 +86,18 @@ describe('ActivityList — quiz "View" button', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('ActivityList — gamification hidden (the default)', () => {
+  it('shows the completion without a +XP pill', () => {
+    render(
+      <ActivityList
+        activities={[
+          { id: 11, activity_type: 'lesson_completed', reference_id: 9, description: 'Completed lesson: Cells', created_at: '2026-10-19T10:00:00.000Z' },
+          { id: 12, activity_type: 'xp_earned', reference_id: 9, description: '+10 XP - Completed lesson: Cells', created_at: '2026-10-19T10:00:00.000Z' },
+        ]}
+      />
+    );
+    expect(screen.getByText('Completed lesson: Cells')).toBeInTheDocument();
+    expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
+  });
+});

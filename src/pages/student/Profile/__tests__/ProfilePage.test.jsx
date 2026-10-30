@@ -31,29 +31,14 @@ beforeEach(() => {
   profileState.error = null;
 });
 
-describe('Profile leaderboard opt-in', () => {
-  it('shows the switch reflecting the current (opted-out) setting', () => {
+describe('Profile with gamification hidden (the default)', () => {
+  it('has no leaderboard opt-in and no XP or Level stats', () => {
     render(<ProfilePage />);
-    const toggle = screen.getByRole('switch', { name: /show me on the leaderboard/i });
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-  });
-
-  it('persists the new value through updateProfile when toggled on', async () => {
-    const user = userEvent.setup();
-    render(<ProfilePage />);
-    await user.click(screen.getByRole('switch', { name: /show me on the leaderboard/i }));
-    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ leaderboard_opt_in: true }));
-  });
-
-  it('reflects an opted-in profile as checked', () => {
-    profileState.data = { ...data, profile: { ...data.profile, leaderboard_opt_in: true } };
-    render(<ProfilePage />);
-    expect(screen.getByRole('switch', { name: /show me on the leaderboard/i })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('does not leak what is shared — the helper text names the hidden fields', () => {
-    render(<ProfilePage />);
-    expect(screen.getByText(/email, program, year, and scores are never shown/i)).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: /leaderboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/leaderboard/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('XP')).not.toBeInTheDocument();
+    expect(screen.queryByText('Level')).not.toBeInTheDocument();
+    expect(screen.getByText('Activities')).toBeInTheDocument();
   });
 });
 

@@ -168,7 +168,8 @@ export default function AdminUsersPage() {
     { key: 'name', label: 'Name', render: (u) => <span className="font-medium text-ink-800 block max-w-[180px] truncate" title={`${u.first_name} ${u.last_name}`}>{u.first_name} {u.last_name}</span> },
     { key: 'email', label: 'Email', render: (u) => <span className="text-ink-500 block max-w-[200px] truncate" title={u.email}>{u.email}</span> },
     { key: 'program', label: 'Program', render: (u) => <span className="text-ink-500">{u.program || '—'}{u.year_level ? ` · Yr ${u.year_level}` : ''}</span> },
-    { key: 'level', label: 'Level / XP', render: (u) => <span className="text-ink-500">Lv.{u.level ?? 1} · {u.xp_points ?? 0} XP</span> },
+    { key: 'lessons', label: 'Lessons completed', render: (u) => <span className="text-ink-500 tabular-nums">{u.role === 'student' ? (u.lessons_completed ?? 0) : '—'}</span> },
+    { key: 'avgQuiz', label: 'Avg quiz score', render: (u) => <span className="text-ink-500 tabular-nums">{u.avg_quiz_score != null ? `${Number(u.avg_quiz_score)}%` : '—'}</span> },
     { key: 'role', label: 'Role', render: (u) => <span className="text-ink-500 capitalize">{u.role}</span> },
     {
       key: 'status',

@@ -1,8 +1,10 @@
 const ApiError = require('../utils/ApiError');
 const notificationModel = require('../models/notificationModel');
+const { studentNotifications } = require('../utils/studentGamification');
 
 async function listNotifications(userId) {
-  const notifications = await notificationModel.listForUser(userId);
+  // Level notifications only ever go to students; hidden unless gamification is shown.
+  const notifications = studentNotifications(await notificationModel.listForUser(userId));
   const unreadCount = notifications.filter((item) => !item.is_read).length;
   return { notifications, unreadCount };
 }

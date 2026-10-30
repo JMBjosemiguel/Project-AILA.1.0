@@ -11,6 +11,7 @@ import { useProfileData } from '../../../hooks/useProfileData';
 import { changePassword, updateProfile } from '../../../services/api/profileService';
 import ActivityList from '../../../components/student/ActivityList';
 import { facebookHref } from '../../../utils/facebookHref';
+import { SHOW_GAMIFICATION } from '../../../constants/studentFeatures';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 72;
@@ -149,8 +150,8 @@ export default function ProfilePage() {
               <p className="text-white/70 text-sm mt-0.5">{profile?.program ?? 'Program pending'} {profile?.year_level ? `- Year ${profile.year_level}` : ''}</p>
               <p className="text-white/50 text-xs mt-1">{user?.student_number ? `ID: ${user.student_number}` : 'Student number pending'}</p>
               <div className="flex justify-center gap-6 mt-5 pt-4 border-t border-white/15">
-                <MiniStat val={profile?.xp_points ?? 0} label="XP" />
-                <MiniStat val={profile?.level ?? 0} label="Level" />
+                {SHOW_GAMIFICATION && <MiniStat val={profile?.xp_points ?? 0} label="XP" />}
+                {SHOW_GAMIFICATION && <MiniStat val={profile?.level ?? 0} label="Level" />}
                 <MiniStat val={data?.activities?.length ?? 0} label="Activities" />
               </div>
             </div>
@@ -248,6 +249,8 @@ export default function ProfilePage() {
             </div>
           </Card>
 
+          {/* The leaderboard (and this opt-in) only exists while gamification is shown. */}
+          {SHOW_GAMIFICATION && (
           <Card>
             <CardHeader title="Leaderboard" />
             <div className="flex items-center justify-between gap-3">
@@ -266,6 +269,7 @@ export default function ProfilePage() {
               />
             </div>
           </Card>
+          )}
 
           <Card>
             <CardHeader title="Change password" />

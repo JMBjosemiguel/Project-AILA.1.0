@@ -141,14 +141,19 @@ export default function AdminChatbotRulesPage() {
           )}
         />
         <ListCard
-          title="Most active students" subtitle="By XP earned" icon={Award}
-          items={data.activeStudents.filter((s) => s.xp_points > 0)} empty="No student activity yet"
+          title="Most active students" subtitle="By lessons + quizzes completed" icon={Award}
+          items={data.activeStudents.filter((s) => (s.lessons_completed ?? 0) + (s.quizzes_completed ?? 0) > 0)} empty="No student activity yet"
           renderItem={(s) => (
-            <div key={s.id} className="flex items-center justify-between py-2 text-sm">
+            <div key={s.id} className="flex items-center justify-between gap-2 py-2 text-sm">
               <div className="min-w-0">
                 <span className="text-ink-700 truncate block">{s.first_name} {s.last_name}</span>
+                <span className="text-xs text-ink-400">
+                  {s.lessons_completed} lesson{s.lessons_completed === 1 ? '' : 's'} · {s.quizzes_completed} quiz{s.quizzes_completed === 1 ? '' : 'zes'}
+                </span>
               </div>
-              <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">{s.xp_points} XP · Lv.{s.level}</span>
+              <span className="text-ink-400 font-semibold flex-shrink-0 ml-2">
+                {s.avg_quiz_score != null ? `Avg ${s.avg_quiz_score}%` : 'No quizzes'}
+              </span>
             </div>
           )}
         />

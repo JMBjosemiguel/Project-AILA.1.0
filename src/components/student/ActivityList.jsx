@@ -6,6 +6,7 @@ import { mergeActivityXp } from '../../utils/mergeActivityXp';
 import { getAttemptIdForActivity } from '../../services/api/quizService';
 import { useToast } from '../common/Toast';
 import XpPill from '../common/XpPill';
+import { SHOW_GAMIFICATION } from '../../constants/studentFeatures';
 import QuizRunner from './quiz/QuizRunner';
 
 // Shared "list of recent activity rows" used by the Dashboard's Recent
@@ -47,7 +48,7 @@ export default function ActivityList({ activities, showQuizView = true }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm text-ink-800 leading-snug">{activity.description}</p>
-                <XpPill amount={activity.xpAmount} className="mt-0.5" />
+                {SHOW_GAMIFICATION && <XpPill amount={activity.xpAmount} className="mt-0.5" />}
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-ink-400">{formatDateTime(activity.created_at)}</span>

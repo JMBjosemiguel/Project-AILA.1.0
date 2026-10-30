@@ -62,3 +62,17 @@ describe('AnalyticsPage — "Topics to review" empty state', () => {
     expect(screen.queryByText('Nothing to review right now')).not.toBeInTheDocument();
   });
 });
+
+describe('AnalyticsPage — gamification hidden (the default)', () => {
+  it('leaves out the XP / Level KPI and the XP over time chart', () => {
+    state.data = {
+      kpis: [{ label: 'Completed Lessons', value: '4' }, { label: 'XP / Level', value: '240 XP', delta: 'Lv. 3' }],
+      xpOverTime: [{ label: 'Mon', value: 20 }],
+    };
+    render(<AnalyticsPage />);
+    expect(screen.getByText('Completed Lessons')).toBeInTheDocument();
+    expect(screen.queryByText('XP / Level')).not.toBeInTheDocument();
+    expect(screen.queryByText('XP over time')).not.toBeInTheDocument();
+    expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
+  });
+});

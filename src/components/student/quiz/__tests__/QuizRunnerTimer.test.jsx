@@ -266,3 +266,27 @@ describe('QuizRunner — tab switches', () => {
     expect(recordQuizTabSwitch).not.toHaveBeenCalled();
   });
 });
+
+describe('QuizRunner — results with gamification hidden (the default)', () => {
+  it('shows no +XP, no level toast, and only study-milestone toasts', async () => {
+    const user = userEvent.setup();
+    submitAttempt.mockResolvedValue({
+      ...REVIEW, timedOut: false, xpAwarded: 20, leveledUp: true, level: 4,
+      newAchievements: [{ name: 'Quiz Starter', category: 'learning' }, { name: 'Rising Scholar', category: 'level' }],
+    });
+    startQuizAttempt.mockResolvedValue(startPayload());
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    await user.click(screen.getByRole('button', { name: /Check answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+
+    expect(screen.getByText('Saved to your quiz history')).toBeInTheDocument();
+    expect(screen.queryByText(/XP/)).not.toBeInTheDocument();
+    const toasts = toast.success.mock.calls.map(([message]) => message);
+    expect(toasts).toContain('Study milestone reached: Quiz Starter');
+    expect(toasts.some((m) => /level|XP|Rising Scholar/i.test(m))).toBe(false);
+  });
+});

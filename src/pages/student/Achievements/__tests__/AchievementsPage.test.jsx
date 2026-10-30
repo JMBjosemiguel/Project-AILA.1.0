@@ -12,6 +12,13 @@ vi.mock('../../../../hooks/useGamificationData', () => ({
   useLeaderboardData: () => leaderboardState,
 }));
 
+// These tests cover the page with gamification SHOWN (the switch in
+// constants/studentFeatures is off by default; see the .milestones test).
+vi.mock('../../../../constants/studentFeatures', async (importOriginal) => ({
+  ...(await importOriginal()),
+  SHOW_GAMIFICATION: true,
+}));
+
 import AchievementsPage from '../index.jsx';
 
 const summary = {

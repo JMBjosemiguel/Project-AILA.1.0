@@ -29,3 +29,25 @@ describe('Admin Analytics page — weekly results', () => {
     expect(heading.compareDocumentPosition(daily) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe('Admin Analytics page — most active students by studying', () => {
+  it('ranks by lessons + quizzes completed and shows study stats, not XP or level', async () => {
+    getAdminAnalytics.mockResolvedValue({
+      ...analytics,
+      activeStudents: [
+        { id: 1, first_name: 'Ana', last_name: 'Cruz', lessons_completed: 12, quizzes_completed: 5, avg_quiz_score: 81 },
+        { id: 2, first_name: 'Ben', last_name: 'Reyes', lessons_completed: 1, quizzes_completed: 0, avg_quiz_score: null },
+        { id: 3, first_name: 'Cy', last_name: 'Lim', lessons_completed: 0, quizzes_completed: 0, avg_quiz_score: null },
+      ],
+    });
+    render(<AdminChatbotRulesPage />);
+
+    expect(await screen.findByText('By lessons + quizzes completed')).toBeInTheDocument();
+    expect(screen.getByText('12 lessons · 5 quizzes')).toBeInTheDocument();
+    expect(screen.getByText('Avg 81%')).toBeInTheDocument();
+    expect(screen.getByText('1 lesson · 0 quizzes')).toBeInTheDocument();
+    expect(screen.getByText('No quizzes')).toBeInTheDocument();
+    expect(screen.queryByText('Cy Lim')).not.toBeInTheDocument(); // no study activity
+    expect(screen.queryByText(/XP|Lv\./)).not.toBeInTheDocument();
+  });
+});

@@ -271,3 +271,21 @@ describe('AdminUsersPage — deleting an admin account', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+describe('AdminUsersPage — study stats instead of Level / XP', () => {
+  it('shows lessons completed and average quiz score columns, and no Level / XP', async () => {
+    listAdminUsers.mockResolvedValue({
+      users: [{ ...STUDENT, level: 7, xp_points: 640, lessons_completed: 12, avg_quiz_score: '83' }, { ...ADMIN, lessons_completed: 0, avg_quiz_score: null }],
+      pagination: { page: 1, totalPages: 1, total: 2, pageSize: 10 },
+    });
+    renderPage();
+
+    const headers = (await screen.findAllByRole('columnheader')).map((th) => th.textContent);
+    expect(headers).toEqual(expect.arrayContaining(['Lessons completed', 'Avg quiz score']));
+    expect(headers).not.toContain('Level / XP');
+    const studentRow = screen.getByText('Ada Lovelace').closest('tr');
+    expect(studentRow).toHaveTextContent('12');
+    expect(studentRow).toHaveTextContent('83%');
+    expect(studentRow).not.toHaveTextContent(/Lv\.|640 XP/);
+  });
+});

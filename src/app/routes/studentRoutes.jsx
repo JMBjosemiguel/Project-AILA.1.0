@@ -11,6 +11,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { ROLES } from '../../constants/roles';
+import { SHOW_GAMIFICATION } from '../../constants/studentFeatures';
 
 export const STUDENT_ROUTE_IDS = {
   DASHBOARD: 'student.dashboard',
@@ -84,9 +85,10 @@ export const STUDENT_ROUTES = {
   [STUDENT_ROUTE_IDS.ACHIEVEMENTS]: {
     id: STUDENT_ROUTE_IDS.ACHIEVEMENTS,
     path: '/student/achievements',
-    label: 'Achievements',
-    title: 'Achievements',
-    subtitle: 'Badges, streaks, and the leaderboard.',
+    // Shown as "Study milestones" while XP/levels/leaderboard are hidden.
+    label: SHOW_GAMIFICATION ? 'Achievements' : 'Study milestones',
+    title: SHOW_GAMIFICATION ? 'Achievements' : 'Study milestones',
+    subtitle: SHOW_GAMIFICATION ? 'Badges, streaks, and the leaderboard.' : 'Study milestones and your study streak.',
     icon: Award,
     allowedRoles: [ROLES.STUDENT],
   },

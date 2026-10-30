@@ -3,6 +3,7 @@ const gamificationModel = require('../models/gamificationModel');
 const achievementService = require('./achievementService');
 const { xpProgress } = require('../utils/gamification');
 const { appStartOfWeek, APP_TIMEZONE } = require('../utils/appTime');
+const { SHOW_GAMIFICATION_TO_STUDENTS, isStudyMilestone } = require('../utils/studentGamification');
 
 const LEADERBOARD_PERIODS = ['weekly', 'all_time'];
 const BOARD_SIZE = 10;
@@ -37,11 +38,21 @@ function closeness(achievement) {
   return Math.min(1, p.current / p.target);
 }
 
+// The achievement view a student sees. With gamification hidden, achievements
+// that only measure XP/levels are left out (still earned and stored as usual).
+async function studentAchievementView(userId, show = SHOW_GAMIFICATION_TO_STUDENTS) {
+  const view = await achievementService.getUserAchievementView(userId);
+  if (show) return view;
+  const earned = view.earned.filter(isStudyMilestone);
+  const locked = view.locked.filter(isStudyMilestone);
+  return { ...view, earned, locked, earnedCount: earned.length, totalCount: earned.length + locked.length };
+}
+
 async function getSummary(userId) {
   const [profile, streak, view] = await Promise.all([
     gamificationModel.getXpPoints(userId),
     gamificationModel.getStreak(userId),
-    achievementService.getUserAchievementView(userId),
+    studentAchievementView(userId),
   ]);
 
   const progress = xpProgress(profile.xp_points);
@@ -90,7 +101,7 @@ async function getSummary(userId) {
 }
 
 async function getAchievements(userId) {
-  const view = await achievementService.getUserAchievementView(userId);
+  const view = await studentAchievementView(userId);
   return {
     earned: view.earned,
     locked: view.locked,
@@ -144,6 +155,7 @@ async function getLeaderboard(userId, period = 'all_time') {
 }
 
 module.exports = {
+  studentAchievementView,
   getSummary,
   getAchievements,
   getLeaderboard,

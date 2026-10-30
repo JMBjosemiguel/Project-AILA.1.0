@@ -12,7 +12,7 @@ import { Award, Bell, CalendarClock, ClipboardCheck, Megaphone, Sparkles, Trendi
 const TITLE_ICON_RULES = [
   { test: (title) => /quiz scored|checkpoint|course final/i.test(title), icon: ClipboardCheck, color: 'text-primary bg-primary-50' },
   { test: (title) => /level up|level \d+ reached/i.test(title), icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50' },
-  { test: (title) => /achievement (unlocked|earned)/i.test(title), icon: Award, color: 'text-amber-600 bg-amber-50' },
+  { test: (title) => /achievement (unlocked|earned)|study milestone/i.test(title), icon: Award, color: 'text-amber-600 bg-amber-50' },
 ];
 
 const TYPE_ICON = {

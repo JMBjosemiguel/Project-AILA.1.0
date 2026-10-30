@@ -7,7 +7,8 @@ import { useToast } from '../../common/Toast';
 import QuizCard from '../../chatbot/QuizCard';
 import QuizTimer from './QuizTimer';
 import { QUIZ_TIME_LIMIT_OPTIONS } from '../../../constants/ui';
-import { achievementEarnedMessage, levelReachedMessage } from '../../../utils/progressMessages';
+import { progressToastMessages } from '../../../utils/progressMessages';
+import { SHOW_GAMIFICATION } from '../../../constants/studentFeatures';
 import {
   generateQuiz, startQuizAttempt, saveAttemptAnswer, submitAttempt, getQuizAttempt,
   startBatchQuizGeneration, appendQuizBatch, finishQuizGeneration, recordQuizTabSwitch,
@@ -315,8 +316,7 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
           ? (review.passed ? `Passed — ${review.percent}%` : `Not passed — ${review.percent}% (need ${review.passingScore}%)`)
           : 'Quiz submitted — saved to your history.'
       );
-      if (review.leveledUp) toast.success(levelReachedMessage(review.level));
-      (review.newAchievements ?? []).forEach((a) => toast.success(achievementEarnedMessage(a.name)));
+      progressToastMessages(review).forEach((message) => toast.success(message));
       return review;
     } catch (err) {
       toast.error(err.message || 'Could not submit your quiz.');
@@ -646,10 +646,10 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
               />
               {result && !formalResult && (
                 <p className="text-center text-xs text-ink-400 mt-2">
-                  Saved to your quiz history{result.xpAwarded > 0 ? ` · +${result.xpAwarded} XP` : ''}
+                  Saved to your quiz history{SHOW_GAMIFICATION && result.xpAwarded > 0 ? ` · +${result.xpAwarded} XP` : ''}
                 </p>
               )}
-              {formalResult && result.passed && result.xpAwarded > 0 && (
+              {SHOW_GAMIFICATION && formalResult && result.passed && result.xpAwarded > 0 && (
                 <p className="text-center text-xs text-emerald-600 mt-2 font-semibold">+{result.xpAwarded} XP earned</p>
               )}
             </div>

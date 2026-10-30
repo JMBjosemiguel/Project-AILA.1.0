@@ -210,11 +210,12 @@ describe('DashboardPage — study-focused layout', () => {
     for (let i = 1; i < order.length; i += 1) expect(follows(order[i - 1], order[i])).toBe(true);
   });
 
-  it('shows XP, level, streak and achievements as one compact row below the learning content', () => {
+  it('shows the streak and study milestones (no level or XP) as one compact row below the learning content', () => {
     renderDashboard();
     const row = screen.getByRole('region', { name: 'Your progress' });
-    expect(row).toHaveTextContent('Level 1 · 40/100 XP');
+    expect(row).not.toHaveTextContent(/Level|XP/);
     expect(row).toHaveTextContent('Study streak: 3 days (best 5)');
+    expect(row).toHaveTextContent(/study milestones/i);
     expect(follows(screen.getByText('Recent quiz scores'), row)).toBe(true);
     expect(follows(screen.getByText('Course progress'), row)).toBe(true);
   });

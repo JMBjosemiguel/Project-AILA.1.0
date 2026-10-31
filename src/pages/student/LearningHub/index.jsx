@@ -10,7 +10,8 @@ import AddCourseWizard from '../../../components/student/learningHub/AddCourseWi
 import LessonReader from '../../../components/student/learningHub/LessonReader';
 import SubjectCard from '../../../components/student/learningHub/SubjectCard';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
-import { CURRICULUM_SUBJECT_OPTIONS, groupCoursesBySubject, matchesSubjectFilter } from '../../../constants/curriculumSubjects';
+import { groupCoursesBySubject, matchesSubjectFilter } from '../../../constants/curriculumSubjects';
+import CurriculumSubjectOptions from '../../../components/student/learningHub/CurriculumSubjectOptions';
 import { useLearningHubData } from '../../../hooks/useLearningHubData';
 import { deleteCourse } from '../../../services/api/learningService';
 import { getResourceLibraryData } from '../../../services/api/resourceService';
@@ -255,9 +256,7 @@ export default function LearningHubPage({ onNavigate }) {
             className="bg-surface border border-ink-100 focus:border-primary-300 rounded-xl px-3 py-2.5 text-sm text-ink-700 outline-none max-w-sm w-full sm:w-56"
           >
             <option value="all">All subjects</option>
-            {CURRICULUM_SUBJECT_OPTIONS.map((option) => (
-              <option key={option.value || 'others'} value={option.value}>{option.label}</option>
-            ))}
+            <CurriculumSubjectOptions />
           </select>
         </div>
         <Button icon={<Plus size={15} />} onClick={() => setAddingCourse(true)}>Add course</Button>

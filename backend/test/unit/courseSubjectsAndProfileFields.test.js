@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { validationResult } = require('express-validator');
 
 const {
-  CURRICULUM_SUBJECT_CODES, OTHERS_LABEL, normalizeCurriculumSubject, curriculumSubjectLabel,
+  CURRICULUM_TERMS, CURRICULUM_SUBJECTS, CURRICULUM_SUBJECT_CODES, OTHERS_LABEL, normalizeCurriculumSubject, curriculumSubjectLabel,
 } = require('../../src/utils/curriculumSubject');
 const { generateCourseValidator } = require('../../src/validators/learningValidator');
 const { registerValidator } = require('../../src/validators/authValidator');
@@ -18,29 +18,46 @@ async function invalidFields(chains, body) {
 }
 
 test('curriculum subject config', async (t) => {
-  await t.test('lists the 8 placeholder 2nd-year subjects, with "Others" as the no-subject label', () => {
-    assert.deepEqual(CURRICULUM_SUBJECT_CODES, ['NCM 104', 'NCM 105', 'NCM 106', 'NCM 107', 'NCM 108', 'NCM 109', 'NCM 110', 'MC 4']);
+  await t.test('lists the PLP 16 second-year BSN subjects by term, with "Others" as the no-subject label', () => {
+    assert.deepEqual(CURRICULUM_TERMS.map((term) => [term.label, term.subjects.map((s) => s.code)]), [
+      ['1st Semester', ['NCM 104', 'NCM 106', 'NCM 107', 'NCM 108', 'NCM 102', 'GE 0007', 'PE 3']],
+      ['2nd Semester', ['NCM 109', 'NCM 110', 'TC ACT1', 'NCM 113', 'GE 0006', 'GEE 001']],
+      ['Summer', ['GE 002', 'PE 4', 'GE 009']],
+    ]);
+    assert.equal(CURRICULUM_SUBJECT_CODES.length, 16);
+    assert.equal(new Set(CURRICULUM_SUBJECT_CODES).size, 16, 'codes are unique');
     assert.equal(OTHERS_LABEL, 'Others');
+  });
+
+  await t.test('only short codes are stored (subjects.curriculum_subject is VARCHAR(50)); lab/RLE parts are merged or left out', () => {
+    for (const code of CURRICULUM_SUBJECT_CODES) {
+      assert.ok(code.length <= 50 && !code.includes(':'), code);
+      assert.doesNotMatch(code, / [AB]$/, 'no separate lecture/lab (A/B) entries');
+    }
+    assert.equal(CURRICULUM_SUBJECTS.find((s) => s.code === 'NCM 113').term, '2nd Semester');
   });
 
   await t.test('normalize keeps a listed code and turns everything else into NULL', () => {
     assert.equal(normalizeCurriculumSubject('NCM 106'), 'NCM 106');
-    assert.equal(normalizeCurriculumSubject('  MC 4 '), 'MC 4');
-    for (const value of ['Others', '', '   ', null, undefined, 'NCM 999', 42]) {
+    assert.equal(normalizeCurriculumSubject('  TC ACT1 '), 'TC ACT1');
+    for (const value of ['Others', '', '   ', null, undefined, 'NCM 999', 'NCM 105', 'MC 4', 'NCM 107 B', 42]) {
       assert.equal(normalizeCurriculumSubject(value), null, JSON.stringify(value));
     }
   });
 
-  await t.test('label is "<code> <name>", and "Others" for NULL or an unknown code', () => {
-    assert.equal(curriculumSubjectLabel('NCM 106'), 'NCM 106 Pharmacology');
+  await t.test('label is "CODE: Title", and "Others" for NULL or a code no longer listed', () => {
+    assert.equal(curriculumSubjectLabel('NCM 106'), 'NCM 106: Pharmacology');
+    assert.equal(curriculumSubjectLabel('GE 009'), 'GE 009: Life, Works and Writing of Rizal');
     assert.equal(curriculumSubjectLabel(null), 'Others');
     assert.equal(curriculumSubjectLabel('NCM 999'), 'Others');
+    assert.equal(curriculumSubjectLabel('NCM 105'), 'Others', 'old placeholder code');
+    assert.equal(curriculumSubjectLabel('MC 4'), 'Others', 'old placeholder code');
   });
 });
 
 test('generateCourseValidator: curriculumSubject', async (t) => {
   await t.test('accepts a listed code, "Others", "", null, or omitted', async () => {
-    for (const curriculumSubject of ['NCM 104', 'MC 4', 'Others', '', null, undefined]) {
+    for (const curriculumSubject of ['NCM 104', 'GE 0007', 'TC ACT1', 'PE 4', 'Others', '', null, undefined]) {
       // eslint-disable-next-line no-await-in-loop
       const fields = await invalidFields(generateCourseValidator, { courseName: 'Drug classes', curriculumSubject });
       assert.ok(!fields.includes('curriculumSubject'), JSON.stringify(curriculumSubject));
@@ -48,7 +65,7 @@ test('generateCourseValidator: curriculumSubject', async (t) => {
   });
 
   await t.test('rejects a code that is not on the list, or a non-string', async () => {
-    for (const curriculumSubject of ['NCM 999', 'Pharmacology', 106, ['NCM 106']]) {
+    for (const curriculumSubject of ['NCM 999', 'NCM 105', 'MC 4', 'NCM 106: Pharmacology', 'Pharmacology', 106, ['NCM 106']]) {
       // eslint-disable-next-line no-await-in-loop
       const fields = await invalidFields(generateCourseValidator, { courseName: 'Drug classes', curriculumSubject });
       assert.ok(fields.includes('curriculumSubject'), JSON.stringify(curriculumSubject));

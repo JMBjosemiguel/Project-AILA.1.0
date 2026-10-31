@@ -41,16 +41,24 @@ describe('AddCourseWizard', () => {
     await waitFor(() => expect(onGenerated).toHaveBeenCalledWith(42));
   });
 
-  it('the subject dropdown sits beside the course name, lists the subjects, and defaults to Others', () => {
+  it('the subject dropdown sits beside the course name, lists the subjects by term, and defaults to Others', () => {
     render(<AddCourseWizard onClose={vi.fn()} onGenerated={vi.fn()} />);
     const select = screen.getByLabelText('Subject');
     expect(select).toHaveDisplayValue('Others');
+
+    const groups = Array.from(select.querySelectorAll('optgroup'));
+    expect(groups.map((g) => g.label)).toEqual(['1st Semester', '2nd Semester', 'Summer']);
+    expect(groups.map((g) => g.querySelectorAll('option').length)).toEqual([7, 6, 3]);
+    expect(groups[0].querySelector('option')).toHaveTextContent('NCM 104: Community Health Nursing 1 (Individual and Family as Clients)');
+    expect(groups[0].querySelector('option')).toHaveValue('NCM 104'); // only the code is stored
+
     const labels = within(select).getAllByRole('option').map((option) => option.textContent);
-    expect(labels[0]).toBe('NCM 104 Community Health Nursing I');
-    expect(labels).toContain('NCM 106 Pharmacology');
-    expect(labels).toContain('MC 4 Logic and Critical Thinking');
+    expect(labels).toContain('NCM 106: Pharmacology');
+    expect(labels).toContain('TC ACT1: Therapeutic Communication and Assessment of Critical Thinking 1');
+    expect(labels).toContain('GE 009: Life, Works and Writing of Rizal');
+    expect(labels.some((l) => /NCM 105|MC 4|NCM 10[79] B/.test(l))).toBe(false);
     expect(labels[labels.length - 1]).toBe('Others');
-    expect(labels).toHaveLength(9);
+    expect(labels).toHaveLength(17);
   });
 
   it('a chosen subject is sent with the course', async () => {

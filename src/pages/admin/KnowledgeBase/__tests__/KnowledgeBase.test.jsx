@@ -41,7 +41,7 @@ describe('AdminKnowledgeBasePage — curriculum subject column', () => {
 
     expect(await screen.findByText('Drug Classes')).toBeInTheDocument();
     expect(screen.getAllByText('Subject').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('NCM 106 Pharmacology').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('NCM 106: Pharmacology').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Others').length).toBeGreaterThan(0);
   });
 });

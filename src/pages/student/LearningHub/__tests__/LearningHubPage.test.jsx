@@ -298,6 +298,7 @@ describe('LearningHubPage curriculum subject groups', () => {
     { ...subjects[1], id: 2, name: 'Free Elective Notes', curriculum_subject: null },
     { ...subjects[1], id: 3, name: 'Community Diagnosis', curriculum_subject: 'NCM 104' },
     { ...subjects[0], id: 4, name: 'Retired Subject Course', curriculum_subject: 'NCM 999' },
+    { ...subjects[1], id: 5, name: 'Old Placeholder Course', curriculum_subject: 'MC 4' },
   ];
 
   beforeEach(() => {
@@ -310,17 +311,21 @@ describe('LearningHubPage curriculum subject groups', () => {
     renderPage();
 
     const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-    expect(headings).toEqual(['NCM 104 Community Health Nursing I (1)', 'NCM 106 Pharmacology (1)', 'Others (2)']);
+    expect(headings).toEqual([
+      'NCM 104: Community Health Nursing 1 (Individual and Family as Clients) (1)', 'NCM 106: Pharmacology (1)', 'Others (3)',
+    ]);
 
     const others = screen.getByRole('region', { name: 'Others' });
     expect(within(others).getByText('Free Elective Notes')).toBeInTheDocument();
     expect(within(others).getByText('Retired Subject Course')).toBeInTheDocument();
+    expect(within(others).getByText('Old Placeholder Course')).toBeInTheDocument();
   });
 
   it('the subject filter shows only that subject, and "Others" shows only courses without one', async () => {
     const user = userEvent.setup();
     renderPage();
     const filter = screen.getByRole('combobox', { name: 'Filter courses by subject' });
+    expect(Array.from(filter.querySelectorAll('optgroup')).map((g) => g.label)).toEqual(['1st Semester', '2nd Semester', 'Summer']);
 
     await user.selectOptions(filter, 'NCM 106');
     expect(screen.getByText('Drug Classes')).toBeInTheDocument();
@@ -330,6 +335,7 @@ describe('LearningHubPage curriculum subject groups', () => {
     await user.selectOptions(filter, 'Others');
     expect(screen.getByText('Free Elective Notes')).toBeInTheDocument();
     expect(screen.getByText('Retired Subject Course')).toBeInTheDocument();
+    expect(screen.getByText('Old Placeholder Course')).toBeInTheDocument();
     expect(screen.queryByText('Drug Classes')).not.toBeInTheDocument();
 
     await user.selectOptions(filter, 'All subjects');
@@ -340,7 +346,7 @@ describe('LearningHubPage curriculum subject groups', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter courses by subject' }), 'MC 4');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter courses by subject' }), 'GE 009');
 
     expect(screen.getByText('No matching courses')).toBeInTheDocument();
     expect(screen.getByText('Try a different search term or subject.')).toBeInTheDocument();

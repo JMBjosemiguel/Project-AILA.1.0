@@ -64,7 +64,7 @@ test('course curriculum subjects + profile middle name / contact info', async (t
   await t.test('a listed subject is saved on the course and given to Gemini as context', async () => {
     const { subjectId, stored, prompt } = await generate('NCM 106');
     assert.equal(stored, 'NCM 106');
-    assert.match(prompt, /NCM 106 Pharmacology/);
+    assert.match(prompt, /NCM 106: Pharmacology/);
 
     const subjects = await learningModel.listSubjectsForUser(A.id);
     assert.equal(subjects.find((s) => s.id === subjectId).curriculum_subject, 'NCM 106');
@@ -95,6 +95,25 @@ test('course curriculum subjects + profile middle name / contact info', async (t
     const [row] = await db.query('SELECT created_by, curriculum_subject FROM subjects WHERE id = ?', [copied.materialId]);
     assert.equal(Number(row.created_by), B.id);
     assert.equal(row.curriculum_subject, 'NCM 110');
+  });
+
+  await t.test('a course with an old placeholder code (no longer listed) keeps it, lists fine and copies unchanged', async () => {
+    const { subjectId } = await generate('NCM 106');
+    await db.query("UPDATE subjects SET curriculum_subject = 'NCM 105' WHERE id = ?", [subjectId]);
+
+    const list = await api('GET', '/subjects', { token: A.token });
+    assert.equal(list.status, 200, JSON.stringify(list.json));
+    assert.equal(list.json.data.subjects.find((s) => s.id === subjectId).curriculum_subject, 'NCM 105', 'stored value kept');
+
+    const share = await shareService.createShare(A.id, 'subject', subjectId, 'unlisted');
+    const copied = await shareService.copySharedMaterial(B.id, share.token);
+    subjectIds.push(copied.materialId);
+    const [row] = await db.query('SELECT curriculum_subject FROM subjects WHERE id = ?', [copied.materialId]);
+    assert.equal(row.curriculum_subject, 'NCM 105', 'a copy is never rejected or rewritten');
+
+    const admin = await api('GET', `/admin/learning?search=${encodeURIComponent(TAG)}&page=1&pageSize=50`, { token: adminToken });
+    assert.equal(admin.status, 200);
+    assert.ok(admin.json.data.courses.some((c) => c.id === subjectId && c.curriculum_subject === 'NCM 105'));
   });
 
   await t.test('the admin course list includes the curriculum subject', async () => {

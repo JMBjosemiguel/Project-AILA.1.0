@@ -1,14 +1,37 @@
 {
-  "_note": "Placeholder CHED 2nd-year BSN subject list. Edit ONLY this file: the backend validates course subjects against it and the frontend dropdowns read it at build time. A course with no subject (NULL) shows as othersLabel.",
+  "_note": "PLP official 2nd-year BSN subjects, grouped by term (lecture/lab parts merged, RLE-only lines left out). Edit ONLY this file: the backend validates new courses against it and the frontend dropdowns read it at build time. Only the code is stored (subjects.curriculum_subject, VARCHAR(50)); it is shown as \"CODE: Title\". A course with no subject (NULL), or with a code no longer listed, shows as othersLabel.",
   "othersLabel": "Others",
-  "subjects": [
-    { "code": "NCM 104", "name": "Community Health Nursing I" },
-    { "code": "NCM 105", "name": "Nutrition and Diet Therapy" },
-    { "code": "NCM 106", "name": "Pharmacology" },
-    { "code": "NCM 107", "name": "Care of Mother, Child, Adolescent (Well Clients)" },
-    { "code": "NCM 108", "name": "Health Care Ethics (Bioethics)" },
-    { "code": "NCM 109", "name": "Care of Mother, Child at Risk or with Problem" },
-    { "code": "NCM 110", "name": "Nursing Informatics" },
-    { "code": "MC 4", "name": "Logic and Critical Thinking" }
+  "terms": [
+    {
+      "label": "1st Semester",
+      "subjects": [
+        { "code": "NCM 104", "name": "Community Health Nursing 1 (Individual and Family as Clients)" },
+        { "code": "NCM 106", "name": "Pharmacology" },
+        { "code": "NCM 107", "name": "Care of Mother, Child, Adolescent (Well Clients)" },
+        { "code": "NCM 108", "name": "Health Care Ethics (Bioethics)" },
+        { "code": "NCM 102", "name": "Health Education" },
+        { "code": "GE 0007", "name": "Science, Technology and Society" },
+        { "code": "PE 3", "name": "Physical Activities Towards Health and Fitness (PATHFIT 3)" }
+      ]
+    },
+    {
+      "label": "2nd Semester",
+      "subjects": [
+        { "code": "NCM 109", "name": "Care of Mother, Child, at Risk or with Problems (Acute and Chronic)" },
+        { "code": "NCM 110", "name": "Nursing Informatics" },
+        { "code": "TC ACT1", "name": "Therapeutic Communication and Assessment of Critical Thinking 1" },
+        { "code": "NCM 113", "name": "Community Health Nursing 2 (Population Groups and Community as Clients)" },
+        { "code": "GE 0006", "name": "Art Appreciation" },
+        { "code": "GEE 001", "name": "GE Elective 1" }
+      ]
+    },
+    {
+      "label": "Summer",
+      "subjects": [
+        { "code": "GE 002", "name": "GE Elective 2" },
+        { "code": "PE 4", "name": "Physical Activities Towards Health and Fitness (PATHFIT 4)" },
+        { "code": "GE 009", "name": "Life, Works and Writing of Rizal" }
+      ]
+    }
   ]
 }

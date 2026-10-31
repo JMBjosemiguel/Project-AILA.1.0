@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, Loader2, X } from 'lucide-react';
 import Button from '../../common/Button';
 import { useToast } from '../../common/Toast';
 import { COURSE_FOCUSES, COURSE_LENGTHS, COURSE_PURPOSES } from '../../../constants/ui';
-import { CURRICULUM_SUBJECT_OPTIONS } from '../../../constants/curriculumSubjects';
+import CurriculumSubjectOptions from './CurriculumSubjectOptions';
 import { generateCourse } from '../../../services/api/learningService';
 
 const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
@@ -110,9 +110,7 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
                       onChange={(event) => setCurriculumSubject(event.target.value)}
                       className="w-full border border-ink-100 focus:border-primary-300 rounded-lg px-2 py-2 text-sm bg-surface outline-none focus-visible:ring-2 focus-visible:ring-primary-200"
                     >
-                      {CURRICULUM_SUBJECT_OPTIONS.map((option) => (
-                        <option key={option.value || 'others'} value={option.value}>{option.label}</option>
-                      ))}
+                      <CurriculumSubjectOptions />
                     </select>
                   </div>
                 </div>

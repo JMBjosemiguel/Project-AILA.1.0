@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { setConnectivityStatus } from './connectivityStatus';
+import { AUTH_PATHS } from '../../app/routes/authPaths';
 
 const TOKEN_KEY = 'aila.jwt';
 const API_URL = import.meta.env.VITE_API_URL;
@@ -43,6 +44,42 @@ export class ApiClientError extends Error {
     this.status = status;
     this.details = details;
   }
+}
+
+// When the server says the session is over (a 401 on an ordinary request), the
+// student is signed out and sent to the login page, which shows this message.
+export const SESSION_ENDED_MESSAGE = 'Your session ended, please sign in again.';
+const SESSION_ENDED_KEY = 'aila.sessionEnded';
+
+// A 401 from these endpoints means something else (wrong password, a bad
+// link, an expired reset token...), not "your session ended".
+const AUTH_ENDPOINTS = [
+  '/auth/login', '/auth/register', '/auth/me', '/auth/logout', '/auth/verify-email',
+  '/auth/resend-verification', '/auth/forgot-password', '/auth/reset-password',
+  '/users/me/password',
+];
+
+export function peekSessionEnded() {
+  try {
+    return window.sessionStorage.getItem(SESSION_ENDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearSessionEnded() {
+  try {
+    window.sessionStorage.removeItem(SESSION_ENDED_KEY);
+  } catch {
+    // Storage can be blocked; the notice is only a convenience.
+  }
+}
+
+let onSessionEnded = () => window.location.assign(AUTH_PATHS.LOGIN);
+
+// Tests swap the redirect out (jsdom can't navigate).
+export function setSessionEndedHandler(handler) {
+  onSessionEnded = handler || (() => window.location.assign(AUTH_PATHS.LOGIN));
 }
 
 export const tokenStorage = {
@@ -94,6 +131,22 @@ function toApiClientError(error) {
   return new ApiClientError(error.message || 'Request failed.');
 }
 
+// Only when a token was actually in use: a visitor with no session (a shared
+// link, the login form) just gets the normal error.
+function endSessionOn401(error) {
+  if (error.response?.status !== 401 || !tokenStorage.get()) return;
+  const url = error.config?.url || '';
+  if (AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))) return;
+
+  tokenStorage.remove();
+  try {
+    window.sessionStorage.setItem(SESSION_ENDED_KEY, '1');
+  } catch {
+    // Storage can be blocked; the redirect still happens.
+  }
+  onSessionEnded();
+}
+
 apiClient.interceptors.response.use(
   (response) => {
     setConnectivityStatus('online');
@@ -102,6 +155,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     const config = error.config;
     const method = (config?.method || 'get').toLowerCase();
+
+    endSessionOn401(error);
 
     if (!config || method !== 'get' || !isRetryableError(error)) {
       // Any response at all — even an error one — proves the server is

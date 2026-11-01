@@ -65,3 +65,22 @@ describe('Study milestones (gamification hidden by default)', () => {
     expect(screen.queryByText(/\+\d+ XP/)).not.toBeInTheDocument();
   });
 });
+
+describe('Study milestones: empty and error states (gamification hidden)', () => {
+  it('says "No study milestones yet" when there is nothing to show', () => {
+    achievementsState.data = { earnedCount: 0, totalCount: 0, earned: [], locked: [] };
+    render(<AchievementsPage onNavigate={vi.fn()} />);
+    expect(screen.getByText('No study milestones yet')).toBeInTheDocument();
+    expect(screen.getByText('Complete lessons and quizzes to reach your first milestone.')).toBeInTheDocument();
+    expect(screen.queryByText(/achievements yet|badges/i)).not.toBeInTheDocument();
+  });
+
+  it('says "Couldn\'t load your study milestones" when loading fails', () => {
+    achievementsState.data = null;
+    achievementsState.error = new Error('offline');
+    render(<AchievementsPage onNavigate={vi.fn()} />);
+    expect(screen.getByText("Couldn't load your study milestones")).toBeInTheDocument();
+    expect(screen.queryByText(/your achievements/i)).not.toBeInTheDocument();
+    achievementsState.error = null;
+  });
+});

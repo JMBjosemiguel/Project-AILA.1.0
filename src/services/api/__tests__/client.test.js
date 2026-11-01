@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { apiClient, ApiClientError } from '../client';
+import {
+  apiClient, ApiClientError, SESSION_ENDED_MESSAGE, clearSessionEnded, peekSessionEnded, setSessionEndedHandler, tokenStorage,
+} from '../client';
 import { getConnectivityState, setConnectivityStatus } from '../connectivityStatus';
 
 function networkError(config) {
@@ -113,4 +115,78 @@ describe('apiClient GET retry + connectivity banner', () => {
     await assertion;
     expect(getConnectivityState().status).toBe('unavailable');
   }, 15000);
+});
+
+describe('apiClient: a 401 on an ordinary request ends the session', () => {
+  let originalAdapter;
+  const redirect = vi.fn();
+
+  beforeEach(() => {
+    originalAdapter = apiClient.defaults.adapter;
+    redirect.mockClear();
+    setSessionEndedHandler(redirect);
+    clearSessionEnded();
+    tokenStorage.set('stale-token');
+    setConnectivityStatus('online');
+  });
+
+  afterEach(() => {
+    apiClient.defaults.adapter = originalAdapter;
+    setSessionEndedHandler(null);
+    clearSessionEnded();
+    tokenStorage.remove();
+  });
+
+  const failWith401 = (message = 'Session is no longer active.') => {
+    apiClient.defaults.adapter = vi.fn(async (config) => { throw httpError(config, 401, { message }); });
+  };
+
+  it('clears the token, leaves a note for the login page, and sends the student to sign in', async () => {
+    failWith401();
+
+    await expect(apiClient.get('/dashboard/summary')).rejects.toMatchObject({ status: 401 });
+
+    expect(tokenStorage.get()).toBeNull();
+    expect(peekSessionEnded()).toBe(true);
+    expect(redirect).toHaveBeenCalledTimes(1);
+    expect(SESSION_ENDED_MESSAGE).toBe('Your session ended, please sign in again.');
+  });
+
+  it('also applies to writes (POST/PATCH), not just reads', async () => {
+    failWith401();
+    await expect(apiClient.patch('/users/me/profile', {})).rejects.toMatchObject({ status: 401 });
+    expect(redirect).toHaveBeenCalledTimes(1);
+    expect(tokenStorage.get()).toBeNull();
+  });
+
+  it('does not sign anyone out for a wrong password at login, a bad reset link, or a wrong current password', async () => {
+    failWith401('Invalid email or password.');
+    for (const call of [
+      () => apiClient.post('/auth/login', {}),
+      () => apiClient.post('/auth/reset-password', {}),
+      () => apiClient.patch('/users/me/password', {}),
+      () => apiClient.get('/auth/me'),
+    ]) {
+      // eslint-disable-next-line no-await-in-loop
+      await expect(call()).rejects.toMatchObject({ status: 401 });
+    }
+    expect(redirect).not.toHaveBeenCalled();
+    expect(tokenStorage.get()).toBe('stale-token');
+    expect(peekSessionEnded()).toBe(false);
+  });
+
+  it('does nothing for a visitor with no session (for example a shared link)', async () => {
+    tokenStorage.remove();
+    failWith401('Authentication token is required.');
+    await expect(apiClient.post('/share/abc/copy')).rejects.toMatchObject({ status: 401 });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(peekSessionEnded()).toBe(false);
+  });
+
+  it('other errors (403, 500) keep the session', async () => {
+    apiClient.defaults.adapter = vi.fn(async (config) => { throw httpError(config, 403, { message: 'Nope.' }); });
+    await expect(apiClient.get('/admin/users')).rejects.toMatchObject({ status: 403 });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(tokenStorage.get()).toBe('stale-token');
+  });
 });

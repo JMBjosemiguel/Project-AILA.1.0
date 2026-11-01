@@ -174,8 +174,10 @@ test('course curriculum subjects + profile middle name / contact info', async (t
     const me = await api('GET', '/auth/me', { token: A.token });
     assert.doesNotMatch(JSON.stringify(me.json), /subjprof\.marker|0917 555 0199/);
 
-    const leaderboard = await api('GET', '/gamification/leaderboard', { token: B.token });
-    assert.equal(leaderboard.status, 200);
-    assert.doesNotMatch(JSON.stringify(leaderboard.json), /subjprof\.marker|0917 555 0199/);
+    // The leaderboard API is switched off while gamification is hidden (404), so
+    // check the board itself: it must never carry contact info either.
+    assert.equal((await api('GET', '/gamification/leaderboard', { token: B.token })).status, 404);
+    const board = await require('../../src/services/gamificationService').getLeaderboard(B.id, 'all_time');
+    assert.doesNotMatch(JSON.stringify(board), /subjprof\.marker|0917 555 0199/);
   });
 });

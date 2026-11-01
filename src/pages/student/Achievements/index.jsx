@@ -72,7 +72,7 @@ function AchievementsTab({ refreshKey, onRetry }) {
   if (error || !data) {
     return (
       <LoadError
-        title="Couldn't load your achievements"
+        title={SHOW_GAMIFICATION ? "Couldn't load your achievements" : "Couldn't load your study milestones"}
         message={error?.message || 'Please try again in a moment.'}
         onRetry={onRetry}
       />
@@ -114,7 +114,11 @@ function AchievementsTab({ refreshKey, onRetry }) {
       )}
 
       {earned.length === 0 && locked.length === 0 && (
-        <EmptyState icon={Trophy} title="No achievements yet" message="Complete lessons and quizzes to start earning badges." />
+        <EmptyState
+          icon={Trophy}
+          title={SHOW_GAMIFICATION ? 'No achievements yet' : 'No study milestones yet'}
+          message={SHOW_GAMIFICATION ? 'Complete lessons and quizzes to start earning badges.' : 'Complete lessons and quizzes to reach your first milestone.'}
+        />
       )}
     </div>
   );

@@ -518,6 +518,20 @@ function formatAttemptReview({ quiz, attemptId, gradedAnswers, score, total, xpA
   };
 }
 
+// Module checkpoints and course finals reuse the same questions on every
+// retake, so until one is passed its review shows only the score and
+// right/wrong per question: no correct answer and no rationale. A passing
+// attempt, and every practice quiz, gets the full review.
+function withholdAnswersUnlessPassed(review) {
+  const formal = review.assessmentKind && review.assessmentKind !== 'practice';
+  if (!formal || review.passed === true) return review;
+  return {
+    ...review,
+    answersHidden: true,
+    items: review.items.map((item) => ({ ...item, correctAnswer: null, explanation: null })),
+  };
+}
+
 function assessmentMeta(quiz) {
   const kind = quiz.assessment_kind || 'practice';
   if (kind === 'practice') return { kind, isFormal: false, passingScore: null };
@@ -559,11 +573,20 @@ function gradeQuiz(quiz, answerByQuestionId) {
   return { gradedAnswers, score, total: quiz.questions.length };
 }
 
+// A lesson/topic source must belong to the student: another student's id (or
+// one that doesn't exist) is a 404, never quietly used as prompt context.
+async function resolveOwnedSourceContext(userId, sourceType, sourceId) {
+  if (!sourceId || (sourceType !== 'lesson' && sourceType !== 'topic')) return null;
+  const context = await quizModel.getQuizSourceContext(sourceType, sourceId, userId);
+  if (!context) throw new ApiError(404, 'That lesson or topic was not found.');
+  return context;
+}
+
 async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficulty = 'medium', sourceType, sourceId }) {
   // Lesson/topic quizzes are grounded in the actual course/module/topic
   // (and, for a lesson, its own content) rather than trusting whatever bare
   // topic string the frontend sent — see quizModel.getQuizSourceContext.
-  const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
+  const sourceContext = await resolveOwnedSourceContext(userId, sourceType, sourceId);
   let sourceContextText = buildQuizSourceContextBlock(sourceContext);
   let resourceNote = null;
 
@@ -794,7 +817,7 @@ async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, 
   const target = Math.max(1, Math.min(BATCHED_MAX_ITEMS, Math.trunc(Number(itemCount) || 0)));
   const numBatches = Math.ceil(target / BATCH_MAX_ITEMS);
 
-  const sourceContext = await quizModel.getQuizSourceContext(sourceType, sourceId).catch(() => null);
+  const sourceContext = await resolveOwnedSourceContext(userId, sourceType, sourceId);
   let sourceContextText = buildQuizSourceContextBlock(sourceContext);
   let resourceNote = null;
 
@@ -871,7 +894,7 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
   const remaining = state.target - state.actual;
   const countToRequest = Math.min(BATCH_MAX_ITEMS, remaining, Math.max(1, Math.trunc(Number(requestedCount) || BATCH_MAX_ITEMS)));
 
-  const sourceContext = await quizModel.getQuizSourceContext(state.source_type, state.source_id).catch(() => null);
+  const sourceContext = await quizModel.getQuizSourceContext(state.source_type, state.source_id, userId).catch(() => null);
   let sourceContextText = buildQuizSourceContextBlock(sourceContext);
 
   if (state.source_type === 'resource' && state.source_id) {
@@ -1299,7 +1322,7 @@ async function getAttempt(userId, attemptId) {
   });
 
   const { kind, isFormal, passingScore } = assessmentMeta(quiz);
-  return {
+  return withholdAnswersUnlessPassed({
     ...formatAttemptReview({
       quiz,
       attemptId: attempt.id,
@@ -1317,7 +1340,7 @@ async function getAttempt(userId, attemptId) {
     timedOut: Boolean(attempt.timed_out),
     timeLimitSeconds: attempt.time_limit_seconds == null ? null : Number(attempt.time_limit_seconds),
     tabSwitchCount: Number(attempt.tab_switch_count) || 0,
-  };
+  });
 }
 
 /**
@@ -1483,6 +1506,7 @@ async function submitAttempt(userId, attemptId) {
   if (isFormal && !passed) {
     review.recommendation = await buildFailRecommendation(userId, quiz);
   }
+  const visibleReview = withholdAnswersUnlessPassed(review);
 
   try {
     await logAdminAction(userId, 'quiz.submit', 'quiz_attempts', attempt.id, { quizId: quiz.id, score, total, passed, timedOut });
@@ -1490,7 +1514,7 @@ async function submitAttempt(userId, attemptId) {
     console.error(`[quizService] failed to write audit log entry for attempt ${attempt.id} submission: ${error.message}`);
   }
 
-  return review;
+  return visibleReview;
 }
 
 /**
@@ -1502,6 +1526,9 @@ async function submitAttempt(userId, attemptId) {
  */
 async function submitQuizAnswers(userId, quizId, answers) {
   const started = await startAttempt(userId, quizId);
+  // The previous attempt ran out of time while the student was away: it was
+  // just submitted, so hand back that review instead of starting over.
+  if (started.timedOut) return started.review;
   const attemptId = started.attempt.id;
 
   try {
@@ -1568,13 +1595,6 @@ async function listQuizHistory(userId) {
   return quizModel.listAttemptsForUser(userId);
 }
 
-async function deleteAttempt(userId, attemptId) {
-  const affectedRows = await quizModel.deleteAttemptForUser(Number(attemptId), userId);
-  if (!affectedRows) {
-    throw new ApiError(404, 'Quiz attempt not found.');
-  }
-}
-
 // Used by the Learning Hub search — the authenticated student's own quizzes
 // only, matched on topic. An empty term returns nothing rather than the whole
 // quiz list, since this endpoint only exists to back the search box.
@@ -1632,12 +1652,13 @@ module.exports = {
   submitQuizAnswers,
   listActiveAttempts,
   listQuizHistory,
-  deleteAttempt,
   searchQuizzes,
   listChatQuizzes,
   formatQuizForTake,
   formatAttemptForResume,
   formatAttemptReview,
+  withholdAnswersUnlessPassed,
+  resolveOwnedSourceContext,
   gradeQuiz,
   buildResourceQuizContext,
   CHECKPOINT_ITEMS,

@@ -4,6 +4,7 @@ const courseAssessmentController = require('../controllers/courseAssessmentContr
 const { authenticate } = require('../middlewares/authenticate');
 const { validateRequest } = require('../middlewares/validateRequest');
 const { aiRateLimiter } = require('../middlewares/aiRateLimiter');
+const { lessonGenerationLimiter } = require('../middlewares/lessonGenerationLimiter');
 const {
   lessonIdParamValidator,
   generateCourseValidator,
@@ -23,7 +24,7 @@ subjectsRouter.post('/:subjectId/modules/:moduleId/checkpoint', authenticate, ai
 subjectsRouter.delete('/:subjectId', authenticate, subjectIdParamValidator, validateRequest, learningController.deleteSubject);
 
 const lessonsRouter = express.Router();
-lessonsRouter.get('/:lessonId', authenticate, lessonIdParamValidator, validateRequest, learningController.getLesson);
+lessonsRouter.get('/:lessonId', authenticate, lessonIdParamValidator, validateRequest, lessonGenerationLimiter, learningController.getLesson);
 lessonsRouter.post('/:lessonId/complete', authenticate, lessonIdParamValidator, validateRequest, learningController.completeLesson);
 
 module.exports = {

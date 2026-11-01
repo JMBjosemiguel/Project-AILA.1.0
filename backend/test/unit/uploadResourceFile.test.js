@@ -10,19 +10,19 @@ const multer = require('multer');
 const { MAX_FILE_SIZE } = require('../../src/middlewares/uploadResourceFile');
 
 test('uploadResourceFile', async (t) => {
-  await t.test('the configured maximum is exactly 200 MB', () => {
-    assert.equal(MAX_FILE_SIZE, 200 * 1024 * 1024);
+  await t.test('the configured maximum is exactly 25 MB', () => {
+    assert.equal(MAX_FILE_SIZE, 25 * 1024 * 1024);
   });
 
-  await t.test('the friendly error message reports 200 MB', async () => {
+  await t.test('the friendly error message reports 25 MB', async () => {
     // Reload with a mocked multer error path isn't needed — the message is
     // built directly from MAX_FILE_SIZE (see uploadResourceFile.js), so this
     // asserts the same arithmetic the app uses to render it.
-    assert.equal(`That file is too large. The maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`, 'That file is too large. The maximum size is 200 MB.');
+    assert.equal(`That file is too large. The maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`, 'That file is too large. The maximum size is 25 MB.');
   });
 
   // multer's own limits.fileSize boundary semantics — verified directly
-  // against a throwaway small-limit server rather than moving 200 MB of real
+  // against a throwaway small-limit server rather than moving 25 MB of real
   // data through the live R2-backed dev environment. The app's real
   // MAX_FILE_SIZE constant is asserted above; this proves the underlying
   // library (same version this app depends on) treats that number as an

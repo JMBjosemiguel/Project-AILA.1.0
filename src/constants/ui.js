@@ -32,7 +32,9 @@ export const ACCEPTED_RESOURCE_FILE_TYPES = [
   'image/gif',
 ];
 
-export const MAX_RESOURCE_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+// Must match the backend's MAX_FILE_SIZE (middlewares/uploadResourceFile.js).
+export const MAX_RESOURCE_FILE_SIZE_MB = 25;
+export const MAX_RESOURCE_FILE_SIZE_BYTES = MAX_RESOURCE_FILE_SIZE_MB * 1024 * 1024;
 
 // Mirrors backend/src/constants/courseOptions.js — the backend is the
 // source of truth for what's VALID (it rejects anything else); this is

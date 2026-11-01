@@ -6,7 +6,7 @@ const multer = require('multer');
 const ApiError = require('../utils/ApiError');
 const { isR2Enabled, UPLOADS_DIR } = require('../services/storageService');
 
-const MAX_FILE_SIZE = 200 * 1024 * 1024;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 const MIME_TO_TYPE = {
   'application/pdf': 'pdf',
@@ -37,7 +37,7 @@ const storage = multer.diskStorage({
 // Even when R2 is the final destination, a file never sits fully in RAM: it
 // streams straight to this OS temp file (multer writes it incrementally as
 // it arrives), and storageService streams that temp file on to R2 and
-// deletes it afterward — a 200 MB upload never costs more than a few MB of
+// deletes it afterward — a maximum-size upload never costs more than a few MB of
 // buffering at any point, which matters a lot on a 512 MB server.
 const tempStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, os.tmpdir()),
@@ -78,7 +78,7 @@ function uploadResourceFile(req, res, next) {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return next(new ApiError(400, `That file is too large. The maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB.`));
+        return next(new ApiError(400, `That file is too large. The maximum size is ${MAX_FILE_SIZE / (1024 * 1024)} MB. Try compressing it or uploading a smaller file.`));
       }
       return next(new ApiError(400, 'That file could not be uploaded. Please try a different file.'));
     }

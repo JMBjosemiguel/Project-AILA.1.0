@@ -117,6 +117,9 @@ export default function ChatInput({
         <p className="text-[0.7rem] text-ink-400 text-center mt-2">
           AILA can make mistakes. Review important answers with your course materials.
         </p>
+        <p className="text-[0.7rem] text-ink-400 text-center mt-0.5">
+          Conversations may be reviewed by AILA administrators to keep the assistant safe and helpful.
+        </p>
       </div>
     </div>
   );

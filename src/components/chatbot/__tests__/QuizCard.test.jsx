@@ -379,3 +379,76 @@ describe('QuizCard — grade and rationale', () => {
     expect(screen.getByText(/Grade 100%/)).toBeInTheDocument();
   });
 });
+
+describe('QuizCard: checkpoint or final review without answers (not passed yet)', () => {
+  const hiddenResult = {
+    score: 1,
+    total: 2,
+    answersHidden: true,
+    items: [
+      { id: 1, correctAnswer: null, explanation: null, yourAnswer: 'Berlin', isCorrect: false },
+      { id: 2, correctAnswer: null, explanation: null, yourAnswer: 'Tokyo', isCorrect: true },
+    ],
+  };
+
+  async function submitHidden() {
+    const user = userEvent.setup();
+    render(<QuizCard quiz={takePayload} onSubmit={vi.fn().mockResolvedValue(hiddenResult)} />);
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+  }
+
+  it('shows the score and right/wrong per question, with a clear note instead of answers and rationale', async () => {
+    await submitHidden();
+
+    expect(screen.getByText('Answers and rationale are shown once you pass.')).toBeInTheDocument();
+    expect(screen.getByText('Incorrect.')).toBeInTheDocument();
+    expect(screen.getByText('Correct.')).toBeInTheDocument();
+    expect(screen.queryByRole('note', { name: 'Rationale' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Correct answer:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No rationale was saved/)).not.toBeInTheDocument();
+  });
+
+  it('marks only the student own pick: the right option green, the wrong pick red, the real answer never revealed', async () => {
+    await submitHidden();
+
+    expect(screen.getByRole('button', { name: 'Tokyo' }).className).toMatch(/emerald/);
+    expect(screen.getByRole('button', { name: 'Berlin' }).className).toMatch(/rose/);
+    // Paris is the real answer of question 1: it must look like any untouched option.
+    const paris = screen.getByRole('button', { name: 'Paris' });
+    expect(paris.className).not.toMatch(/emerald/);
+    expect(paris.className).toMatch(/text-ink-400/);
+  });
+
+  it('a stored review (presetReview) behaves the same', () => {
+    render(
+      <QuizCard
+        quiz={takePayload}
+        presetReview={{
+          answers: [{ questionId: 1, selectedAnswer: 'Berlin' }, { questionId: 2, selectedAnswer: 'Tokyo' }],
+          graded: [
+            { correctAnswer: null, explanation: null, isCorrect: false, hidden: true },
+            { correctAnswer: null, explanation: null, isCorrect: true, hidden: true },
+          ],
+        }}
+      />
+    );
+    expect(screen.getByText('Answers and rationale are shown once you pass.')).toBeInTheDocument();
+    expect(screen.queryByRole('note', { name: 'Rationale' })).not.toBeInTheDocument();
+  });
+
+  it('after passing, the full review (correct answers and Rationale) is shown with no note', async () => {
+    const user = userEvent.setup();
+    render(<QuizCard quiz={takePayload} onSubmit={vi.fn().mockResolvedValue(gradedResult)} />);
+    await user.click(screen.getByRole('button', { name: 'Berlin' }));
+    await user.click(screen.getByRole('button', { name: 'Tokyo' }));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored/)).toBeInTheDocument());
+
+    expect(screen.queryByText('Answers and rationale are shown once you pass.')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('note', { name: 'Rationale' })).toHaveLength(2);
+    expect(screen.getByText(/Correct answer: Paris/)).toBeInTheDocument();
+  });
+});

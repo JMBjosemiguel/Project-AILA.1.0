@@ -500,12 +500,12 @@ describe('AssistantPage — chat attachments', () => {
     expect(uploadResource).not.toHaveBeenCalled();
   });
 
-  it('rejects a file over 200MB client-side, without calling the upload endpoint', async () => {
+  it('rejects a file over 25 MB client-side with a clear message, without calling the upload endpoint', async () => {
     const user = userEvent.setup();
     render(<AssistantPage onNavigate={vi.fn()} />);
 
-    await selectFile(user, makeFile('huge.pdf', 'application/pdf', 200 * 1024 * 1024 + 1));
-    expect(screen.getByText(/too large/i)).toBeInTheDocument();
+    await selectFile(user, makeFile('huge.pdf', 'application/pdf', 25 * 1024 * 1024 + 1));
+    expect(screen.getByText('That file is too large. The maximum size is 25 MB.')).toBeInTheDocument();
     expect(uploadResource).not.toHaveBeenCalled();
   });
 
@@ -684,5 +684,12 @@ describe('AssistantPage — chat attachments', () => {
 
     await typeAndSend(user, 'summarize this');
     await waitFor(() => expect(screen.getByText(/could not be found or you don.t have access/i)).toBeInTheDocument());
+  });
+});
+
+describe('AssistantPage: admin review notice', () => {
+  it('tells students that conversations may be reviewed by AILA administrators', () => {
+    render(<AssistantPage onNavigate={vi.fn()} />);
+    expect(screen.getByText('Conversations may be reviewed by AILA administrators to keep the assistant safe and helpful.')).toBeInTheDocument();
   });
 });

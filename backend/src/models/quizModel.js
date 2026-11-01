@@ -450,16 +450,11 @@ async function getQuizAverageScore(userId) {
   return rows[0] || { avg_percent: null, attempt_count: 0 };
 }
 
-async function deleteAttemptForUser(attemptId, userId) {
-  const result = await query('DELETE FROM quiz_attempts WHERE id = ? AND user_id = ?', [attemptId, userId]);
-  return result.affectedRows;
-}
-
 // Full course/module/topic/lesson context for a lesson- or topic-sourced
 // quiz (including its subjectId, for scoping personalization to that
 // course), used to ground generation in the right material instead of a
 // bare (possibly ambiguous) topic string.
-async function getQuizSourceContext(sourceType, sourceId) {
+async function getQuizSourceContext(sourceType, sourceId, userId) {
   if (!sourceId) return null;
   if (sourceType === 'lesson') {
     const rows = await query(
@@ -469,8 +464,8 @@ async function getQuizSourceContext(sourceType, sourceId) {
        INNER JOIN topics t ON t.id = l.topic_id
        INNER JOIN modules m ON m.id = t.module_id
        INNER JOIN subjects s ON s.id = m.subject_id
-       WHERE l.id = ? LIMIT 1`,
-      [sourceId]
+       WHERE l.id = ? AND s.created_by = ? LIMIT 1`,
+      [sourceId, userId]
     );
     const row = rows[0];
     if (!row) return null;
@@ -490,8 +485,8 @@ async function getQuizSourceContext(sourceType, sourceId) {
        FROM topics t
        INNER JOIN modules m ON m.id = t.module_id
        INNER JOIN subjects s ON s.id = m.subject_id
-       WHERE t.id = ? LIMIT 1`,
-      [sourceId]
+       WHERE t.id = ? AND s.created_by = ? LIMIT 1`,
+      [sourceId, userId]
     );
     const row = rows[0];
     if (!row) return null;
@@ -583,6 +578,5 @@ module.exports = {
   listActiveAttemptsForUser,
   listAttemptsForUser,
   getQuizAverageScore,
-  deleteAttemptForUser,
   getQuizSourceContext,
 };

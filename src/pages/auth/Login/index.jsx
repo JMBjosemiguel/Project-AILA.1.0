@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import AuthInput from '../../../components/auth/AuthInput';
 import Button from '../../../components/common/Button';
 import { useAuth } from '../../../contexts/AuthContext';
 import AuthLayout from '../../../layouts/AuthLayout/AuthLayout';
+import { SESSION_ENDED_MESSAGE, clearSessionEnded, peekSessionEnded } from '../../../services/api/client';
 
 export default function LoginPage({ onAuthenticated, onGoToRegister, onGoToForgotPassword }) {
   const { login, resendVerification } = useAuth();
@@ -17,6 +18,9 @@ export default function LoginPage({ onAuthenticated, onGoToRegister, onGoToForgo
   const [resendState, setResendState] = useState('idle'); // idle | sending | sent | error
   const [resendMessage, setResendMessage] = useState('');
   const [isWakingUp, setIsWakingUp] = useState(false);
+  // Set when the server ended the session (see api/client.js); shown once.
+  const [sessionEnded] = useState(peekSessionEnded);
+  useEffect(() => { clearSessionEnded(); }, []);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -71,6 +75,11 @@ export default function LoginPage({ onAuthenticated, onGoToRegister, onGoToForgo
   return (
     <AuthLayout title="Welcome back" subtitle="Sign in to continue your learning">
       <form className="flex flex-col gap-4" onSubmit={submit}>
+        {sessionEnded && (
+          <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {SESSION_ENDED_MESSAGE}
+          </p>
+        )}
         <AuthInput
           label="Email"
           icon={Mail}

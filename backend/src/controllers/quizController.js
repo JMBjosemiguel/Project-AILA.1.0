@@ -126,11 +126,6 @@ const getAttemptForActivity = asyncHandler(async (req, res) => {
   sendSuccess(res, result, 200, 'Attempt resolved.');
 });
 
-const deleteAttempt = asyncHandler(async (req, res) => {
-  await quizService.deleteAttempt(req.auth.user.id, req.params.attemptId);
-  sendSuccess(res, null, 200, 'Quiz attempt deleted.');
-});
-
 module.exports = {
   generate,
   startBatchGeneration,
@@ -148,5 +143,4 @@ module.exports = {
   listChatQuizzes,
   getAttempt,
   getAttemptForActivity,
-  deleteAttempt,
 };

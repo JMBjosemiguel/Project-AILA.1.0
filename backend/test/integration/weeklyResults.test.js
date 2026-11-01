@@ -67,8 +67,9 @@ test('admin weekly results and the study-focused dashboard', async (t) => {
 
   await t.test('8 weeks, oldest first, the current one starting where the weekly leaderboard starts', async () => {
     const data = await weekly();
-    const board = await api('GET', '/gamification/leaderboard?period=weekly', { token: A.token });
-    assert.equal(board.status, 200, JSON.stringify(board.json));
+    // The leaderboard API is off while gamification is hidden, so read its week
+    // from the service behind it (the same code the board uses).
+    const board = { json: { data: await require('../../src/services/gamificationService').getLeaderboard(A.id, 'weekly') } };
 
     const rows = data.weeklyResults;
     assert.equal(rows.length, 8);

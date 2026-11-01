@@ -144,7 +144,9 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
     });
     setPresetReview({
       answers: data.items.map((i) => ({ questionId: i.id, selectedAnswer: i.yourAnswer })),
-      graded: data.items.map((i) => ({ correctAnswer: i.correctAnswer, explanation: i.explanation, isCorrect: i.isCorrect })),
+      graded: data.items.map((i) => ({
+        correctAnswer: i.correctAnswer, explanation: i.explanation, isCorrect: i.isCorrect, hidden: Boolean(data.answersHidden),
+      })),
     });
     setResult({ ...data, assessmentKind: data.assessmentKind });
     setStep('review');

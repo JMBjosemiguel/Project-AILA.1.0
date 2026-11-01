@@ -44,7 +44,11 @@ test('cross-student data isolation', async (t) => {
 
     assert.equal((await api('GET', `/quizzes/${quizId}`, { token: B.token })).status, 404);
     assert.equal((await api('GET', `/quizzes/attempts/${attemptId}`, { token: B.token })).status, 404);
+    // Students can't delete attempts at all, not even their own.
     assert.equal((await api('DELETE', `/quizzes/attempts/${attemptId}`, { token: B.token })).status, 404);
+    assert.equal((await api('DELETE', `/quizzes/attempts/${attemptId}`, { token: A.token })).status, 404);
+    const [kept] = await db.query('SELECT COUNT(*) AS c FROM quiz_attempts WHERE id = ?', [attemptId]);
+    assert.equal(Number(kept.c), 1, 'the attempt is still there');
     assert.equal((await api('POST', `/quizzes/${quizId}/attempts`, { token: B.token, body: { answers: [{ questionId: 1, selectedAnswer: 'A' }] } })).status, 404);
     assert.equal((await api('GET', `/quizzes/${quizId}`, { token: A.token })).status, 200);
   });

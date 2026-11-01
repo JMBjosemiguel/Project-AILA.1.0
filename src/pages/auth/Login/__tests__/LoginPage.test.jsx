@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -157,5 +157,25 @@ describe('LoginPage', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: /Resend verification email/i })).toBeInTheDocument());
       expect(screen.getAllByRole('button', { name: /Forgot password\?/i })).toHaveLength(1);
     });
+  });
+});
+
+describe('LoginPage: session ended notice', () => {
+  afterEach(() => window.sessionStorage.clear());
+
+  it('shows "Your session ended, please sign in again." once, after the server ended the session', () => {
+    window.sessionStorage.setItem('aila.sessionEnded', '1');
+    const { unmount } = render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Your session ended, please sign in again.');
+    expect(window.sessionStorage.getItem('aila.sessionEnded')).toBeNull();
+    unmount();
+
+    render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} />);
+    expect(screen.queryByText('Your session ended, please sign in again.')).not.toBeInTheDocument();
+  });
+
+  it('shows nothing extra on a normal visit', () => {
+    render(<LoginPage onAuthenticated={vi.fn()} onGoToRegister={vi.fn()} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

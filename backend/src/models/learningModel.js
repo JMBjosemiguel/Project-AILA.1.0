@@ -193,6 +193,28 @@ async function getLessonBasicForUser(lessonId, userId) {
   return rows[0] || null;
 }
 
+// True when opening this lesson would have to generate its content (a Gemini
+// call). A lesson that isn't the student's (or doesn't exist) is false here:
+// the lesson route itself answers 404 for it.
+async function lessonNeedsGeneration(lessonId, userId) {
+  const rows = await query(
+    `
+      SELECT l.id
+      FROM lessons l
+      INNER JOIN topics t ON t.id = l.topic_id
+      INNER JOIN modules m ON m.id = t.module_id
+      INNER JOIN subjects s ON s.id = m.subject_id
+      WHERE l.id = ?
+        AND (l.content IS NULL OR l.content = '')
+        AND l.deleted_at IS NULL AND t.deleted_at IS NULL AND m.deleted_at IS NULL AND s.deleted_at IS NULL
+        AND s.created_by = ?
+      LIMIT 1
+    `,
+    [lessonId, userId]
+  );
+  return rows.length > 0;
+}
+
 async function getLessonDetail(lessonId, userId) {
   const rows = await query(
     `
@@ -413,6 +435,7 @@ async function deleteSubjectCascade(subjectId, userId, connection) {
 }
 
 module.exports = {
+  lessonNeedsGeneration,
   parseCourseOptions,
   listSubjectsForUser,
   getSubjectTreeById,

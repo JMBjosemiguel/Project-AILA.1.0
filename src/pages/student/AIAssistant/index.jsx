@@ -11,7 +11,7 @@ import { useToast } from '../../../components/common/Toast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChatbotData } from '../../../hooks/useChatbotData';
 import { useSavedChatQuizzes } from '../../../hooks/useSavedChatQuizzes';
-import { ACCEPTED_RESOURCE_FILE_TYPES, MAX_RESOURCE_FILE_SIZE_BYTES } from '../../../constants/ui';
+import { ACCEPTED_RESOURCE_FILE_TYPES, MAX_RESOURCE_FILE_SIZE_BYTES, MAX_RESOURCE_FILE_SIZE_MB } from '../../../constants/ui';
 import { consumePrefillPrompt } from '../../../utils/aiPrefill';
 import { setResourceSearchTarget } from '../../../utils/resourceSearchTarget';
 import { readChatbotQuizState, writeChatbotQuizState } from '../../../utils/chatbotQuizState';
@@ -256,7 +256,7 @@ export default function AssistantPage({ onNavigate }) {
       return;
     }
     if (file.size > MAX_RESOURCE_FILE_SIZE_BYTES) {
-      setAttachError('That file is too large. The maximum size is 200 MB.');
+      setAttachError(`That file is too large. The maximum size is ${MAX_RESOURCE_FILE_SIZE_MB} MB.`);
       return;
     }
 

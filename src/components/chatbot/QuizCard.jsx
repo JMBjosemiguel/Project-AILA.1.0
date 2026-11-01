@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookmarkPlus, Check, CheckCircle2, ClipboardList, Cloud, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { BookmarkPlus, Check, CheckCircle2, ClipboardList, Cloud, Loader2, Lock, RotateCcw, XCircle } from 'lucide-react';
 import Card, { CardHeader } from '../common/Card';
 import Button from '../common/Button';
 import PersonalizedBadge from '../common/PersonalizedBadge';
@@ -66,6 +66,9 @@ function reviewFromServerResult(items, answers, result, quizType) {
   return items.map((item, index) => {
     const row = byId.get(item.id) || graded[index] || {};
     return {
+      // A checkpoint / final that wasn't passed: the server sends only right or
+      // wrong per question (answersHidden), never the answer or rationale.
+      hidden: Boolean(result?.answersHidden),
       correctAnswer: row.correctAnswer ?? '',
       explanation: row.explanation ?? '',
       isCorrect: typeof row.isCorrect === 'boolean'
@@ -143,6 +146,7 @@ export default function QuizCard({
   }, [focusedIndex, currentPage]);
 
   const score = submitted ? review.filter((row) => row.isCorrect).length : 0;
+  const answersHidden = submitted && review.some((row) => row.hidden);
   const unansweredIndexes = items.map((_, i) => i).filter((i) => !answers[i]);
   const isPaginated = !isChatQuiz && !submitted && items.length > PAGE_SIZE;
   const totalPages = isPaginated ? Math.ceil(items.length / PAGE_SIZE) : 1;
@@ -242,6 +246,12 @@ export default function QuizCard({
             {/* The informal chat mini-quiz is "not graded", so it shows no Grade. */}
             {!isChatQuiz && items.length > 0 ? ` · Grade ${gradePercent(score, items.length)}%` : ''}
           </div>
+          {answersHidden && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-500">
+              <Lock size={13} className="mt-0.5 flex-shrink-0 text-ink-400" aria-hidden="true" />
+              Answers and rationale are shown once you pass.
+            </p>
+          )}
           {!isChatQuiz && (
             <div className="mt-2.5 flex items-center gap-2 flex-wrap">
               <div className="flex gap-1.5" role="radiogroup" aria-label="Result filter">
@@ -358,7 +368,11 @@ export default function QuizCard({
                 <div className="flex flex-col gap-1.5">
                   {item.options.map((option) => {
                     const selected = answers[index] === option;
-                    const showCorrect = submitted && normalize(option) === normalize(graded?.correctAnswer);
+                    // With the answers hidden only the student's own pick is marked,
+                    // as right or wrong — the correct option is never revealed.
+                    const showCorrect = submitted && (graded?.hidden
+                      ? selected && isCorrect
+                      : normalize(option) === normalize(graded?.correctAnswer));
                     const showWrong = submitted && selected && !showCorrect;
 
                     return (
@@ -409,12 +423,12 @@ export default function QuizCard({
                     )}
                     <span className="text-ink-500">
                       <span className="font-semibold text-ink-700">{isCorrect ? 'Correct.' : 'Incorrect.'}</span>
-                      {!isCorrect && graded?.correctAnswer && (
+                      {!isCorrect && !graded?.hidden && graded?.correctAnswer && (
                         <span className="font-medium text-ink-700"> Correct answer: {graded.correctAnswer}.</span>
                       )}
                     </span>
                   </div>
-                  <RationaleBox explanation={graded?.explanation} />
+                  {!graded?.hidden && <RationaleBox explanation={graded?.explanation} />}
                 </>
               )}
             </div>

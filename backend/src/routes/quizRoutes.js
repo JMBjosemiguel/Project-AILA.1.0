@@ -41,7 +41,6 @@ router.post('/attempts/:attemptId/submit', authenticate, attemptIdParamValidator
 router.post('/attempts/:attemptId/tab-switch', authenticate, attemptIdParamValidator, validateRequest, quizController.recordTabSwitch);
 
 router.get('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.getAttempt);
-router.delete('/attempts/:attemptId', authenticate, attemptIdParamValidator, validateRequest, quizController.deleteAttempt);
 
 // Recent activity's "View" button (quiz rows only) — resolves a
 // dashboard_activity_log row to the attempt it refers to; the frontend then

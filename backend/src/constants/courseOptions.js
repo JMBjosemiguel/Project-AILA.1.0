@@ -25,20 +25,38 @@ const COURSE_PURPOSE_GUIDANCE = {
   mastery: 'The student wants deep mastery of this topic, beyond the basics — include nuance, edge cases, and deeper "why" explanations, not just surface-level coverage.',
 };
 
-const COURSE_LENGTHS = {
-  short: 'Short (2-3 modules)',
-  standard: 'Standard',
-  in_depth: 'In-depth (5-6 modules)',
+// The exact size of each course length. The module count is what the length
+// changes; every length keeps the same per-module shape the roadmap always
+// used (2-3 topics per module, 1-2 lessons per topic). The server enforces
+// these after Gemini replies (courseGenerationService.fitRoadmapToLength).
+const COURSE_LENGTH_SIZES = {
+  short: { modules: 2, topicsPerModule: { min: 2, max: 3 }, lessonsPerTopic: { min: 1, max: 2 } },
+  standard: { modules: 4, topicsPerModule: { min: 2, max: 3 }, lessonsPerTopic: { min: 1, max: 2 } },
+  in_depth: { modules: 6, topicsPerModule: { min: 2, max: 3 }, lessonsPerTopic: { min: 1, max: 2 } },
 };
+const DEFAULT_COURSE_LENGTH = 'standard';
 
-// Only 'short' and 'in_depth' need an explicit override — 'standard' keeps
-// the roadmap system rule's existing "2-4 modules" phrasing byte-for-byte,
-// so a course generated with the default length prompts identically to
-// before this feature existed.
-const COURSE_LENGTH_ROADMAP_RULE = {
-  short: 'Produce a SHORT course: exactly 2-3 modules total, each with 2-3 topics, each topic with 1-2 lessons.',
-  in_depth: 'Produce an IN-DEPTH course: 5-6 modules total, each with 2-3 topics, each topic with 1-2 lessons.',
-};
+// An unknown or missing length (e.g. a course from before this option
+// existed) is treated as 'standard'.
+function courseLengthSize(length) {
+  return COURSE_LENGTH_SIZES[length] || COURSE_LENGTH_SIZES[DEFAULT_COURSE_LENGTH];
+}
+
+const COURSE_LENGTH_NAMES = { short: 'Short', standard: 'Standard', in_depth: 'In-depth' };
+
+const COURSE_LENGTHS = Object.fromEntries(
+  Object.entries(COURSE_LENGTH_SIZES).map(([key, size]) => [key, `${COURSE_LENGTH_NAMES[key]}: ${size.modules} modules`])
+);
+
+// The roadmap prompt's size rule, with the exact counts stated plainly.
+function courseLengthRule(length) {
+  const { modules, topicsPerModule: t, lessonsPerTopic: l } = courseLengthSize(length);
+  return `Produce EXACTLY ${modules} modules — no more and no fewer. Each module has ${t.min}-${t.max} topics; each topic has ${l.min}-${l.max} lessons.`;
+}
+
+const COURSE_LENGTH_ROADMAP_RULE = Object.fromEntries(
+  Object.keys(COURSE_LENGTH_SIZES).map((key) => [key, courseLengthRule(key)])
+);
 
 const COURSE_FOCUSES = {
   worked_examples: 'Worked examples',
@@ -63,6 +81,10 @@ module.exports = {
   COURSE_PURPOSE_GUIDANCE,
   COURSE_PURPOSE_KEYS: Object.keys(COURSE_PURPOSES),
   COURSE_LENGTHS,
+  COURSE_LENGTH_SIZES,
+  DEFAULT_COURSE_LENGTH,
+  courseLengthSize,
+  courseLengthRule,
   COURSE_LENGTH_ROADMAP_RULE,
   COURSE_LENGTH_KEYS: Object.keys(COURSE_LENGTHS),
   COURSE_FOCUSES,

@@ -5,7 +5,7 @@ const { query } = require('../config/database');
 const { notifyUser } = require('../utils/notify');
 const personalizationService = require('./personalizationService');
 const {
-  COURSE_PURPOSE_GUIDANCE, COURSE_LENGTH_ROADMAP_RULE, COURSE_FOCUS_GUIDANCE,
+  COURSE_PURPOSE_GUIDANCE, COURSE_FOCUS_GUIDANCE, courseLengthSize, courseLengthRule,
 } = require('../constants/courseOptions');
 const { curriculumSubjectLabel } = require('../utils/curriculumSubject');
 
@@ -45,8 +45,8 @@ function courseOptionsRules(courseOptions, { includeLength = false } = {}) {
   if (courseOptions.purpose && COURSE_PURPOSE_GUIDANCE[courseOptions.purpose]) {
     lines.push(COURSE_PURPOSE_GUIDANCE[courseOptions.purpose]);
   }
-  if (includeLength && courseOptions.length && COURSE_LENGTH_ROADMAP_RULE[courseOptions.length]) {
-    lines.push(COURSE_LENGTH_ROADMAP_RULE[courseOptions.length]);
+  if (includeLength && courseOptions.length) {
+    lines.push(courseLengthRule(courseOptions.length));
   }
   if (Array.isArray(courseOptions.focus) && courseOptions.focus.length) {
     const asks = courseOptions.focus.map((key) => COURSE_FOCUS_GUIDANCE[key]).filter(Boolean);
@@ -124,7 +124,9 @@ const ROADMAP_SCHEMA = {
 // goes in `contents`, clearly delimited so it cannot act as an instruction.
 const ROADMAP_SYSTEM_RULES = [
   'You generate college-level course roadmaps as JSON only.',
-  'Produce 2-4 modules, each with 2-3 topics, each topic with 1-2 lessons.',
+  // The exact size comes from the chosen course length (courseLengthRule),
+  // never a fixed range here: a range overlapping the length rule is what
+  // let a Short course come back as big as a Standard one.
   'Lesson titles must be specific and build progressively toward the goal — not generic placeholders.',
   'Each lesson should include a reasonable estimatedMinutes (10-30) for how long it would take to read/study.',
   'This course can be for ANY college program (nursing, psychology, engineering, business, arts, etc.) — tailor the structure to the actual subject matter; do not assume computer science unless the request explicitly is.',
@@ -163,15 +165,62 @@ function readRoadmapAttempt(payload) {
   return modules;
 }
 
+function asTitle(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+// Fits a parsed roadmap to the chosen length's size: extra modules, topics
+// and lessons are trimmed (in order, so the opening of the course is kept);
+// untitled entries and topics with no lessons are dropped. `complete` is
+// false when there are fewer modules or topics than the length asks for.
+function fitRoadmapToLength(modules, length) {
+  const size = courseLengthSize(length);
+  const fitted = (Array.isArray(modules) ? modules : [])
+    .map((module_) => ({
+      title: asTitle(module_?.title),
+      topics: (Array.isArray(module_?.topics) ? module_.topics : [])
+        .map((topic) => ({
+          title: asTitle(topic?.title),
+          lessons: (Array.isArray(topic?.lessons) ? topic.lessons : [])
+            .filter((lesson) => asTitle(lesson?.title))
+            .slice(0, size.lessonsPerTopic.max)
+            .map((lesson) => ({ ...lesson, title: asTitle(lesson.title) })),
+        }))
+        .filter((topic) => topic.title && topic.lessons.length >= size.lessonsPerTopic.min)
+        .slice(0, size.topicsPerModule.max),
+    }))
+    .filter((module_) => module_.title && module_.topics.length)
+    .slice(0, size.modules);
+
+  const complete = fitted.length === size.modules
+    && fitted.every((module_) => module_.topics.length >= size.topicsPerModule.min);
+  return { modules: fitted, complete, target: size.modules };
+}
+
+function lessonCount(fit) {
+  return fit.modules.reduce((sum, module_) => sum + module_.topics.reduce((s, topic) => s + topic.lessons.length, 0), 0);
+}
+
+// Of two fitted attempts, the one closest to the requested size.
+function betterRoadmap(a, b) {
+  if (!b) return a;
+  if (a.complete !== b.complete) return a.complete ? a : b;
+  if (a.modules.length !== b.modules.length) return a.modules.length > b.modules.length ? a : b;
+  return lessonCount(b) > lessonCount(a) ? b : a;
+}
+
 async function generateRoadmap({ userId, courseName, difficulty, goal, context = null, courseOptions = null, curriculumSubject = null }) {
   const personalization = personalizationService.formatPersonalizationPrompt(context);
-  const optionsRules = courseOptionsRules(courseOptions, { includeLength: true });
+  const length = courseOptions?.length;
+  const size = courseLengthSize(length);
+  // The size rule is always present (a course without options is Standard).
+  const optionsRules = courseOptions ? courseOptionsRules(courseOptions, { includeLength: true }) : courseLengthRule(length);
   const systemInstruction = [ROADMAP_SYSTEM_RULES, optionsRules, personalization].filter(Boolean).join('\n\n');
 
   // curriculumSubject is a validated code from the fixed config list (never
   // free student text), so it can be stated plainly rather than delimited.
   const userPrompt = [
-    `Generate a course roadmap at ${difficulty} level for the course named below.`,
+    `Generate a course roadmap at ${difficulty} level for the course named below, with exactly ${size.modules} modules (${size.topicsPerModule.min}-${size.topicsPerModule.max} topics per module, ${size.lessonsPerTopic.min}-${size.lessonsPerTopic.max} lessons per topic).`,
     curriculumSubject
       ? `This course is for the BS Nursing curriculum subject "${curriculumSubjectLabel(curriculumSubject)}". Keep the roadmap within that subject's scope.`
       : '',
@@ -180,7 +229,7 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
   ].filter(Boolean).join('\n\n');
 
   const generationConfig = {
-    maxOutputTokens: roadmapOutputBudget(courseOptions?.length),
+    maxOutputTokens: roadmapOutputBudget(length),
     reasoningLevel: 'medium',
     responseMimeType: 'application/json',
     responseSchema: ROADMAP_SCHEMA,
@@ -198,14 +247,21 @@ async function generateRoadmap({ userId, courseName, difficulty, goal, context =
       generationConfig,
       timeoutMs: Math.max(1000, deadline - Date.now()),
     });
-    return readRoadmapAttempt(payload);
+    return fitRoadmapToLength(readRoadmapAttempt(payload), length);
   }
 
-  let modules = await attempt();
-  if (!modules.length && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
-    // Truncated / malformed / incomplete — retry once before giving up.
-    modules = await attempt();
+  let best = await attempt();
+  if (!best.complete && deadline - Date.now() > MIN_RETRY_BUDGET_MS) {
+    // Truncated / malformed / too small for the chosen length: retry once,
+    // then keep whichever attempt came closest (too many is already trimmed).
+    // A failed retry never throws away a usable first attempt.
+    try {
+      best = betterRoadmap(best, await attempt());
+    } catch (err) {
+      if (!best.modules.length) throw err;
+    }
   }
+  const { modules } = best;
 
   if (!modules.length) {
     throw new ApiError(502, roadmapErrorMessage);
@@ -383,6 +439,8 @@ module.exports = {
   readRoadmapAttempt,
   readLessonAttempt,
   courseOptionsRules,
+  fitRoadmapToLength,
+  betterRoadmap,
   buildStoredSubjectContext,
   roadmapOutputBudget,
   ROADMAP_MAX_OUTPUT_TOKENS,

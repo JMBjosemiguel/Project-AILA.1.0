@@ -53,11 +53,13 @@ export const QUIZ_TIME_LIMIT_OPTIONS = [
   ...[5, 10, 15, 20, 30, 45, 60].map((minutes) => ({ value: minutes, label: `${minutes} min` })),
 ];
 
+// Must match the backend's COURSE_LENGTH_SIZES (constants/courseOptions.js),
+// which the server enforces on every generated roadmap.
 export const COURSE_LENGTHS = [
-  { value: 'short', label: 'Short', description: '2-3 modules' },
-  { value: 'standard', label: 'Standard', description: 'the current size' },
-  { value: 'in_depth', label: 'In-depth', description: '5-6 modules' },
-];
+  { value: 'short', label: 'Short', modules: 2 },
+  { value: 'standard', label: 'Standard', modules: 4 },
+  { value: 'in_depth', label: 'In-depth', modules: 6 },
+].map((option) => ({ ...option, description: `${option.label}: ${option.modules} modules` }));
 
 export const COURSE_FOCUSES = [
   { value: 'worked_examples', label: 'Worked examples' },

@@ -177,6 +177,9 @@ export default function AddCourseWizard({ onClose, onGenerated }) {
                           </button>
                         ))}
                       </div>
+                      <p className="text-xs text-ink-400 mt-1.5" aria-live="polite">
+                        {COURSE_LENGTHS.find((option) => option.value === length)?.description}, each with 2-3 topics.
+                      </p>
                     </div>
 
                     <div>

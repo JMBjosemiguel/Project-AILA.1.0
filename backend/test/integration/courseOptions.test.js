@@ -23,6 +23,22 @@ const SAMPLE_ROADMAP = {
   ],
 };
 
+// `modules` modules of 3 topics x 2 lessons, for the length-enforcement checks.
+function roadmapOf(modules) {
+  return {
+    modules: Array.from({ length: modules }, (_, m) => ({
+      title: `Module ${m + 1}`,
+      topics: Array.from({ length: 3 }, (__, t) => ({
+        title: `Topic ${m + 1}.${t + 1}`,
+        lessons: [{ title: `Lesson ${m + 1}.${t + 1}.1` }, { title: `Lesson ${m + 1}.${t + 1}.2` }],
+      })),
+    })),
+  };
+}
+
+// Roadmap replies to hand out in order (then SAMPLE_ROADMAP once used up).
+let roadmapReplies = [];
+
 // Routes each Gemini call by inspecting its systemInstruction — roadmap vs
 // lesson generation use distinctive rule text (ROADMAP_SYSTEM_RULES vs
 // LESSON_SYSTEM_RULES), same trick as chatIntent.test.js's installGeminiStub.
@@ -33,7 +49,7 @@ function installGeminiStub() {
     calls.push(body);
     const instr = body.systemInstruction || '';
     if (instr.includes('college-level course roadmaps')) {
-      return jsonPayload(SAMPLE_ROADMAP);
+      return jsonPayload(roadmapReplies.length ? roadmapReplies.shift() : SAMPLE_ROADMAP);
     }
     if (instr.includes('single, focused college lesson')) {
       return textPayload('## Objectives\nSomething real.\n## Summary\nA summary.');
@@ -116,7 +132,7 @@ test('course options (purpose, length, focus)', async (t) => {
 
     const roadmapInstruction = systemInstructionOf(calls, /college-level course roadmaps/);
     assert.match(roadmapInstruction, /NLE/);
-    assert.match(roadmapInstruction, /2-3 modules total/);
+    assert.match(roadmapInstruction, /Produce EXACTLY 2 modules — no more and no fewer\./);
     assert.match(roadmapInstruction, /case scenarios|patient cases/i);
     assert.match(roadmapInstruction, /key terms/i);
 
@@ -135,14 +151,48 @@ test('course options (purpose, length, focus)', async (t) => {
     assert.deepEqual(stored.courseOptions, { purpose: 'from_scratch', length: 'standard', focus: [] });
   });
 
-  await t.test('a standard-length roadmap prompt is byte-identical to the pre-feature "2-4 modules" rule', async () => {
+  await t.test('a standard-length roadmap prompt asks for exactly 4 modules, with no overlapping range', async () => {
     const { learningService, calls } = installGeminiStub();
     const result = await learningService.generateCourse(A.id, { courseName: `${TAG} Standard Length` });
     subjectIds.push(result.subjectId);
 
-    const roadmapInstruction = systemInstructionOf(calls, /college-level course roadmaps/);
-    assert.match(roadmapInstruction, /Produce 2-4 modules, each with 2-3 topics, each topic with 1-2 lessons\./);
-    assert.doesNotMatch(roadmapInstruction, /modules total/, 'no length override line for the default length');
+    const roadmapCall = calls.find((c) => /college-level course roadmaps/.test(c.systemInstruction || ''));
+    assert.match(roadmapCall.systemInstruction, /Produce EXACTLY 4 modules — no more and no fewer\. Each module has 2-3 topics; each topic has 1-2 lessons\./);
+    assert.doesNotMatch(roadmapCall.systemInstruction, /2-4 modules/);
+    assert.match(roadmapCall.contents[0].parts[0].text, /with exactly 4 modules/);
+  });
+
+  const moduleCount = async (subjectId) => Number((await db.query('SELECT COUNT(*) AS c FROM modules WHERE subject_id = ?', [subjectId]))[0].c);
+  const roadmapCalls = (calls) => calls.filter((c) => /college-level course roadmaps/.test(c.systemInstruction || '')).length;
+
+  await t.test('too many: a Short course saves exactly 2 modules even when Gemini returns 5 (no retry needed)', async () => {
+    const { learningService, calls } = installGeminiStub();
+    roadmapReplies = [roadmapOf(5)];
+    const result = await learningService.generateCourse(A.id, { courseName: `${TAG} Short Trim`, length: 'short' });
+    subjectIds.push(result.subjectId);
+    assert.equal(await moduleCount(result.subjectId), 2);
+    assert.equal(roadmapCalls(calls), 1);
+    const topics = await db.query('SELECT COUNT(*) AS c FROM topics t JOIN modules m ON m.id = t.module_id WHERE m.subject_id = ?', [result.subjectId]);
+    assert.equal(Number(topics[0].c), 6);
+  });
+
+  await t.test('too few: an In-depth course retries once and keeps the better reply', async () => {
+    const { learningService, calls } = installGeminiStub();
+    roadmapReplies = [roadmapOf(4), roadmapOf(6)];
+    const result = await learningService.generateCourse(A.id, { courseName: `${TAG} In-depth Retry`, length: 'in_depth' });
+    subjectIds.push(result.subjectId);
+    assert.equal(roadmapCalls(calls), 2);
+    assert.equal(await moduleCount(result.subjectId), 6);
+  });
+
+  await t.test('still too few after the retry: the best attempt is saved, without crashing', async () => {
+    const { learningService, calls } = installGeminiStub();
+    roadmapReplies = [roadmapOf(3), roadmapOf(2)];
+    const result = await learningService.generateCourse(A.id, { courseName: `${TAG} In-depth Best`, length: 'in_depth' });
+    subjectIds.push(result.subjectId);
+    assert.equal(roadmapCalls(calls), 2, 'exactly one retry');
+    assert.equal(await moduleCount(result.subjectId), 3);
+    roadmapReplies = [];
   });
 
   await t.test('the course\'s purpose shows up as a badge field when listing courses', async () => {

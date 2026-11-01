@@ -118,6 +118,19 @@ describe('AddCourseWizard', () => {
     }));
   });
 
+  it('shows the size of the chosen length: Short 2, Standard 4, In-depth 6 modules', async () => {
+    const user = userEvent.setup();
+    render(<AddCourseWizard onClose={vi.fn()} onGenerated={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: /More options/i }));
+
+    expect(screen.getByText('Standard: 4 modules, each with 2-3 topics.')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Short' }));
+    expect(screen.getByText('Short: 2 modules, each with 2-3 topics.')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'In-depth' }));
+    expect(screen.getByText('In-depth: 6 modules, each with 2-3 topics.')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'In-depth' })).toHaveAttribute('title', 'In-depth: 6 modules');
+  });
+
   it('focus pills toggle on and off', async () => {
     const user = userEvent.setup();
     render(<AddCourseWizard onClose={vi.fn()} onGenerated={vi.fn()} />);

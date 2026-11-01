@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { ArrowUp, ClipboardList, FileText, FolderOpen, Layers, Loader2, Paperclip, Upload, X } from 'lucide-react';
 import ActionMenu from '../common/ActionMenu';
-import { ACCEPTED_RESOURCE_FILE_TYPES } from '../../constants/ui';
+import { ACCEPTED_RESOURCE_FILE_TYPES, MAX_CHAT_MESSAGE_LENGTH } from '../../constants/ui';
 
 const ATTACH_TRIGGER_CLASSNAME = 'w-8 h-8 flex items-center justify-center rounded-lg text-ink-400 hover:bg-ink-50 hover:text-primary flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300';
 
@@ -103,6 +103,7 @@ export default function ChatInput({
             onChange={autoResize}
             onKeyDown={handleKey}
             placeholder="Ask AILA about your coursework..."
+            maxLength={MAX_CHAT_MESSAGE_LENGTH}
             className="flex-1 resize-none bg-transparent outline-none text-sm text-ink-800 placeholder:text-ink-400 py-1.5 max-h-32"
           />
           <button
@@ -114,6 +115,12 @@ export default function ChatInput({
             <ArrowUp size={16} />
           </button>
         </div>
+        {value.length >= MAX_CHAT_MESSAGE_LENGTH - 200 && (
+          <p className="text-[0.7rem] text-amber-600 text-center mt-1.5" role="status">
+            {value.length.toLocaleString('en-US')} / {MAX_CHAT_MESSAGE_LENGTH.toLocaleString('en-US')} characters
+            {value.length >= MAX_CHAT_MESSAGE_LENGTH ? ' — the limit for one message' : ''}
+          </p>
+        )}
         <p className="text-[0.7rem] text-ink-400 text-center mt-2">
           AILA can make mistakes. Review important answers with your course materials.
         </p>

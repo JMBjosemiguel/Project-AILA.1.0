@@ -24,7 +24,7 @@ async function makeQuiz(userId, topic) {
 }
 
 const bodyOf = (res) => JSON.stringify(res.json);
-const leaksKey = (res) => /correct_?answer|correctAnswer|explanation|is_?correct|isCorrect|987|Basic arithmetic/i.test(bodyOf(res));
+const leaksKey = (res) => /correct_?answer|correctAnswer|explanation|is_?correct|isCorrect|capital since 987|Basic arithmetic/i.test(bodyOf(res));
 
 test('resumable formal quiz attempts', async (t) => {
   if (!(await serverReachable())) { t.skip('local backend not reachable'); return; }

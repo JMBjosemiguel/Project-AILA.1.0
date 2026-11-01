@@ -60,13 +60,14 @@ async function createShareRow({ materialType, materialId, createdBy, tokenHash, 
 
 // --- material loaders (share-view: current row, ownership + soft-delete aware) --
 
-// A course + its full tree, only if it currently exists (not soft-deleted).
+// A course + its full tree, only if it currently exists (not soft-deleted) and
+// its owner is still an active, non-deleted account.
 async function getSubjectTreeForShare(subjectId) {
   const subjectRows = await query(
     `SELECT s.id, s.name, s.difficulty, s.goal, s.visibility, s.created_by,
             u.first_name AS owner_first_name, u.last_name AS owner_last_name
        FROM subjects s
-       LEFT JOIN users u ON u.id = s.created_by
+       INNER JOIN users u ON u.id = s.created_by AND u.deleted_at IS NULL AND u.is_active = 1
       WHERE s.id = ? AND s.deleted_at IS NULL
       LIMIT 1`,
     [subjectId]
@@ -103,13 +104,14 @@ async function getSubjectTreeForShare(subjectId) {
   return { subject, rows, definitions, examples, hasAssessments };
 }
 
-// A standalone quiz + questions (with the answer key — the serializer strips it).
+// A standalone quiz + questions (with the answer key — the serializer strips it),
+// only while its owner is still an active, non-deleted account.
 async function getQuizForShare(quizId) {
   const quizRows = await query(
     `SELECT q.id, q.topic, q.quiz_type, q.difficulty, q.visibility, q.assessment_kind, q.user_id,
             u.first_name AS owner_first_name, u.last_name AS owner_last_name
        FROM quizzes q
-       LEFT JOIN users u ON u.id = q.user_id
+       INNER JOIN users u ON u.id = q.user_id AND u.deleted_at IS NULL AND u.is_active = 1
       WHERE q.id = ?
       LIMIT 1`,
     [quizId]

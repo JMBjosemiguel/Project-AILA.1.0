@@ -16,7 +16,6 @@ const dashboardRoutes = require('./dashboardRoutes');
 const feedbackRoutes = require('./feedbackRoutes');
 const { materialsRouter, shareRouter } = require('./materialShareRoutes');
 const gamificationRoutes = require('./gamificationRoutes');
-const { createScaffoldRouter } = require('./scaffoldRoutes');
 
 const router = express.Router();
 
@@ -35,7 +34,6 @@ router.use('/study-tasks', plannerRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/users/me', profileRoutes);
-router.use('/users', createScaffoldRouter('Users'));
 router.use('/feedback', feedbackRoutes);
 router.use('/materials', materialsRouter);
 router.use('/share', shareRouter);

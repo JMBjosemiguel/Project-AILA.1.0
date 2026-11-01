@@ -3,6 +3,8 @@ const { sendSuccess } = require('../utils/http');
 const adminService = require('../services/adminService');
 const resourceService = require('../services/resourceService');
 const topicGroupingService = require('../services/topicGroupingService');
+const { csvEscape } = require('../utils/csv');
+const { logAdminAction } = require('../utils/adminAudit');
 
 const getDashboardStats = asyncHandler(async (req, res) => {
   const stats = await adminService.getDashboardStats();
@@ -156,6 +158,7 @@ const getTopicGroups = asyncHandler(async (req, res) => {
 
 const regroupTopicGroups = asyncHandler(async (req, res) => {
   const result = await topicGroupingService.getTopicGroups({ forceRegroup: true });
+  await logAdminAction(req.auth.user.id, 'topic_groups.regroup', 'topic_groups');
   sendSuccess(res, result, 200, 'Topic groups regrouped.');
 });
 
@@ -164,11 +167,6 @@ const listAuditLog = asyncHandler(async (req, res) => {
   const result = await adminService.listAuditLog({ search, action, role, from, to, page: req.query.page, pageSize: req.query.pageSize });
   sendSuccess(res, result, 200, 'Audit log retrieved.');
 });
-
-function csvEscape(value) {
-  const str = String(value ?? '');
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-}
 
 const exportAuditLog = asyncHandler(async (req, res) => {
   const { search = '', action = 'all', role = 'all', from = '', to = '' } = req.query;

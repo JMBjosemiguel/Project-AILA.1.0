@@ -28,7 +28,14 @@ const updateProfileValidator = [
   body('program').optional({ values: 'null' }).trim().isLength({ max: 150 }),
   body('year_level').optional({ values: 'null' }).isInt({ min: 1, max: 6 }),
   body('bio').optional({ values: 'null' }).trim().isLength({ max: 2000 }),
-  body('avatar_url').optional({ values: 'null' }).trim().isLength({ max: 255 }),
+  // '' clears it; otherwise it has to be an https URL (up to 255 characters).
+  body('avatar_url')
+    .optional({ values: 'null' })
+    .isString().withMessage('Avatar must be a link starting with https://.')
+    .trim()
+    .isLength({ max: 255 }).withMessage('Avatar link must be at most 255 characters.')
+    .if((value) => value !== '')
+    .isURL({ protocols: ['https'], require_protocol: true, require_tld: true }).withMessage('Avatar must be a link starting with https://.'),
   body('leaderboard_opt_in').optional().isBoolean().withMessage('leaderboard_opt_in must be true or false.'),
   // '' is allowed for these two and means "clear it".
   body('facebook')

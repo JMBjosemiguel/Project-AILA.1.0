@@ -32,6 +32,9 @@ export const ACCEPTED_RESOURCE_FILE_TYPES = [
   'image/gif',
 ];
 
+// Must match the backend's MAX_CHAT_MESSAGE_LENGTH (validators/chatValidator.js).
+export const MAX_CHAT_MESSAGE_LENGTH = 4000;
+
 // Must match the backend's MAX_FILE_SIZE (middlewares/uploadResourceFile.js).
 export const MAX_RESOURCE_FILE_SIZE_MB = 25;
 export const MAX_RESOURCE_FILE_SIZE_BYTES = MAX_RESOURCE_FILE_SIZE_MB * 1024 * 1024;

@@ -148,7 +148,8 @@ async function getStudentsNeedingHelp(limit = 5) {
             SELECT qa.user_id, qa.score / qa.total AS pct,
               ROW_NUMBER() OVER (PARTITION BY qa.user_id ORDER BY qa.completed_at DESC) AS rn
             FROM quiz_attempts qa
-            WHERE qa.status = 'submitted' AND qa.total > 0
+            INNER JOIN quizzes q ON q.id = qa.quiz_id
+            WHERE qa.status = 'submitted' AND qa.total > 0 AND ${notChatQuizCondition('q')}
           ) recent
           WHERE rn <= 10
           GROUP BY user_id
@@ -381,6 +382,12 @@ async function getUserDetail(userId) {
 // (chats, quizzes, XP, resources, ...) are untouched — nothing is deleted
 // except the identity fields, and the account is never reactivated.
 async function deleteUser(userId, connection = null) {
+  // A deleted student's shared courses and quizzes stop being reachable by link.
+  await execute(
+    connection,
+    'UPDATE material_shares SET revoked_at = CURRENT_TIMESTAMP WHERE created_by = ? AND revoked_at IS NULL',
+    [userId]
+  );
   const result = await execute(
     connection,
     `
@@ -441,6 +448,10 @@ async function resetUserProgress(userId, connection) {
   await execute(connection, 'DELETE FROM lesson_progress WHERE user_id = ?', [userId]);
   await execute(connection, 'DELETE FROM learning_progress WHERE user_id = ?', [userId]);
   await execute(connection, 'DELETE FROM quiz_attempts WHERE user_id = ?', [userId]);
+  // XP and milestones restart from zero too (the cached xp/level below are
+  // rebuilt from xp_events, so the events must go as well).
+  await execute(connection, 'DELETE FROM xp_events WHERE user_id = ?', [userId]);
+  await execute(connection, 'DELETE FROM user_achievements WHERE user_id = ?', [userId]);
   await execute(connection, 'UPDATE learning_streaks SET current_streak = 0, longest_streak = 0, last_active_date = NULL WHERE user_id = ?', [userId]);
   await execute(connection, 'UPDATE user_profiles SET xp_points = 0, level = 1 WHERE user_id = ?', [userId]);
 }

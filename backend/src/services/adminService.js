@@ -10,6 +10,7 @@ const { deleteStoredFile } = require('./resourceService');
 const { logAdminAction } = require('../utils/adminAudit');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 const { APP_TIMEZONE } = require('../utils/appTime');
+const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
 
 async function getDashboardStats() {
   const [stats, activity, feedbackPending, unverifiedOver24h, studentsNeedingHelp, activeStudentsByDay, tabSwitchAttempts] = await Promise.all([
@@ -198,6 +199,11 @@ async function demoteToStudent(adminId, userId) {
 }
 
 async function resetUserProgress(adminId, userId) {
+  // A missing or deleted account is a 404 before anything is touched or logged.
+  const target = await adminModel.getUserForPromotion(Number(userId));
+  if (!target) {
+    throw new ApiError(404, 'User not found.');
+  }
   await transaction((connection) => adminModel.resetUserProgress(Number(userId), connection));
   await logAdminAction(adminId, 'user.reset_progress', 'users', Number(userId));
 }
@@ -260,13 +266,15 @@ async function getCourseDetail(courseId) {
         SELECT ROUND(AVG(qa.score / qa.total * 100)) AS avg_quiz_score
         FROM quiz_attempts qa
         INNER JOIN quizzes q ON q.id = qa.quiz_id
-        WHERE qa.completed_at IS NOT NULL AND qa.user_id = ?
+        WHERE qa.status = 'submitted' AND qa.total > 0 AND qa.user_id = ?
+          AND ${notChatQuizCondition('q')}
           AND (
             (q.source_type = 'topic' AND q.source_id IN (SELECT t.id FROM topics t INNER JOIN modules m ON m.id = t.module_id WHERE m.subject_id = ?))
             OR (q.source_type = 'lesson' AND q.source_id IN (SELECT l.id FROM lessons l INNER JOIN topics t ON t.id = l.topic_id INNER JOIN modules m ON m.id = t.module_id WHERE m.subject_id = ?))
+            OR q.subject_id = ?
           )
       `,
-      [ownerId, courseId, courseId]
+      [ownerId, courseId, courseId, courseId]
     ),
   ]);
 

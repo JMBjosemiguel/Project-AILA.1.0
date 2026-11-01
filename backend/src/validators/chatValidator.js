@@ -1,7 +1,11 @@
 const { body, param } = require('express-validator');
 
+// Longest chat message accepted (the chat box limits the input to match).
+const MAX_CHAT_MESSAGE_LENGTH = 4000;
+
 const sendMessageValidator = [
-  body('message').trim().notEmpty().withMessage('Please enter a message for AILA.'),
+  body('message').trim().notEmpty().withMessage('Please enter a message for AILA.')
+    .isLength({ max: MAX_CHAT_MESSAGE_LENGTH }).withMessage(`Messages can be up to ${MAX_CHAT_MESSAGE_LENGTH.toLocaleString('en-US')} characters. Please shorten yours.`),
   body('conversation_id').optional({ values: 'null' }).isInt({ min: 1 }).withMessage('Invalid conversation id.'),
   // .toInt() matters here specifically: aiService.generateChatResponse branches on
   // `typeof resourceId === 'number'` to tell "attach/switch" apart from "no change"
@@ -19,6 +23,7 @@ const renameConversationValidator = [
 ];
 
 module.exports = {
+  MAX_CHAT_MESSAGE_LENGTH,
   sendMessageValidator,
   conversationIdParamValidator,
   renameConversationValidator,

@@ -95,8 +95,11 @@ function buildSubjectTree(rows) {
       };
     });
 
-    const subjectProgress = modules.length
-      ? Math.round(modules.reduce((sum, module_) => sum + module_.progress_percent, 0) / modules.length)
+    // Course % = average of its modules that have lessons (a module with no
+    // lessons is skipped, as a topic with none already is); no lessons at all = 0%.
+    const modulesWithLessons = modules.filter((module_) => module_.topics.some((topic) => topic.lessons.length > 0));
+    const subjectProgress = modulesWithLessons.length
+      ? Math.round(modulesWithLessons.reduce((sum, module_) => sum + module_.progress_percent, 0) / modulesWithLessons.length)
       : 0;
 
     return {
@@ -435,6 +438,7 @@ async function deleteSubjectCascade(subjectId, userId, connection) {
 }
 
 module.exports = {
+  buildSubjectTree,
   lessonNeedsGeneration,
   parseCourseOptions,
   listSubjectsForUser,

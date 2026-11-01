@@ -170,7 +170,7 @@ async function buildResourceGrounding(resourceId, userId, questionText) {
     // instruction), and the fixed rule below says to treat it as such.
     return {
       rules: DOCUMENT_GROUNDING_RULES,
-      documentBlock: personalizationService.delimitStudentText('document', text, { maxLength: MAX_CHARS_FOR_AI, keepLines: true }),
+      documentBlock: personalizationService.delimitSourceText('document', text),
       resourceNote: truncated ? 'truncated' : null,
     };
   } catch {

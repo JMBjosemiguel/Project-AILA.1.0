@@ -276,7 +276,7 @@ async function generateQuiz({ topic, quizType, itemCount, difficulty = 'medium',
       ? `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz based ONLY on the document content in quiz_source_material below. Base every question on facts actually present in the document.`
       : `Generate a ${itemCount}-item ${difficultyLabel} ${typeLabel} quiz for a college student on the topic below.`,
     personalizationService.delimitStudentText('topic', topic),
-    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+    sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
     sourceContextText && !isDocumentSource
       ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above. Do not drift to a different subject or field, even if the topic title alone could plausibly apply elsewhere.'
       : '',
@@ -332,7 +332,7 @@ async function generateFlashcards({ topic, count, sourceContextText = '' }) {
     sourceContextText
       ? `Generate ${count} question-and-answer flashcards for a college student, based ONLY on the document content in quiz_source_material below.`
       : `Generate ${count} question-and-answer flashcards about "${topic}" for a college student.`,
-    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+    sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
     'Keep each question focused on a single concept and each answer concise (1-2 sentences).',
     'Do not include any text outside the JSON object.',
   ].filter(Boolean).join('\n');
@@ -709,7 +709,7 @@ async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, pers
   const prompt = [
     `This quiz topic will be split into ${numBatches} batches of questions, generated separately. List exactly ${numBatches} distinct subtopics or angles of the topic below, one per batch, so each batch can focus on something different and the whole quiz ends up well-rounded instead of repetitive.`,
     personalizationService.delimitStudentText('topic', topic),
-    sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+    sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
     sourceContextText ? 'Every subtopic must stay within the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
     'Keep each subtopic short (3-8 words). Respond with JSON only, matching the schema.',
   ].filter(Boolean).join('\n');
@@ -756,7 +756,7 @@ async function generateBatchItems({ topic, subtopic, quizType, difficulty, count
       `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of the topic below:`,
       personalizationService.delimitStudentText('topic', topic),
       personalizationService.delimitStudentText('quiz_subtopic', subtopic),
-      sourceContextText ? personalizationService.delimitStudentText('quiz_source_material', sourceContextText) : '',
+      sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
       sourceContextText ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
       QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
       'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
@@ -1051,7 +1051,7 @@ async function generateAssessmentItems({ kind, outlineText, itemCount, personali
     `Generate a ${itemCount}-item multiple-choice ${isFinal ? 'course final assessment' : 'module checkpoint quiz'} for a college student.`,
     'Each item must have exactly 4 plausible "options", "correctAnswer" must exactly match one option, and "explanation" is one educational sentence.',
     'Base every question ONLY on the course outline below.',
-    personalizationService.delimitStudentText('course_outline', outlineText),
+    personalizationService.delimitSourceText('course_outline', outlineText),
     'Do not include any text outside the JSON object.',
   ].join('\n');
 
@@ -1672,6 +1672,7 @@ module.exports = {
   readGeminiJson,
   questionDedupeKey,
   buildSubtopicPlan,
+  generateBatchItems,
   MAX_BATCH_CALLS_PER_QUIZ,
   extractLessonCoreSections,
   buildQuizSourceContextBlock,

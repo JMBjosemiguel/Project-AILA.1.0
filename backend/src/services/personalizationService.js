@@ -12,6 +12,7 @@
  */
 const userModel = require('../models/userModel');
 const studentContext = require('./studentContextService');
+const { MAX_CHARS_FOR_AI } = require('../utils/pdfText');
 
 const DIFFICULTY_WORD = {
   beginner: 'Beginner',
@@ -34,6 +35,14 @@ function difficultyWord(value) {
  * treats it as data, never as instructions. Strips any fake delimiter tags the
  * student may have embedded and caps the length.
  */
+// Source material (an uploaded document, lesson content, a course outline) is
+// the thing the model must actually read, so it gets the full source-text limit
+// (MAX_CHARS_FOR_AI) with its paragraphs kept. Short student inputs (chat
+// messages, titles, goals) keep delimitStudentText's 500-character default.
+function delimitSourceText(label, value) {
+  return delimitStudentText(label, value, { maxLength: MAX_CHARS_FOR_AI, keepLines: true });
+}
+
 // Defaults suit short free text (500 characters, one line). An uploaded
 // document needs `maxLength` raised and `keepLines` on so its paragraphs survive.
 function delimitStudentText(label, value, { maxLength = 500, keepLines = false } = {}) {
@@ -212,4 +221,5 @@ module.exports = {
   buildContextSnapshot,
   snapshotJson,
   delimitStudentText,
+  delimitSourceText,
 };

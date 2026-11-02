@@ -221,6 +221,53 @@ describe('QuizRunner — resumable formal quiz', () => {
   });
 });
 
+describe('QuizRunner — Share in the review header', () => {
+  const reviewOf = (extra) => ({
+    ...REVIEW, attemptId: 77, quizId: 5, quizType: 'multiple_choice', status: 'submitted', percent: 50,
+    items: REVIEW.items.map((i) => ({ ...i, options: ['Paris', 'Berlin'] })),
+    ...extra,
+  });
+
+  it('a practice quiz review shows Share, which opens the existing share dialog for that quiz', async () => {
+    const user = userEvent.setup();
+    getQuizAttempt.mockResolvedValue(reviewOf({ assessmentKind: 'practice' }));
+
+    render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);
+    const share = await screen.findByRole('button', { name: 'Share' });
+    await user.click(share);
+
+    expect(await screen.findByRole('heading', { name: 'Share this quiz' })).toBeInTheDocument();
+    expect(getShareStatus).toHaveBeenCalledWith('quiz', 5);
+    expect(await screen.findByRole('button', { name: /Create share link/i })).toBeInTheDocument();
+  });
+
+  it('an older review with no assessmentKind counts as practice and shows Share', async () => {
+    getQuizAttempt.mockResolvedValue(reviewOf({}));
+    render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['module_checkpoint', 'Module Checkpoint'],
+    ['course_final', 'Course Final'],
+  ])('a %s review has no Share button', async (assessmentKind, title) => {
+    getQuizAttempt.mockResolvedValue(reviewOf({ assessmentKind, passed: true, passingScore: 70, percent: 90 }));
+    render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Passed — 90%/)).toBeInTheDocument());
+    expect(screen.getByText(title, { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Share this quiz/i })).not.toBeInTheDocument();
+  });
+
+  it('a review without a quiz id has no Share button', async () => {
+    getQuizAttempt.mockResolvedValue(reviewOf({ assessmentKind: 'practice', quizId: undefined }));
+    render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Capital of France?/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
+});
+
 describe('QuizRunner — count picker (presets + custom)', () => {
   it('defaults to the 5 preset, with no custom box shown', async () => {
     render(<QuizRunner request={{ topic: 'Geography' }} onClose={vi.fn()} />);

@@ -382,16 +382,32 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
           : reviewAttemptId ? 'Review' : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
   const resumedCount = step === 'ready' && !result ? initialAnswers.filter((a) => a.selectedAnswer).length : 0;
   const formalResult = result && result.assessmentKind && result.assessmentKind !== 'practice';
+  // A past result's review: the attempt endpoint is owner-scoped, so a loaded
+  // review is the student's own quiz. Same rule as the server's createShare:
+  // practice quizzes only (checkpoints and finals are shared with their course).
+  const reviewShareQuizId = step === 'review' && !assessmentKind ? result?.quizId ?? null : null;
+  const shareQuizId = quiz?.id ?? reviewShareQuizId;
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-ink-900/50 flex items-center justify-center p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="quiz-runner-title">
       <div className="w-full max-w-xl max-h-[90vh] flex flex-col bg-surface border border-ink-100 rounded-2xl shadow-soft overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-ink-100">
           <div className="min-w-0">
-            <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800 flex items-center gap-1.5">
-              {assessmentKind === 'course_final' && <GraduationCap size={15} className="text-primary" />}
-              {headerTitle}
-            </h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h3 id="quiz-runner-title" className="text-[0.95rem] font-semibold text-ink-800 flex items-center gap-1.5">
+                {assessmentKind === 'course_final' && <GraduationCap size={15} className="text-primary" />}
+                {headerTitle}
+              </h3>
+              {reviewShareQuizId && (
+                <button
+                  type="button"
+                  onClick={() => setSharing(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-600"
+                >
+                  <Share2 size={13} /> Share
+                </button>
+              )}
+            </div>
             <p className="text-xs text-ink-400 mt-0.5 truncate">
               {quiz?.topic || request?.topic || '—'}
               {assessmentKind && passingScore != null && <span> · Passing {passingScore}%</span>}
@@ -670,8 +686,8 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
         )}
       </div>
 
-      {sharing && quiz?.id && (
-        <ShareDialog materialType="quiz" materialId={quiz.id} materialName={quiz.topic} onClose={() => setSharing(false)} />
+      {sharing && shareQuizId && (
+        <ShareDialog materialType="quiz" materialId={shareQuizId} materialName={quiz?.topic} onClose={() => setSharing(false)} />
       )}
     </div>,
     document.body

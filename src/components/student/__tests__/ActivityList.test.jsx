@@ -19,10 +19,18 @@ vi.mock('../../common/Toast', () => ({
   useToast: () => ({ success: vi.fn(), error: toastError }),
 }));
 
+vi.mock('../../../services/api/shareService', () => ({
+  getShareStatus: vi.fn(),
+  createShare: vi.fn(),
+  revokeShare: vi.fn(),
+  absoluteShareUrl: vi.fn((path) => `https://aila.local${path}`),
+}));
+
 import ActivityList from '../ActivityList.jsx';
 import {
   getAttemptIdForActivity, getQuizAttempt, startQuizAttempt, saveAttemptAnswer, submitAttempt,
 } from '../../../services/api/quizService';
+import { getShareStatus } from '../../../services/api/shareService';
 
 const ACTIVITIES = [
   { id: 1, activity_type: 'quiz_completed', reference_id: 50, description: 'Scored 4/5 on "Networking" quiz', created_at: '2026-10-20T10:00:00.000Z' },
@@ -72,6 +80,31 @@ describe('ActivityList — quiz "View" button', () => {
     expect(startQuizAttempt).not.toHaveBeenCalled();
     expect(saveAttemptAnswer).not.toHaveBeenCalled();
     expect(submitAttempt).not.toHaveBeenCalled();
+  });
+
+  it('the review opened from View has a Share button that opens the share dialog for that quiz', async () => {
+    const user = userEvent.setup();
+    getAttemptIdForActivity.mockResolvedValue({ attemptId: 999 });
+    getQuizAttempt.mockResolvedValue(REVIEW);
+    getShareStatus.mockResolvedValue({ visibility: 'private', shared: false });
+
+    render(<ActivityList activities={ACTIVITIES} />);
+    await user.click(screen.getByRole('button', { name: /View/i }));
+    await user.click(await screen.findByRole('button', { name: 'Share' }));
+
+    expect(await screen.findByRole('heading', { name: 'Share this quiz' })).toBeInTheDocument();
+    expect(getShareStatus).toHaveBeenCalledWith('quiz', 50);
+  });
+
+  it('a module checkpoint opened from View has no Share button', async () => {
+    const user = userEvent.setup();
+    getAttemptIdForActivity.mockResolvedValue({ attemptId: 999 });
+    getQuizAttempt.mockResolvedValue({ ...REVIEW, assessmentKind: 'module_checkpoint', passed: true, passingScore: 70, percent: 80 });
+
+    render(<ActivityList activities={ACTIVITIES} />);
+    await user.click(screen.getByRole('button', { name: /View/i }));
+    await waitFor(() => expect(screen.getByText(/What is a subnet\?/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 
   it("another student's activity (or a deleted quiz/attempt) 404s — shows an error, opens nothing", async () => {

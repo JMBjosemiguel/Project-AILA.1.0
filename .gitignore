@@ -4,3 +4,9 @@ dist
 .env.aiven
 .DS_Store
 *.log
+
+# Local coding-assistant files
+.claude/
+CLAUDE.md
+AGENTS.md
+.cursor/

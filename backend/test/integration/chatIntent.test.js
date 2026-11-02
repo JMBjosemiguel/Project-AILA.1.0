@@ -20,8 +20,8 @@ function textPayload(text) {
 // Routes each Gemini call to the right canned response by inspecting its
 // systemInstruction — the three callers in this flow (classifier, quiz
 // generation, normal chat reply) each have a distinctive one. Flashcards
-// generation sends no systemInstruction at all, so it's identified instead
-// by its responseSchema shape (the only caller whose schema has `cards`).
+// generation shares the quiz systemInstruction, so it's identified first by
+// its responseSchema shape (the only caller whose schema has `cards`).
 function installGeminiStub({ classify, quiz, flashcards, chat } = {}) {
   const gemini = require('../../src/services/geminiClient');
   const calls = [];
@@ -33,13 +33,13 @@ function installGeminiStub({ classify, quiz, flashcards, chat } = {}) {
       const next = Array.isArray(classify) ? classify.shift() : classify;
       return jsonPayload(next);
     }
-    if (instr.includes('You generate college quizzes')) {
-      if (!quiz) throw new Error('unexpected quiz-generation call — no `quiz` stub provided');
-      return jsonPayload(quiz);
-    }
     if (body.generationConfig?.responseSchema?.properties?.cards) {
       if (!flashcards) throw new Error('unexpected flashcards-generation call — no `flashcards` stub provided');
       return jsonPayload(flashcards);
+    }
+    if (instr.includes('You generate college quizzes')) {
+      if (!quiz) throw new Error('unexpected quiz-generation call — no `quiz` stub provided');
+      return jsonPayload(quiz);
     }
     if (!chat) throw new Error('unexpected normal-chat call — no `chat` stub provided');
     return textPayload(chat);

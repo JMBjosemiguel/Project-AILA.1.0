@@ -11,7 +11,9 @@ import { useToast } from '../../../components/common/Toast';
 import ResourceCard from '../../../components/student/resources/ResourceCard';
 import EditResourceDialog from '../../../components/student/resources/EditResourceDialog';
 import QuizRunner from '../../../components/student/quiz/QuizRunner';
-import { ACCEPTED_RESOURCE_FILE_TYPES, RESOURCE_TYPES, RESOURCE_TYPE_LABELS } from '../../../constants/ui';
+import {
+  ACCEPTED_RESOURCE_FILE_TYPES, MAX_RESOURCE_FILE_SIZE_BYTES, MAX_RESOURCE_FILE_SIZE_MB, RESOURCE_TYPES, RESOURCE_TYPE_LABELS,
+} from '../../../constants/ui';
 import { useResourceLibraryData } from '../../../hooks/useResourceLibraryData';
 import { addLinkResource, deleteResource, downloadResource, logResourceView, openResourceFile, uploadResource } from '../../../services/api/resourceService';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
@@ -93,6 +95,11 @@ export default function ResourcesPage({ onNavigate }) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    // Same limit as the server; saves uploading a file it would reject.
+    if (file.size > MAX_RESOURCE_FILE_SIZE_BYTES) {
+      setUploadError(`That file is too large. The maximum size is ${MAX_RESOURCE_FILE_SIZE_MB} MB.`);
+      return;
+    }
 
     setUploading(true);
     setUploadError('');

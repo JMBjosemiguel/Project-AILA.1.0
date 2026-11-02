@@ -382,10 +382,13 @@ export default function QuizRunner({ request, resumeQuizId = null, reviewAttempt
           : reviewAttemptId ? 'Review' : resumeQuizId ? 'Resume quiz' : 'Generate a quiz';
   const resumedCount = step === 'ready' && !result ? initialAnswers.filter((a) => a.selectedAnswer).length : 0;
   const formalResult = result && result.assessmentKind && result.assessmentKind !== 'practice';
-  // A past result's review: the attempt endpoint is owner-scoped, so a loaded
-  // review is the student's own quiz. Same rule as the server's createShare:
-  // practice quizzes only (checkpoints and finals are shared with their course).
-  const reviewShareQuizId = step === 'review' && !assessmentKind ? result?.quizId ?? null : null;
+  // A finished quiz, just submitted or a past result's review: the attempt
+  // endpoints are owner-scoped, so it is the student's own quiz. Same rule as
+  // the server's createShare: practice quizzes only (checkpoints and finals
+  // are shared with their course).
+  const reviewShareQuizId = !assessmentKind && !formalResult && (step === 'review' || result)
+    ? result?.quizId ?? quiz?.id ?? null
+    : null;
   const shareQuizId = quiz?.id ?? reviewShareQuizId;
 
   return createPortal(

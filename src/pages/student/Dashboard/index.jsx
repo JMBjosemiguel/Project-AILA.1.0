@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, CalendarClock, FolderOpen, MessageSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BarChart3, BookOpenCheck, CalendarClock, FolderOpen, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import AIInsightCard from '../../../components/student/dashboard/AIInsightCard';
 import ResumeTestCard from '../../../components/student/dashboard/ResumeTestCard';
@@ -14,11 +14,8 @@ import Card, { CardHeader } from '../../../components/common/Card';
 import StatCard from '../../../components/common/StatCard';
 import EmptyState from '../../../components/common/EmptyState';
 import { SkeletonStat } from '../../../components/common/Skeleton';
-import { useConfirm } from '../../../components/common/ConfirmDialog';
-import { useToast } from '../../../components/common/Toast';
 import { useDashboardData } from '../../../hooks/useDashboardData';
 import { useGamificationSummary } from '../../../hooks/useGamificationData';
-import { deleteQuizAttempt } from '../../../services/api/quizService';
 import { setResumeLesson } from '../../../utils/learningHubTarget';
 import { setResumeQuiz } from '../../../utils/quizResumeTarget';
 import { setPrefillPrompt } from '../../../utils/aiPrefill';
@@ -45,24 +42,6 @@ export default function DashboardPage({ onNavigate }) {
   // Don't show "Continue learning" when the AI Insight already points at the same lesson.
   const continueLearningIsDuplicate =
     continueLearning && recommendation?.lessonId && continueLearning.lessonId === recommendation.lessonId;
-  const confirm = useConfirm();
-  const toast = useToast();
-
-  const handleDeleteQuiz = async (attemptId) => {
-    const ok = await confirm({
-      title: 'Delete this quiz attempt?',
-      message: 'This score will be permanently removed from your history.',
-    });
-    if (!ok) return;
-
-    try {
-      await deleteQuizAttempt(attemptId);
-      toast.success('Quiz attempt deleted.');
-      setRefreshVersion((version) => version + 1);
-    } catch (error) {
-      toast.error(error.message || 'Could not delete that quiz attempt.');
-    }
-  };
 
   const handleContinueLearning = () => {
     if (!continueLearning) return;
@@ -148,20 +127,13 @@ export default function DashboardPage({ onNavigate }) {
             {data?.recentQuizzes?.length ? (
               <div className="flex flex-col gap-2.5">
                 {data.recentQuizzes.map((quiz) => (
-                  <div key={quiz.id} className="group flex items-center justify-between gap-2 text-sm">
+                  <div key={quiz.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="text-ink-700 truncate">{quiz.topic}</span>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <span className="text-primary font-semibold">{quiz.score}/{quiz.total}</span>
                       {gradePercent(quiz.score, quiz.total) != null && (
                         <span className="text-xs text-ink-400">Grade {gradePercent(quiz.score, quiz.total)}%</span>
                       )}
-                      <button
-                        onClick={() => handleDeleteQuiz(quiz.id)}
-                        aria-label={`Delete quiz attempt: ${quiz.topic}`}
-                        className="w-6 h-6 flex items-center justify-center rounded-lg text-ink-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 transition-opacity"
-                      >
-                        <Trash2 size={12} />
-                      </button>
                     </div>
                   </div>
                 ))}

@@ -77,7 +77,7 @@ test('source text reaches the Gemini prompt in full', async (t) => {
     assert.ok(promptOf(requests).includes(MARKER));
   });
 
-  await t.test('the batch plan and each batch of a large quiz get the whole document too', async () => {
+  await t.test('the batch plan and each batch get a document under the 30,000-character batch limit whole', async () => {
     const plan = loadWithFetchStub({ subtopics: ['One', 'Two', 'Three'] });
     await plan.service.buildSubtopicPlan({
       topic: 'Kidney', quizType: 'multiple_choice', difficulty: 'medium', numBatches: 3, personalizationText: '', sourceContextText: doc,

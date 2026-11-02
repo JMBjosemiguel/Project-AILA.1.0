@@ -4,6 +4,7 @@ const { appStartOfDay, appDateStr } = require('../utils/appTime');
 const { appWindowStart, windowStartDays, distinctCountByAppDay } = require('../utils/dayBucket');
 const { WEAK_SCORE_THRESHOLD } = require('../constants/mastery');
 const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
+const { quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
 
 const INACTIVITY_DAYS = 7;
 
@@ -15,7 +16,16 @@ async function getDashboardStats() {
     query('SELECT COUNT(*) AS count FROM chat_conversations WHERE deleted_at IS NULL'),
     query('SELECT COUNT(*) AS count FROM lessons WHERE deleted_at IS NULL'),
     query('SELECT COUNT(*) AS count FROM quizzes'),
-    query('SELECT COUNT(*) AS count FROM quiz_attempts'),
+    // Finished attempts by students, chat mini-quizzes left out (like the
+    // weekly results' "Quizzes completed").
+    query(
+      `SELECT COUNT(*) AS count
+         FROM quiz_attempts qa
+         INNER JOIN quizzes q ON q.id = qa.quiz_id
+         INNER JOIN users u ON u.id = qa.user_id
+        WHERE qa.status = 'submitted' AND ${notChatQuizCondition('q')}
+          AND u.deleted_at IS NULL AND u.role_id = (SELECT id FROM roles WHERE name = 'student')`
+    ),
     query('SELECT ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS count FROM feedback WHERE rating IS NOT NULL AND deleted_at IS NULL'),
     // "Today" means the application timezone's calendar day (APP_TIMEZONE),
     // not MySQL's own session date (CURDATE() depends on the connection's
@@ -267,9 +277,12 @@ async function listUsers({ search = '', role = 'all', status = 'all', verificati
           r.name AS role, up.program, up.year_level, up.xp_points, up.level,
           -- Study stats for the Users table (in place of Level / XP).
           (SELECT COUNT(*) FROM lesson_progress lp WHERE lp.user_id = u.id) AS lessons_completed,
+          -- Same rule as the student's own dashboard average.
           (SELECT ROUND(AVG(qa.score / qa.total * 100), 0)
              FROM quiz_attempts qa INNER JOIN quizzes q ON q.id = qa.quiz_id
+             ${quizSubjectJoins('q')}
             WHERE qa.user_id = u.id AND qa.status = 'submitted' AND qa.total > 0
+              AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
               AND ${notChatQuizCondition('q')}) AS avg_quiz_score
         FROM users u
         INNER JOIN roles r ON r.id = u.role_id
@@ -323,11 +336,14 @@ async function getUserDetail(userId) {
     query('SELECT COUNT(*) AS count FROM subjects WHERE created_by = ? AND deleted_at IS NULL', [userId]),
     query('SELECT COUNT(*) AS count FROM lesson_progress WHERE user_id = ?', [userId]),
     query('SELECT COUNT(*) AS count FROM resources WHERE uploaded_by = ? AND deleted_at IS NULL', [userId]),
-    // Same definition as the Users table: submitted, non-chat attempts only.
+    // Same definition as the Users table and the student's dashboard:
+    // submitted, non-chat attempts, not from a deleted course.
     query(
       `SELECT ROUND(AVG(qa.score / qa.total) * 100, 0) AS avg_percent
          FROM quiz_attempts qa INNER JOIN quizzes q ON q.id = qa.quiz_id
-        WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0 AND ${notChatQuizCondition('q')}`,
+         ${quizSubjectJoins('q')}
+        WHERE qa.user_id = ? AND qa.status = 'submitted' AND qa.total > 0
+          AND ${QUIZ_SUBJECT_VISIBLE_CONDITION} AND ${notChatQuizCondition('q')}`,
       [userId]
     ),
     query('SELECT current_streak, longest_streak FROM learning_streaks WHERE user_id = ? LIMIT 1', [userId]),
@@ -454,6 +470,12 @@ async function resetUserProgress(userId, connection) {
   await execute(connection, 'DELETE FROM user_achievements WHERE user_id = ?', [userId]);
   await execute(connection, 'UPDATE learning_streaks SET current_streak = 0, longest_streak = 0, last_active_date = NULL WHERE user_id = ?', [userId]);
   await execute(connection, 'UPDATE user_profiles SET xp_points = 0, level = 1 WHERE user_id = ?', [userId]);
+  // The recent-activity rows for that progress would point at deleted attempts.
+  await execute(
+    connection,
+    "DELETE FROM dashboard_activity_log WHERE user_id = ? AND activity_type IN ('quiz_completed', 'lesson_completed', 'xp_earned')",
+    [userId]
+  );
 }
 
 async function setUserActive(userId, isActive, connection = null) {
@@ -605,10 +627,12 @@ async function listSubjectsAdmin({ search = '', archived = 'all', sort = 'newest
             SELECT ROUND(AVG(qa.score / qa.total * 100))
             FROM quiz_attempts qa
             INNER JOIN quizzes q ON q.id = qa.quiz_id
-            WHERE qa.completed_at IS NOT NULL AND qa.user_id = s.created_by
+            WHERE qa.status = 'submitted' AND qa.total > 0 AND qa.user_id = s.created_by
+              AND ${notChatQuizCondition('q')}
               AND (
                 (q.source_type = 'topic' AND q.source_id IN (SELECT t.id FROM topics t INNER JOIN modules m ON m.id = t.module_id WHERE m.subject_id = s.id))
                 OR (q.source_type = 'lesson' AND q.source_id IN (SELECT l.id FROM lessons l INNER JOIN topics t ON t.id = l.topic_id INNER JOIN modules m ON m.id = t.module_id WHERE m.subject_id = s.id))
+                OR q.subject_id = s.id
               )
           ) AS avg_quiz_score
         FROM subjects s

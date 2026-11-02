@@ -12,7 +12,7 @@ const { awardXpOnce, touchStreak, logActivity } = require('../utils/gamification
 const { notifyUser } = require('../utils/notify');
 const { truncateForAi, MAX_CHARS_FOR_AI } = require('../utils/pdfText');
 const { logAdminAction } = require('../utils/adminAudit');
-const { getResourceChunks, selectSpreadChunks, NO_READABLE_TEXT_MESSAGE } = require('./resourceTextExtraction');
+const { getResourceChunks, selectSpreadChunks, selectChunksForSubtopic, NO_READABLE_TEXT_MESSAGE } = require('./resourceTextExtraction');
 const { QUIZ_TIME_LIMIT_MINUTES, isTimerEligible } = require('../constants/quizTimer');
 
 // Builds the 'quiz_source_material' block for a resource-sourced quiz —
@@ -21,14 +21,18 @@ const { QUIZ_TIME_LIMIT_MINUTES, isTimerEligible } = require('../constants/quizT
 // resourceNote: 'no-text' when the file has no extractable text at all (the
 // caller turns this into a friendly error instead of generating an
 // ungrounded quiz), or 'truncated' when the document didn't fit whole.
-async function buildResourceQuizContext(sourceId, userId) {
+// A batched quiz asks for a smaller `maxChars` (BATCH_SOURCE_MAX_CHARS), and
+// each batch passes its `subtopic` to get the part of the file it is about.
+async function buildResourceQuizContext(sourceId, userId, { maxChars = MAX_CHARS_FOR_AI, subtopic = null } = {}) {
   const resource = await resourceModel.getResourceById(sourceId, userId);
   if (!resource) return { text: '', resourceNote: null };
 
   const chunks = await getResourceChunks(resource);
   if (!chunks.length) return { text: '', resourceNote: 'no-text' };
 
-  const { text, truncated } = selectSpreadChunks(chunks, MAX_CHARS_FOR_AI);
+  const { text, truncated } = subtopic
+    ? selectChunksForSubtopic(chunks, subtopic, maxChars)
+    : selectSpreadChunks(chunks, maxChars);
   return { text, resourceNote: truncated ? 'truncated' : null };
 }
 
@@ -331,7 +335,8 @@ async function generateFlashcards({ topic, count, sourceContextText = '' }) {
   const prompt = [
     sourceContextText
       ? `Generate ${count} question-and-answer flashcards for a college student, based ONLY on the document content in quiz_source_material below.`
-      : `Generate ${count} question-and-answer flashcards about "${topic}" for a college student.`,
+      : `Generate ${count} question-and-answer flashcards for a college student on the topic below.`,
+    sourceContextText ? '' : personalizationService.delimitStudentText('topic', topic),
     sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
     'Keep each question focused on a single concept and each answer concise (1-2 sentences).',
     'Do not include any text outside the JSON object.',
@@ -348,6 +353,9 @@ async function generateFlashcards({ topic, count, sourceContextText = '' }) {
 
   async function attempt() {
     const payload = await callGemini({
+      // Same data-only rule as quizzes: the topic and document are fenced in
+      // <student_*> tags and must never be followed as instructions.
+      systemInstruction: QUIZ_SYSTEM_RULES,
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig,
       timeoutMs: Math.max(1000, deadline - Date.now()),
@@ -668,6 +676,16 @@ async function generateAndSaveQuiz({ userId, topic, quizType, itemCount, difficu
 // change: the same quizzes/quiz_questions tables, just populated over several
 // requests instead of one.
 const BATCH_MAX_ITEMS = 15;
+// Source text per call of a batched quiz. A single-call quiz gets the whole
+// document (MAX_CHARS_FOR_AI); a 100-item quiz is 8+ calls, and resending
+// 120,000 characters on each one runs into Gemini's per-minute token limit.
+const BATCH_SOURCE_MAX_CHARS = 30000;
+
+function delimitBatchSource(sourceContextText) {
+  return personalizationService.delimitStudentText('quiz_source_material', sourceContextText, {
+    maxLength: BATCH_SOURCE_MAX_CHARS, keepLines: true,
+  });
+}
 const SINGLE_CALL_MAX_ITEMS = 20;
 const BATCHED_MAX_ITEMS = 150;
 // Mathematical minimum at 150/15 is 10 calls; this leaves headroom for a few
@@ -709,7 +727,7 @@ async function buildSubtopicPlan({ topic, quizType, difficulty, numBatches, pers
   const prompt = [
     `This quiz topic will be split into ${numBatches} batches of questions, generated separately. List exactly ${numBatches} distinct subtopics or angles of the topic below, one per batch, so each batch can focus on something different and the whole quiz ends up well-rounded instead of repetitive.`,
     personalizationService.delimitStudentText('topic', topic),
-    sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
+    sourceContextText ? delimitBatchSource(sourceContextText) : '',
     sourceContextText ? 'Every subtopic must stay within the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
     'Keep each subtopic short (3-8 words). Respond with JSON only, matching the schema.',
   ].filter(Boolean).join('\n');
@@ -756,7 +774,7 @@ async function generateBatchItems({ topic, subtopic, quizType, difficulty, count
       `Generate ${targetCount} ${difficultyLabel} ${typeLabel} quiz items for a college student, focused specifically on this subtopic of the topic below:`,
       personalizationService.delimitStudentText('topic', topic),
       personalizationService.delimitStudentText('quiz_subtopic', subtopic),
-      sourceContextText ? personalizationService.delimitSourceText('quiz_source_material', sourceContextText) : '',
+      sourceContextText ? delimitBatchSource(sourceContextText) : '',
       sourceContextText ? 'Every question must test only the exact course/module/topic/lesson material identified in quiz_source_material above.' : '',
       QUIZ_TYPE_INSTRUCTIONS[quizType] || QUIZ_TYPE_INSTRUCTIONS.multiple_choice,
       'Keep each "explanation" short (one sentence) and educational, not just restating the answer.',
@@ -822,7 +840,9 @@ async function startBatchedQuizGeneration({ userId, topic, quizType, itemCount, 
   let resourceNote = null;
 
   if (sourceType === 'resource' && sourceId) {
-    const resourceGrounding = await buildResourceQuizContext(sourceId, userId).catch(() => ({ text: '', resourceNote: null }));
+    // The subtopic plan sees evenly spread sections of the whole file.
+    const resourceGrounding = await buildResourceQuizContext(sourceId, userId, { maxChars: BATCH_SOURCE_MAX_CHARS })
+      .catch(() => ({ text: '', resourceNote: null }));
     if (resourceGrounding.resourceNote === 'no-text') {
       throw new ApiError(400, NO_READABLE_TEXT_MESSAGE);
     }
@@ -892,6 +912,7 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
   }
 
   const remaining = state.target - state.actual;
+  const batchSubtopic = sanitizeSubtopic(subtopic, state.topic);
   const countToRequest = Math.min(BATCH_MAX_ITEMS, remaining, Math.max(1, Math.trunc(Number(requestedCount) || BATCH_MAX_ITEMS)));
 
   const sourceContext = await quizModel.getQuizSourceContext(state.source_type, state.source_id, userId).catch(() => null);
@@ -901,7 +922,9 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
     // The quiz already exists (started successfully), so a resource-text
     // hiccup on a later batch degrades to an ungrounded batch rather than
     // failing an otherwise in-progress quiz.
-    const resourceGrounding = await buildResourceQuizContext(state.source_id, userId).catch(() => ({ text: '' }));
+    const resourceGrounding = await buildResourceQuizContext(state.source_id, userId, {
+      maxChars: BATCH_SOURCE_MAX_CHARS, subtopic: batchSubtopic,
+    }).catch(() => ({ text: '' }));
     sourceContextText = resourceGrounding.text || '';
   }
 
@@ -920,7 +943,7 @@ async function appendQuizBatch({ userId, quizId, subtopic, requestedCount }) {
 
   const items = await generateBatchItems({
     topic: state.topic,
-    subtopic: sanitizeSubtopic(subtopic, state.topic),
+    subtopic: batchSubtopic,
     quizType: state.quiz_type,
     difficulty: state.difficulty,
     count: countToRequest,

@@ -3,7 +3,8 @@ const { sendSuccess } = require('../utils/http');
 const adminService = require('../services/adminService');
 const resourceService = require('../services/resourceService');
 const topicGroupingService = require('../services/topicGroupingService');
-const { csvEscape } = require('../utils/csv');
+const { buildAuditLogCsv } = require('../utils/csv');
+const { appDateStr } = require('../utils/appTime');
 const { logAdminAction } = require('../utils/adminAudit');
 
 const getDashboardStats = asyncHandler(async (req, res) => {
@@ -172,27 +173,9 @@ const exportAuditLog = asyncHandler(async (req, res) => {
   const { search = '', action = 'all', role = 'all', from = '', to = '' } = req.query;
   const rows = await adminService.exportAuditLogCsv({ search, action, role, from, to });
 
-  const header = ['Timestamp', 'User', 'Email', 'Role', 'Action', 'Target Table', 'Target ID', 'Affected Object'];
-  const lines = [header.join(',')];
-  for (const row of rows) {
-    const affectedObject = row.target_name
-      ? `${row.target_name}${row.target_id ? ` (#${row.target_id})` : ''}`
-      : `${row.target_table}${row.target_id ? ` #${row.target_id}` : ''}`;
-    lines.push([
-      new Date(row.created_at).toISOString(),
-      csvEscape(`${row.first_name} ${row.last_name}`),
-      csvEscape(row.email),
-      csvEscape(row.role),
-      csvEscape(row.action),
-      csvEscape(row.target_table),
-      row.target_id ?? '',
-      csvEscape(affectedObject),
-    ].join(','));
-  }
-
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.csv"`);
-  res.send(lines.join('\n'));
+  res.setHeader('Content-Disposition', `attachment; filename="audit-log-${appDateStr()}.csv"`);
+  res.send(buildAuditLogCsv(rows));
 });
 
 module.exports = {

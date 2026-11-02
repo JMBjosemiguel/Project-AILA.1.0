@@ -98,7 +98,3 @@ export function getAttemptIdForActivity(activityId) {
 export function submitQuizAttempt(quizId, answers) {
   return apiClient.post(API_ENDPOINTS.quizzes.attempts(quizId), { answers });
 }
-
-export function deleteQuizAttempt(attemptId) {
-  return apiClient.delete(API_ENDPOINTS.quizzes.attempt(attemptId));
-}

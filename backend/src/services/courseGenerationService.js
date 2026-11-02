@@ -23,13 +23,14 @@ const DIFFICULTY_TO_LESSON_DIFFICULTY = {
 const ROADMAP_MAX_OUTPUT_TOKENS = 4096;
 const LESSON_MAX_OUTPUT_TOKENS = 6144;
 
-// An in-depth roadmap (5-6 modules) produces a noticeably larger JSON
-// response than the 2-4 module default — without more headroom here, a
+// An in-depth roadmap (6 modules) produces a noticeably larger JSON
+// response than the 4-module default — without more headroom here, a
 // truncated response (finishReason: MAX_TOKENS) would burn a retry inside
 // the shared 60s deadline. 'standard' (and no courseOptions at all, i.e.
 // every course generated before this feature existed) keeps the exact
-// original budget.
-const ROADMAP_MAX_OUTPUT_TOKENS_BY_LENGTH = { short: 3072, standard: ROADMAP_MAX_OUTPUT_TOKENS, in_depth: 6144 };
+// original budget. 'short' gets the same as 'standard': 'medium' thinking
+// draws from this budget too, so a smaller cap risked a cut-off roadmap.
+const ROADMAP_MAX_OUTPUT_TOKENS_BY_LENGTH = { short: 4096, standard: ROADMAP_MAX_OUTPUT_TOKENS, in_depth: 6144 };
 function roadmapOutputBudget(length) {
   return ROADMAP_MAX_OUTPUT_TOKENS_BY_LENGTH[length] || ROADMAP_MAX_OUTPUT_TOKENS;
 }

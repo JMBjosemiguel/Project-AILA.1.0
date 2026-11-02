@@ -9,9 +9,6 @@ vi.mock('../../../../hooks/useDashboardData', () => ({
 vi.mock('../../../../hooks/useGamificationData', () => ({
   useGamificationSummary: () => ({ data: null, loading: false, error: null }),
 }));
-vi.mock('../../../../services/api/quizService', () => ({ deleteQuizAttempt: vi.fn() }));
-vi.mock('../../../../components/common/ConfirmDialog', () => ({ useConfirm: () => vi.fn().mockResolvedValue(true) }));
-vi.mock('../../../../components/common/Toast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 
 const setResumeQuiz = vi.fn();
 vi.mock('../../../../utils/quizResumeTarget', () => ({ setResumeQuiz: (id) => setResumeQuiz(id) }));
@@ -170,6 +167,16 @@ describe('DashboardPage — recent quiz scores', () => {
     expect(screen.getByText('Grade 88%')).toBeInTheDocument(); // (3 / 4 x 50) + 50 = 87.5
     expect(screen.getByText('0/5')).toBeInTheDocument();
     expect(screen.getByText('Grade 50%')).toBeInTheDocument();
+  });
+
+  it('has no delete button (attempt deletion was removed from the API)', () => {
+    state.data = { ...baseData, recentQuizzes: [{ id: 1, topic: 'Drug Classes', score: 3, total: 4 }] };
+    state.loading = false;
+    state.error = null;
+    render(<DashboardPage onNavigate={vi.fn()} />);
+
+    expect(screen.getByText('Drug Classes')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete quiz attempt/i })).not.toBeInTheDocument();
   });
 });
 

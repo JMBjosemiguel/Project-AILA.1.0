@@ -260,6 +260,44 @@ describe('QuizRunner — Share in the review header', () => {
     expect(screen.queryByRole('button', { name: /Share this quiz/i })).not.toBeInTheDocument();
   });
 
+  it('a live practice quiz shows Share in the header once it is submitted', async () => {
+    const user = userEvent.setup();
+    startQuizAttempt.mockResolvedValue(startPayload([
+      { questionId: 10, selectedAnswer: 'Berlin' },
+      { questionId: 11, selectedAnswer: 'Tokyo' },
+    ]));
+
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByText(/Capital of France?/));
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Share this quiz/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await waitFor(() => expect(screen.getByText(/You scored 1 \/ 2/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Share this quiz/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(await screen.findByRole('heading', { name: 'Share this quiz' })).toBeInTheDocument();
+    expect(getShareStatus).toHaveBeenCalledWith('quiz', 5);
+  });
+
+  it('a live module checkpoint has no Share once it is submitted', async () => {
+    const user = userEvent.setup();
+    startQuizAttempt.mockResolvedValue({
+      attempt: { id: 77, quizId: 5, status: 'in_progress', currentIndex: 0 },
+      quiz: { id: 5, topic: 'Indexes', quizType: 'multiple_choice', assessmentKind: 'module_checkpoint', passingScore: 70 },
+      items: ITEMS, answers: [],
+    });
+    submitAttempt.mockResolvedValue({ ...REVIEW, assessmentKind: 'module_checkpoint', passed: true, passingScore: 70, percent: 80 });
+
+    render(<QuizRunner resumeQuizId={5} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByText(/Capital of France?/));
+    await user.click(screen.getByRole('button', { name: /Check Answers/i }));
+    await user.click(screen.getByRole('button', { name: /Submit anyway/i }));
+    await waitFor(() => expect(screen.getByText(/Passed — 80%/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
+
   it('a review without a quiz id has no Share button', async () => {
     getQuizAttempt.mockResolvedValue(reviewOf({ assessmentKind: 'practice', quizId: undefined }));
     render(<QuizRunner reviewAttemptId={77} onClose={vi.fn()} />);

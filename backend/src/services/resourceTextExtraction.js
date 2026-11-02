@@ -191,7 +191,10 @@ function selectSpreadChunks(chunks, maxChars) {
     indexes.add(count === 1 ? 0 : Math.round((i * (n - 1)) / (count - 1)));
   }
   const sortedIndexes = [...indexes].sort((a, b) => a - b);
-  const perChunkCap = Math.floor(maxChars / sortedIndexes.length);
+  // Leave room for each "[label]\n", the "…" and the "\n\n" between chunks,
+  // or the final slice cuts off the last chunk of the file.
+  const overhead = sortedIndexes.reduce((sum, i) => sum + chunks[i].label.length + 6, 0);
+  const perChunkCap = Math.max(1, Math.floor((maxChars - overhead) / sortedIndexes.length));
 
   const body = sortedIndexes
     .map((i) => {
@@ -204,6 +207,15 @@ function selectSpreadChunks(chunks, maxChars) {
   return { text: body.slice(0, maxChars), truncated: true };
 }
 
+// One batch of a large quiz: the chunks most relevant to that batch's
+// subtopic, or evenly spread chunks when the subtopic shares no words with
+// the document (e.g. the plan fell back to the raw topic).
+function selectChunksForSubtopic(chunks, subtopic, maxChars) {
+  const words = [...new Set(tokenize(subtopic || ''))];
+  const anyMatch = words.length && chunks.some((chunk) => scoreChunkForWords(chunk.text.toLowerCase(), words) > 0);
+  return anyMatch ? selectRelevantChunks(chunks, subtopic, maxChars) : selectSpreadChunks(chunks, maxChars);
+}
+
 module.exports = {
   NO_READABLE_TEXT_MESSAGE,
   extractChunksFromFile,
@@ -211,4 +223,5 @@ module.exports = {
   joinChunks,
   selectRelevantChunks,
   selectSpreadChunks,
+  selectChunksForSubtopic,
 };

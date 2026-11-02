@@ -232,9 +232,9 @@ test('roadmapOutputBudget', async (t) => {
     assert.equal(roadmapOutputBudget('standard'), ROADMAP_MAX_OUTPUT_TOKENS);
   });
 
-  await t.test('in_depth gets a larger budget than standard, short gets a smaller one', () => {
+  await t.test('in_depth gets a larger budget than standard, short gets 4,096 (thinking shares the cap)', () => {
     assert.ok(roadmapOutputBudget('in_depth') > ROADMAP_MAX_OUTPUT_TOKENS);
-    assert.ok(roadmapOutputBudget('short') < ROADMAP_MAX_OUTPUT_TOKENS);
+    assert.equal(roadmapOutputBudget('short'), 4096);
   });
 
   await t.test('an unknown length value falls back to the original budget, never throws', () => {

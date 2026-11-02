@@ -2,6 +2,7 @@ const { query } = require('../config/database');
 const { appWindowStart, windowStartDays, countByAppDay, avgPercentByAppDay, groupByWeek } = require('../utils/dayBucket');
 const { appWeekStarts } = require('../utils/appTime');
 const { notChatQuizCondition } = require('../constants/chatQuizVisibility');
+const { quizSubjectJoins, QUIZ_SUBJECT_VISIBLE_CONDITION } = require('../constants/subjectVisibility');
 
 const STUDENT_ROLE = "(SELECT id FROM roles WHERE name = 'student')";
 
@@ -61,8 +62,9 @@ async function getLessonCompletionsOverTime(days = 14) {
 // One row per week for the last `weeks` weeks, oldest first. Weeks start on
 // Monday 00:00 in APP_TIMEZONE, the same boundary as the weekly leaderboard.
 // Active students = students with any dashboard activity that week (the same
-// signal as the admin dashboard's daily active-students chart). Chat quizzes
-// are left out of the quiz numbers, like the student analytics.
+// signal as the admin dashboard's daily active-students chart). Every column
+// counts students only (not admins or deleted accounts). Chat quizzes are left
+// out of the quiz numbers, like the student analytics.
 async function getWeeklyResults(weeks = 8, now = new Date()) {
   const starts = appWeekStarts(weeks, now);
   const from = starts[0];
@@ -81,11 +83,21 @@ async function getWeeklyResults(weeks = 8, now = new Date()) {
         SELECT qa.completed_at AS ts, qa.score, qa.total
         FROM quiz_attempts qa
         INNER JOIN quizzes q ON q.id = qa.quiz_id
+        INNER JOIN users u ON u.id = qa.user_id
         WHERE qa.status = 'submitted' AND qa.completed_at >= ? AND ${notChatQuizCondition('q')}
+          AND u.deleted_at IS NULL AND u.role_id = ${STUDENT_ROLE}
       `,
       [from]
     ),
-    query('SELECT completed_at AS ts FROM lesson_progress WHERE completed_at >= ?', [from]),
+    query(
+      `
+        SELECT lp.completed_at AS ts
+        FROM lesson_progress lp
+        INNER JOIN users u ON u.id = lp.user_id
+        WHERE lp.completed_at >= ? AND u.deleted_at IS NULL AND u.role_id = ${STUDENT_ROLE}
+      `,
+      [from]
+    ),
     query(
       `SELECT created_at AS ts FROM users WHERE role_id = ${STUDENT_ROLE} AND deleted_at IS NULL AND created_at >= ?`,
       [from]
@@ -156,7 +168,9 @@ async function getMostActiveStudents(limit = 5) {
           ROUND(AVG(CASE WHEN qa.total > 0 THEN qa.score / qa.total * 100 END), 0) AS avg_quiz_score
         FROM quiz_attempts qa
         INNER JOIN quizzes q ON q.id = qa.quiz_id
+        ${quizSubjectJoins('q')}
         WHERE qa.status = 'submitted' AND ${notChatQuizCondition('q')}
+          AND ${QUIZ_SUBJECT_VISIBLE_CONDITION}
         GROUP BY qa.user_id
       ) qs ON qs.user_id = u.id
       WHERE u.role_id = (SELECT id FROM roles WHERE name = 'student') AND u.deleted_at IS NULL
